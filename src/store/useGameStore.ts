@@ -11,7 +11,7 @@ export interface GameStateData {
   status: 'waiting' | 'starting' | 'playing' | 'finished';
   players: Record<string, GamePlayer>;
   // This could be extended for specific game logic (e.g. board state for chess)
-  state: any; 
+  state: any;
   winnerId: string | null;
 }
 
@@ -19,7 +19,7 @@ export interface GameStoreState {
   roomId: string | null;
   gameType: string | null;
   gameState: GameStateData | null;
-  
+
   // Actions
   setGame: (roomId: string, gameType: string, initialState: GameStateData) => void;
   updateGameState: (newState: Partial<GameStateData>) => void;
@@ -32,13 +32,13 @@ export const useGameStore = create<GameStoreState>((set) => ({
   roomId: null,
   gameType: null,
   gameState: null,
-  
+
   setGame: (roomId, gameType, initialState) => set({
     roomId,
     gameType,
     gameState: initialState,
   }),
-  
+
   updateGameState: (newState) => set((state) => {
     if (!state.gameState) return state;
     return {
@@ -48,15 +48,15 @@ export const useGameStore = create<GameStoreState>((set) => ({
       }
     };
   }),
-  
+
   updatePlayer: (playerId, update) => set((state) => {
     if (!state.gameState) return state;
-    
+
     const players = { ...state.gameState.players };
     if (players[playerId]) {
       players[playerId] = { ...players[playerId], ...update };
     }
-    
+
     return {
       gameState: {
         ...state.gameState,
@@ -64,18 +64,18 @@ export const useGameStore = create<GameStoreState>((set) => ({
       }
     };
   }),
-  
-  endGame: (winnerId = null) => set((state) => {
+
+  endGame: (winnerId?: string) => set((state) => {
     if (!state.gameState) return state;
     return {
       gameState: {
         ...state.gameState,
         status: 'finished',
-        winnerId,
+        winnerId: winnerId ?? null,
       }
     };
   }),
-  
+
   clearGame: () => set({
     roomId: null,
     gameType: null,
