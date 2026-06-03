@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CampusVerse",
+  title: "Ano",
   description: "A real-time platform for students to chat, collaborate, and play games.",
 };
 

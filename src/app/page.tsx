@@ -45,7 +45,7 @@ export default function Home() {
       >
         <GlassCard className="flex flex-col gap-6 text-center">
           <div>
-            <h1 className="text-4xl font-extrabold tracking-tight mb-2 text-white">CampusVerse</h1>
+            <h1 className="text-4xl font-extrabold tracking-tight mb-2 text-white">Ano</h1>
             <p className="text-muted-foreground">
               A real-time platform for students to chat, collaborate, and play games.
             </p>
@@ -60,8 +60,8 @@ export default function Home() {
               className="bg-black/20 border-white/10 text-white placeholder:text-gray-400 focus-visible:ring-1 focus-visible:ring-white/30 h-12"
               required
             />
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               className="w-full glass-button h-12 text-md font-semibold text-white"
               disabled={!nickname.trim()}
             >
