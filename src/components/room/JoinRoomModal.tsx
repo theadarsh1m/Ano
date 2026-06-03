@@ -5,6 +5,9 @@ import { GlassModal } from "@/components/layout/GlassModal";
 import { Button } from "@/components/ui/button";
 import { useRoomStore } from "@/store/useRoomStore";
 import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
+
+const API_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001';
 
 interface JoinRoomModalProps {
   isOpen: boolean;
@@ -14,24 +17,41 @@ interface JoinRoomModalProps {
 export function JoinRoomModal({ isOpen, onClose }: JoinRoomModalProps) {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
-  const joinRoom = useRoomStore((state) => state.joinRoom);
+  const [isJoining, setIsJoining] = useState(false);
+  const { addJoinedRoom } = useRoomStore();
   const router = useRouter();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     
-    if (!code.trim()) return;
+    if (!code.trim() || isJoining) return;
 
-    const success = joinRoom(code.trim());
+    setIsJoining(true);
     
-    if (success) {
+    try {
+      // Validate the room code against the server
+      const res = await fetch(`${API_URL}/api/rooms/${code.trim().toUpperCase()}`);
+      
+      if (!res.ok) {
+        setError("Invalid room code. Please check and try again.");
+        setIsJoining(false);
+        return;
+      }
+
+      const room = await res.json();
+      
+      // Track that we've joined this private room
+      addJoinedRoom(room.id);
+
       setCode("");
       onClose();
-      router.push(`/room/${code.trim().toUpperCase()}`);
-    } else {
-      setError("Invalid room code. Please check and try again.");
+      router.push(`/room/${room.id}`);
+    } catch {
+      setError("Could not connect to the server. Please try again.");
     }
+    
+    setIsJoining(false);
   };
 
   return (
@@ -66,9 +86,9 @@ export function JoinRoomModal({ isOpen, onClose }: JoinRoomModalProps) {
           <Button 
             type="submit" 
             className="w-full bg-purple-500 hover:bg-purple-600 text-white"
-            disabled={!code.trim()}
+            disabled={!code.trim() || isJoining}
           >
-            Join Room
+            {isJoining ? <Loader2 className="w-4 h-4 animate-spin" /> : "Join Room"}
           </Button>
         </div>
       </form>

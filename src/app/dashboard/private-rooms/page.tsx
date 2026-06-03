@@ -1,33 +1,52 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRoomStore } from "@/store/useRoomStore";
+import { useRoomStore, Room } from "@/store/useRoomStore";
 import { RoomCard } from "@/components/room/RoomCard";
 import { CreateRoomModal } from "@/components/room/CreateRoomModal";
 import { JoinRoomModal } from "@/components/room/JoinRoomModal";
 import { Button } from "@/components/ui/button";
-import { Plus, ArrowLeft, KeyRound } from "lucide-react";
+import { Plus, ArrowLeft, KeyRound, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 
+const API_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001';
+
 export default function PrivateRoomsPage() {
-  const [isClient, setIsClient] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
-  const { getPrivateRooms } = useRoomStore();
+  const [privateRooms, setPrivateRooms] = useState<Room[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { joinedRoomIds } = useRoomStore();
   const router = useRouter();
 
   useEffect(() => {
-    setIsClient(true);
-  }, []);
+    const fetchPrivateRooms = async () => {
+      if (joinedRoomIds.length === 0) {
+        setPrivateRooms([]);
+        setLoading(false);
+        return;
+      }
 
-  const privateRooms = isClient ? getPrivateRooms() : [];
+      try {
+        // Fetch each room the user has joined
+        const roomPromises = joinedRoomIds.map((id) =>
+          fetch(`${API_URL}/api/rooms/${id}`).then((res) => (res.ok ? res.json() : null))
+        );
+        const rooms = await Promise.all(roomPromises);
+        setPrivateRooms(rooms.filter(Boolean));
+      } catch (err) {
+        console.error('Failed to fetch private rooms:', err);
+      }
+      setLoading(false);
+    };
+
+    fetchPrivateRooms();
+  }, [joinedRoomIds]);
 
   const handleEnterRoom = (roomId: string) => {
     router.push(`/room/${roomId}`);
   };
-
-  if (!isClient) return null;
 
   return (
     <main className="flex-1 p-6 md:p-12 min-h-screen">
@@ -74,7 +93,11 @@ export default function PrivateRoomsPage() {
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2 }}
         >
-          {privateRooms.length > 0 ? (
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
+            </div>
+          ) : privateRooms.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {privateRooms.map((room) => (
                 <RoomCard 

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useRoomStore } from "@/store/useRoomStore";
 import { useUserStore } from "@/store/useUserStore";
 import { useRouter } from "next/navigation";
-import { Globe, Lock } from "lucide-react";
+import { Globe, Lock, Loader2 } from "lucide-react";
 
 interface CreateRoomModalProps {
   isOpen: boolean;
@@ -17,22 +17,24 @@ interface CreateRoomModalProps {
 export function CreateRoomModal({ isOpen, onClose, defaultType = "public" }: CreateRoomModalProps) {
   const [name, setName] = useState("");
   const [type, setType] = useState<"public" | "private">(defaultType);
+  const [isCreating, setIsCreating] = useState(false);
   const createRoom = useRoomStore((state) => state.createRoom);
   const userId = useUserStore((state) => state.id);
   const router = useRouter();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !userId) return;
+    if (!name.trim() || !userId || isCreating) return;
 
-    const roomId = createRoom(name.trim(), type, userId);
+    setIsCreating(true);
+    const roomId = await createRoom(name.trim(), type, userId);
+    setIsCreating(false);
     
-    // Reset and close
-    setName("");
-    onClose();
-    
-    // If it's a private room, we might want to show the code first, but for now just redirect
-    router.push(`/room/${roomId}`);
+    if (roomId) {
+      setName("");
+      onClose();
+      router.push(`/room/${roomId}`);
+    }
   };
 
   return (
@@ -88,9 +90,9 @@ export function CreateRoomModal({ isOpen, onClose, defaultType = "public" }: Cre
           <Button 
             type="submit" 
             className="w-full bg-white text-black hover:bg-gray-200"
-            disabled={!name.trim()}
+            disabled={!name.trim() || isCreating}
           >
-            Create Room
+            {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create Room"}
           </Button>
         </div>
       </form>

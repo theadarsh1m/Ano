@@ -1,112 +1,122 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import { v4 as uuidv4 } from 'uuid';
 
 export interface Room {
   id: string;
   name: string;
   type: 'public' | 'private';
+  description?: string | null;
+  inviteCode?: string | null;
   capacity: number;
-  participants: number;
-  createdAt: number;
-  createdBy: string; // user id
+  createdAt: string | number;
+  createdBy: string | null;
 }
 
 export interface RoomState {
   rooms: Room[];
-  joinedRooms: string[]; // array of room IDs the user has joined
-  createRoom: (name: string, type: 'public' | 'private', createdBy: string) => string;
-  joinRoom: (roomId: string) => boolean; // returns true if successful
-  leaveRoom: (roomId: string) => void;
-  getPublicRooms: () => Room[];
-  getPrivateRooms: () => Room[];
+  joinedRoomIds: string[]; // locally tracked private room IDs the user has joined
+  loading: boolean;
+  error: string | null;
+
+  // Server-backed actions
+  fetchPublicRooms: () => Promise<void>;
+  fetchRoom: (roomId: string) => Promise<Room | null>;
+  createRoom: (name: string, type: 'public' | 'private', createdBy: string) => Promise<string | null>;
+
+  // Local tracking for private rooms
+  addJoinedRoom: (roomId: string) => void;
+  removeJoinedRoom: (roomId: string) => void;
+
+  // Clear
+  clearError: () => void;
 }
 
-export const useRoomStore = create<RoomState>()(
-  persist(
-    (set, get) => ({
-      rooms: [
-        // Add some dummy public rooms so it's not empty initially
-        {
-          id: 'lobby',
-          name: 'Main Lobby',
-          type: 'public',
-          capacity: 100,
-          participants: 42,
-          createdAt: Date.now() - 86400000,
-          createdBy: 'system',
-        },
-        {
-          id: 'chill',
-          name: 'Chill Zone',
-          type: 'public',
-          capacity: 50,
-          participants: 12,
-          createdAt: Date.now() - 3600000,
-          createdBy: 'system',
-        }
-      ],
-      joinedRooms: [],
-      createRoom: (name, type, createdBy) => {
-        // For private rooms, generate a shorter, more readable code
-        const id = type === 'private' 
-          ? uuidv4().substring(0, 6).toUpperCase()
-          : uuidv4().substring(0, 8);
-          
-        const newRoom: Room = {
-          id,
-          name,
-          type,
-          capacity: 50, // default
-          participants: 1, // creator joins automatically
-          createdAt: Date.now(),
-          createdBy,
-        };
-        
-        set((state) => ({
-          rooms: [...state.rooms, newRoom],
-          joinedRooms: [...state.joinedRooms, id]
-        }));
-        
-        return id;
-      },
-      joinRoom: (roomId) => {
-        const state = get();
-        const room = state.rooms.find(r => r.id === roomId || r.id === roomId.toUpperCase());
-        
-        if (!room) return false;
-        
-        // Check if already joined
-        if (state.joinedRooms.includes(room.id)) return true;
-        
-        set((state) => ({
-          rooms: state.rooms.map(r => 
-            r.id === room.id ? { ...r, participants: r.participants + 1 } : r
-          ),
-          joinedRooms: [...state.joinedRooms, room.id]
-        }));
-        
-        return true;
-      },
-      leaveRoom: (roomId) => {
-        set((state) => ({
-          rooms: state.rooms.map(r => 
-            r.id === roomId ? { ...r, participants: Math.max(0, r.participants - 1) } : r
-          ),
-          joinedRooms: state.joinedRooms.filter(id => id !== roomId)
-        }));
-      },
-      getPublicRooms: () => {
-        return get().rooms.filter(r => r.type === 'public');
-      },
-      getPrivateRooms: () => {
-        const state = get();
-        // Return private rooms that the user has joined or created
-        return state.rooms.filter(r => r.type === 'private' && state.joinedRooms.includes(r.id));
+const API_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001';
+
+export const useRoomStore = create<RoomState>((set, get) => ({
+  rooms: [],
+  joinedRoomIds: (() => {
+    // Load joined room IDs from localStorage on init
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('ano-joined-rooms');
+        return stored ? JSON.parse(stored) : [];
+      } catch {
+        return [];
       }
-    }),
-    {
-      name: 'ano-rooms',
     }
-  )
-);
+    return [];
+  })(),
+  loading: false,
+  error: null,
+
+  fetchPublicRooms: async () => {
+    set({ loading: true, error: null });
+    try {
+      const res = await fetch(`${API_URL}/api/rooms/public`);
+      if (!res.ok) throw new Error('Failed to fetch rooms');
+      const rooms = await res.json();
+      set({ rooms, loading: false });
+    } catch (err: any) {
+      set({ error: err.message, loading: false });
+    }
+  },
+
+  fetchRoom: async (roomId: string) => {
+    try {
+      const res = await fetch(`${API_URL}/api/rooms/${roomId}`);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  createRoom: async (name, type, createdBy) => {
+    set({ loading: true, error: null });
+    try {
+      const res = await fetch(`${API_URL}/api/rooms`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, type, createdBy }),
+      });
+      if (!res.ok) throw new Error('Failed to create room');
+      const room = await res.json();
+
+      // Add to local state
+      set((state) => ({ rooms: [room, ...state.rooms], loading: false }));
+
+      // Track private room membership locally
+      if (type === 'private') {
+        get().addJoinedRoom(room.id);
+      }
+
+      return room.id;
+    } catch (err: any) {
+      set({ error: err.message, loading: false });
+      return null;
+    }
+  },
+
+  addJoinedRoom: (roomId) => {
+    set((state) => {
+      if (state.joinedRoomIds.includes(roomId)) return state;
+      const updated = [...state.joinedRoomIds, roomId];
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('ano-joined-rooms', JSON.stringify(updated));
+      }
+      return { joinedRoomIds: updated };
+    });
+  },
+
+  removeJoinedRoom: (roomId) => {
+    set((state) => {
+      const updated = state.joinedRoomIds.filter((id) => id !== roomId);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('ano-joined-rooms', JSON.stringify(updated));
+      }
+      return { joinedRoomIds: updated };
+    });
+  },
+
+  clearError: () => set({ error: null }),
+}));

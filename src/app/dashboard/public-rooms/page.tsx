@@ -5,28 +5,22 @@ import { useRoomStore } from "@/store/useRoomStore";
 import { RoomCard } from "@/components/room/RoomCard";
 import { CreateRoomModal } from "@/components/room/CreateRoomModal";
 import { Button } from "@/components/ui/button";
-import { Plus, ArrowLeft } from "lucide-react";
+import { Plus, ArrowLeft, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 
 export default function PublicRoomsPage() {
-  const [isClient, setIsClient] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const { getPublicRooms, joinRoom } = useRoomStore();
+  const { rooms, loading, error, fetchPublicRooms } = useRoomStore();
   const router = useRouter();
 
   useEffect(() => {
-    setIsClient(true);
-  }, []);
-
-  const publicRooms = isClient ? getPublicRooms() : [];
+    fetchPublicRooms();
+  }, [fetchPublicRooms]);
 
   const handleJoinRoom = (roomId: string) => {
-    joinRoom(roomId);
     router.push(`/room/${roomId}`);
   };
-
-  if (!isClient) return null;
 
   return (
     <main className="flex-1 p-6 md:p-12 min-h-screen">
@@ -63,9 +57,24 @@ export default function PublicRoomsPage() {
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2 }}
         >
-          {publicRooms.length > 0 ? (
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
+            </div>
+          ) : error ? (
+            <div className="text-center py-20 bg-red-500/5 rounded-2xl border border-red-500/10">
+              <p className="text-red-400">Failed to load rooms. Is the server running?</p>
+              <Button 
+                variant="link" 
+                onClick={() => fetchPublicRooms()}
+                className="text-blue-400 mt-2"
+              >
+                Try again
+              </Button>
+            </div>
+          ) : rooms.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {publicRooms.map((room) => (
+              {rooms.map((room) => (
                 <RoomCard 
                   key={room.id} 
                   room={room} 

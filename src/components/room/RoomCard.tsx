@@ -32,7 +32,7 @@ export function RoomCard({ room, onClick }: RoomCardProps) {
           </div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground bg-black/20 px-3 py-1 rounded-full">
             <Users className="w-4 h-4" />
-            <span>{room.participants} / {room.capacity}</span>
+            <span>Cap: {room.capacity}</span>
           </div>
         </div>
         
@@ -41,7 +41,7 @@ export function RoomCard({ room, onClick }: RoomCardProps) {
             {room.name}
           </h3>
           <p className="text-sm text-muted-foreground">
-            Created by {room.createdBy === 'system' ? 'System' : `User ${room.createdBy.substring(0, 4)}`}
+            Created by {room.createdBy === 'system' ? 'System' : `User ${room.createdBy?.substring(0, 8) || 'Unknown'}`}
           </p>
         </div>
       </GlassCard>
