@@ -30,10 +30,15 @@ model Room {
 model Message {
   id        String   @id
   content   String
-  type      String   @default("user")
+  type      String   @default("text")
   createdAt DateTime @default(now())
   sender    User?    @relation(fields: [senderId], references: [id])
   senderId  String?
   room      Room     @relation(fields: [roomId], references: [id])
   roomId    String
+  // Media fields (populated for image/file messages)
+  fileUrl   String?
+  fileName  String?
+  fileSize  Int?
+  fileType  String?  // MIME type e.g. "image/png", "application/pdf"
 }

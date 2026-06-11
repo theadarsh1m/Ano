@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useRoomStore, Room } from "@/store/useRoomStore";
 import { useUserStore } from "@/store/useUserStore";
@@ -13,6 +13,7 @@ import { GlassCard } from "@/components/layout/GlassCard";
 import { ChatArea } from "@/components/room/ChatArea";
 import { MessageInput } from "@/components/room/MessageInput";
 import { OnlineUsersSidebar } from "@/components/room/OnlineUsersSidebar";
+import { DropZone } from "@/components/room/DropZone";
 
 export default function RoomPage() {
   const params = useParams();
@@ -207,10 +208,19 @@ export default function RoomPage() {
         className="flex-1 mt-6 flex flex-col md:flex-row gap-6 min-h-0"
       >
         {/* Chat Section */}
-        <GlassCard className="flex-1 flex flex-col p-0 overflow-hidden relative">
-          <ChatArea roomId={roomId} />
-          <MessageInput roomId={roomId} />
-        </GlassCard>
+        <DropZone
+          onFileDrop={(file) => {
+            if ((window as any).__anoFileDropHandler) {
+              (window as any).__anoFileDropHandler(file);
+            }
+          }}
+          className="flex-1 flex flex-col overflow-hidden relative"
+        >
+          <GlassCard className="flex-1 flex flex-col p-0 overflow-hidden relative">
+            <ChatArea roomId={roomId} />
+            <MessageInput roomId={roomId} />
+          </GlassCard>
+        </DropZone>
         
         {/* Participants Sidebar */}
         <OnlineUsersSidebar roomId={roomId} />

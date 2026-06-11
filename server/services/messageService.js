@@ -9,9 +9,14 @@ const messageService = {
       data: {
         id: message.id,
         content: message.content,
-        type: message.type || 'user',
+        type: message.type || 'text',
         senderId: message.senderId === 'system' ? null : message.senderId,
         roomId: message.roomId,
+        // Media fields
+        fileUrl: message.fileUrl || null,
+        fileName: message.fileName || null,
+        fileSize: message.fileSize || null,
+        fileType: message.fileType || null,
       },
     });
   },
@@ -43,6 +48,11 @@ const messageService = {
       content: msg.content,
       timestamp: msg.createdAt.getTime(),
       type: msg.type,
+      // Media fields
+      fileUrl: msg.fileUrl,
+      fileName: msg.fileName,
+      fileSize: msg.fileSize,
+      fileType: msg.fileType,
     }));
   },
 };

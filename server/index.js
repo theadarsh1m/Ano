@@ -2,9 +2,11 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
+const multer = require('multer');
 const roomService = require('./services/roomService');
 const messageService = require('./services/messageService');
 const userService = require('./services/userService');
+const uploadService = require('./services/uploadService');
 
 const app = express();
 app.use(cors());
@@ -92,6 +94,146 @@ app.post('/api/users', async (req, res) => {
   } catch (err) {
     console.error('Error upserting user:', err);
     res.status(500).json({ error: 'Failed to upsert user' });
+  }
+});
+
+// ========================
+// FILE UPLOAD ENDPOINTS
+// ========================
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB hard limit
+});
+
+// Safe Cloudinary config (no secrets)
+app.get('/api/cloudinary/config', (req, res) => {
+  const { safeConfig } = require('./config/cloudinary');
+  res.json(safeConfig);
+});
+
+// General upload — auto-routes images to Ano/chat-images, files to Ano/attachments
+app.post('/api/upload', upload.single('file'), async (req, res) => {
+  try {
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ error: 'No file provided' });
+    }
+
+    const validation = uploadService.validate(file);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.error });
+    }
+
+    const result = await uploadService.uploadFile(
+      file.buffer,
+      file.originalname,
+      file.mimetype
+    );
+
+    // Return enriched response with publicId and secureUrl
+    res.json({
+      publicId: result.publicId,
+      secureUrl: result.secureUrl,
+      url: result.secureUrl, // backward compat
+      width: result.width || null,
+      height: result.height || null,
+      format: result.format || null,
+      fileName: file.originalname,
+      fileSize: file.size,
+      fileType: file.mimetype,
+    });
+  } catch (err) {
+    console.error('Upload error:', err.message);
+    res.status(500).json({ error: 'Upload failed' });
+  }
+});
+
+// Profile picture upload — stores in Ano/profile-pictures
+app.post('/api/upload/profile-picture', upload.single('file'), async (req, res) => {
+  try {
+    const file = req.file;
+    const userId = req.body.userId;
+
+    if (!file) {
+      return res.status(400).json({ error: 'No file provided' });
+    }
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    const validation = uploadService.validateImage(file);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.error });
+    }
+
+    const result = await uploadService.uploadProfilePicture(file.buffer, userId);
+
+    res.json({
+      publicId: result.publicId,
+      secureUrl: result.secureUrl,
+    });
+  } catch (err) {
+    console.error('Profile picture upload error:', err.message);
+    res.status(500).json({ error: 'Profile picture upload failed' });
+  }
+});
+
+// Attachment upload — stores in Ano/attachments
+app.post('/api/upload/attachment', upload.single('file'), async (req, res) => {
+  try {
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ error: 'No file provided' });
+    }
+
+    const validation = uploadService.validate(file);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.error });
+    }
+
+    const result = await uploadService.uploadAttachment(file.buffer, file.originalname);
+
+    res.json({
+      publicId: result.publicId,
+      secureUrl: result.secureUrl,
+      fileName: file.originalname,
+      fileSize: file.size,
+      fileType: file.mimetype,
+    });
+  } catch (err) {
+    console.error('Attachment upload error:', err.message);
+    res.status(500).json({ error: 'Attachment upload failed' });
+  }
+});
+
+// Delete an uploaded asset (image or raw file)
+// Usage: DELETE /api/upload?publicId=Ano/chat-images/123&type=image
+app.delete('/api/upload', async (req, res) => {
+  try {
+    const publicId = req.query.publicId;
+    const resourceType = req.query.type || 'image'; // 'image' or 'raw'
+
+    if (!publicId) {
+      return res.status(400).json({ error: 'publicId is required' });
+    }
+
+    // Enforce: only allow deleting assets under the Ano/ folder
+    if (!publicId.startsWith('Ano/')) {
+      return res.status(403).json({ error: 'Can only delete assets under the Ano/ folder' });
+    }
+
+    let result;
+    if (resourceType === 'raw') {
+      result = await uploadService.deleteAttachment(publicId);
+    } else {
+      result = await uploadService.deleteImage(publicId);
+    }
+
+    res.json({ success: true, result });
+  } catch (err) {
+    console.error('Delete error:', err.message);
+    res.status(500).json({ error: 'Delete failed' });
   }
 });
 

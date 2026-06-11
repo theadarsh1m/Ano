@@ -7,7 +7,12 @@ export interface Message {
   senderName: string;
   content: string;
   timestamp: number;
-  type?: 'user' | 'system';
+  type?: 'text' | 'user' | 'image' | 'file' | 'system';
+  // Media fields
+  fileUrl?: string;
+  fileName?: string;
+  fileSize?: number;
+  fileType?: string;
 }
 
 export interface ChatState {
