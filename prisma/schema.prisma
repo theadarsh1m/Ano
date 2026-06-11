@@ -10,9 +10,16 @@ datasource db {
 model User {
   id        String    @id
   nickname  String
+  avatar    String?
+  bio       String?
   createdAt DateTime  @default(now())
   lastSeen  DateTime  @default(now())
   messages  Message[]
+
+  // DM relations
+  conversationsAsA Conversation[]  @relation("ParticipantA")
+  conversationsAsB Conversation[]  @relation("ParticipantB")
+  sentDMs          DirectMessage[] @relation("DMSender")
 }
 
 model Room {
@@ -41,4 +48,36 @@ model Message {
   fileName  String?
   fileSize  Int?
   fileType  String?  // MIME type e.g. "image/png", "application/pdf"
+}
+
+model Conversation {
+  id             String          @id @default(uuid())
+  participantAId String
+  participantBId String
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  participantA   User            @relation("ParticipantA", fields: [participantAId], references: [id])
+  participantB   User            @relation("ParticipantB", fields: [participantBId], references: [id])
+  messages       DirectMessage[]
+
+  @@unique([participantAId, participantBId])
+}
+
+model DirectMessage {
+  id             String       @id @default(uuid())
+  content        String
+  type           String       @default("text")
+  createdAt      DateTime     @default(now())
+
+  senderId       String
+  sender         User         @relation("DMSender", fields: [senderId], references: [id])
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+
+  // Media fields
+  fileUrl        String?
+  fileName       String?
+  fileSize       Int?
+  fileType       String?
 }

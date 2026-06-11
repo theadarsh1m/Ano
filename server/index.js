@@ -7,6 +7,8 @@ const roomService = require('./services/roomService');
 const messageService = require('./services/messageService');
 const userService = require('./services/userService');
 const uploadService = require('./services/uploadService');
+const conversationService = require('./services/conversationService');
+const dmService = require('./services/dmService');
 
 const app = express();
 app.use(cors());
@@ -82,6 +84,10 @@ app.get('/api/rooms/:roomId/messages', async (req, res) => {
   }
 });
 
+// ========================
+// USER ENDPOINTS
+// ========================
+
 // Upsert an anonymous user
 app.post('/api/users', async (req, res) => {
   try {
@@ -94,6 +100,103 @@ app.post('/api/users', async (req, res) => {
   } catch (err) {
     console.error('Error upserting user:', err);
     res.status(500).json({ error: 'Failed to upsert user' });
+  }
+});
+
+// Search users by nickname
+app.get('/api/users/search', async (req, res) => {
+  try {
+    const query = req.query.q || '';
+    const users = await userService.searchUsers(query);
+    res.json(users);
+  } catch (err) {
+    console.error('Error searching users:', err);
+    res.status(500).json({ error: 'Failed to search users' });
+  }
+});
+
+// Get user profile
+app.get('/api/users/:userId', async (req, res) => {
+  try {
+    const profile = await userService.getUserProfile(req.params.userId);
+    if (!profile) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json(profile);
+  } catch (err) {
+    console.error('Error fetching user profile:', err);
+    res.status(500).json({ error: 'Failed to fetch profile' });
+  }
+});
+
+// Update user profile
+app.put('/api/users/:userId', async (req, res) => {
+  try {
+    const { nickname, bio, avatar } = req.body;
+    const profile = await userService.updateProfile(req.params.userId, { nickname, bio, avatar });
+    res.json(profile);
+  } catch (err) {
+    console.error('Error updating user profile:', err);
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+// ========================
+// CONVERSATION ENDPOINTS
+// ========================
+
+// Create or get a conversation between two users
+app.post('/api/conversations', async (req, res) => {
+  try {
+    const { userAId, userBId } = req.body;
+    if (!userAId || !userBId) {
+      return res.status(400).json({ error: 'userAId and userBId are required' });
+    }
+    if (userAId === userBId) {
+      return res.status(400).json({ error: 'Cannot create conversation with yourself' });
+    }
+    const conversation = await conversationService.getOrCreateConversation(userAId, userBId);
+    res.json(conversation);
+  } catch (err) {
+    console.error('Error creating conversation:', err);
+    res.status(500).json({ error: 'Failed to create conversation' });
+  }
+});
+
+// Get all conversations for a user
+app.get('/api/conversations/:userId', async (req, res) => {
+  try {
+    const conversations = await conversationService.getConversationsForUser(req.params.userId);
+    res.json(conversations);
+  } catch (err) {
+    console.error('Error fetching conversations:', err);
+    res.status(500).json({ error: 'Failed to fetch conversations' });
+  }
+});
+
+// Get DM history for a conversation
+app.get('/api/dm/:conversationId/messages', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    const messages = await dmService.getDirectMessages(req.params.conversationId, limit);
+    res.json(messages);
+  } catch (err) {
+    console.error('Error fetching DM messages:', err);
+    res.status(500).json({ error: 'Failed to fetch messages' });
+  }
+});
+
+// Get a single conversation by ID
+app.get('/api/dm/:conversationId', async (req, res) => {
+  try {
+    const conversation = await conversationService.getConversation(req.params.conversationId);
+    if (!conversation) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+    res.json(conversation);
+  } catch (err) {
+    console.error('Error fetching conversation:', err);
+    res.status(500).json({ error: 'Failed to fetch conversation' });
   }
 });
 
@@ -131,7 +234,6 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
       file.mimetype
     );
 
-    // Return enriched response with publicId and secureUrl
     res.json({
       publicId: result.publicId,
       secureUrl: result.secureUrl,
@@ -212,13 +314,12 @@ app.post('/api/upload/attachment', upload.single('file'), async (req, res) => {
 app.delete('/api/upload', async (req, res) => {
   try {
     const publicId = req.query.publicId;
-    const resourceType = req.query.type || 'image'; // 'image' or 'raw'
+    const resourceType = req.query.type || 'image';
 
     if (!publicId) {
       return res.status(400).json({ error: 'publicId is required' });
     }
 
-    // Enforce: only allow deleting assets under the Ano/ folder
     if (!publicId.startsWith('Ano/')) {
       return res.status(403).json({ error: 'Can only delete assets under the Ano/ folder' });
     }
@@ -241,14 +342,41 @@ app.delete('/api/upload', async (req, res) => {
 // SOCKET.IO HANDLERS
 // ========================
 
-// In-memory state for online tracking (not persisted)
-const rooms = new Map(); // roomId -> Set of user objects { socketId, userId, nickname }
-const userToRoom = new Map(); // socketId -> roomId
+// In-memory state
+const rooms = new Map();        // roomId -> Set of { socketId, userId, nickname }
+const userToRoom = new Map();   // socketId -> roomId
+const onlineUsers = new Map();  // userId -> Set<socketId> (global presence)
+const socketToUser = new Map(); // socketId -> { userId, nickname }
 
 io.on('connection', (socket) => {
   console.log(`User connected: ${socket.id}`);
 
-  // Join Room
+  // ========================
+  // GLOBAL PRESENCE
+  // ========================
+
+  socket.on('register_user', ({ userId, nickname }) => {
+    if (!userId) return;
+
+    socketToUser.set(socket.id, { userId, nickname });
+
+    if (!onlineUsers.has(userId)) {
+      onlineUsers.set(userId, new Set());
+    }
+    onlineUsers.get(userId).add(socket.id);
+
+    // Broadcast that this user is online
+    socket.broadcast.emit('user_online', { userId });
+
+    // Send current online user list to the connecting user
+    const onlineIds = Array.from(onlineUsers.keys());
+    socket.emit('online_users', onlineIds);
+  });
+
+  // ========================
+  // ROOM CHAT
+  // ========================
+
   socket.on('join_room', async ({ roomId, userId, nickname }) => {
     socket.join(roomId);
     userToRoom.set(socket.id, roomId);
@@ -292,7 +420,6 @@ io.on('connection', (socket) => {
 
     io.to(roomId).emit('receive_message', joinMessage);
 
-    // Persist system message
     try {
       await messageService.saveMessage(joinMessage);
     } catch (err) {
@@ -302,12 +429,9 @@ io.on('connection', (socket) => {
     console.log(`${nickname} (${socket.id}) joined room ${roomId}`);
   });
 
-  // Send Message
   socket.on('send_message', async (message) => {
-    // Broadcast to room
     io.to(message.roomId).emit('receive_message', message);
 
-    // Persist message to database
     try {
       await messageService.saveMessage(message);
     } catch (err) {
@@ -315,7 +439,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Typing Indicators
   socket.on('typing_start', ({ roomId, nickname }) => {
     socket.to(roomId).emit('user_typing', { nickname, isTyping: true });
   });
@@ -324,7 +447,67 @@ io.on('connection', (socket) => {
     socket.to(roomId).emit('user_typing', { nickname, isTyping: false });
   });
 
-  // Leave Room / Disconnect Handling
+  // ========================
+  // DIRECT MESSAGES
+  // ========================
+
+  socket.on('join_dm', ({ conversationId }) => {
+    socket.join(`dm_${conversationId}`);
+  });
+
+  socket.on('leave_dm', ({ conversationId }) => {
+    socket.leave(`dm_${conversationId}`);
+  });
+
+  socket.on('dm_send', async (message) => {
+    // Broadcast to the DM room
+    io.to(`dm_${message.conversationId}`).emit('dm_receive', message);
+
+    // Also send to the other participant's sockets if they're not in the DM room
+    // (so they can update unread counts)
+    if (message.recipientId) {
+      const recipientSockets = onlineUsers.get(message.recipientId);
+      if (recipientSockets) {
+        for (const socketId of recipientSockets) {
+          const recipientSocket = io.sockets.sockets.get(socketId);
+          if (recipientSocket && !recipientSocket.rooms.has(`dm_${message.conversationId}`)) {
+            recipientSocket.emit('dm_notification', {
+              conversationId: message.conversationId,
+              message,
+            });
+          }
+        }
+      }
+    }
+
+    // Persist to database
+    try {
+      await dmService.saveDirectMessage(message);
+    } catch (err) {
+      console.error('Failed to save DM:', err.message);
+    }
+  });
+
+  socket.on('dm_typing_start', ({ conversationId, nickname }) => {
+    socket.to(`dm_${conversationId}`).emit('dm_user_typing', {
+      conversationId,
+      nickname,
+      isTyping: true,
+    });
+  });
+
+  socket.on('dm_typing_stop', ({ conversationId, nickname }) => {
+    socket.to(`dm_${conversationId}`).emit('dm_user_typing', {
+      conversationId,
+      nickname,
+      isTyping: false,
+    });
+  });
+
+  // ========================
+  // LEAVE / DISCONNECT
+  // ========================
+
   const handleLeave = async () => {
     const roomId = userToRoom.get(socket.id);
     if (roomId && rooms.has(roomId)) {
@@ -350,7 +533,6 @@ io.on('connection', (socket) => {
       userToRoom.delete(socket.id);
       socket.leave(roomId);
 
-      // Update lastSeen in database
       if (userId) {
         try {
           await userService.updateLastSeen(userId);
@@ -359,7 +541,6 @@ io.on('connection', (socket) => {
         }
       }
 
-      // Broadcast leave message
       const leaveMessage = {
         id: `sys_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         roomId,
@@ -372,7 +553,6 @@ io.on('connection', (socket) => {
 
       io.to(roomId).emit('receive_message', leaveMessage);
 
-      // Persist leave message
       try {
         await messageService.saveMessage(leaveMessage);
       } catch (err) {
@@ -383,8 +563,39 @@ io.on('connection', (socket) => {
     }
   };
 
+  const handleDisconnect = async () => {
+    // Handle room leave
+    await handleLeave();
+
+    // Handle global presence
+    const userData = socketToUser.get(socket.id);
+    if (userData) {
+      const { userId } = userData;
+      const userSockets = onlineUsers.get(userId);
+
+      if (userSockets) {
+        userSockets.delete(socket.id);
+
+        if (userSockets.size === 0) {
+          onlineUsers.delete(userId);
+          // Broadcast offline only when ALL tabs are closed
+          socket.broadcast.emit('user_offline', { userId });
+
+          // Update lastSeen
+          try {
+            await userService.updateLastSeen(userId);
+          } catch (err) {
+            console.error('Failed to update lastSeen on disconnect:', err.message);
+          }
+        }
+      }
+
+      socketToUser.delete(socket.id);
+    }
+  };
+
   socket.on('leave_room', handleLeave);
-  socket.on('disconnect', handleLeave);
+  socket.on('disconnect', handleDisconnect);
 });
 
 const PORT = process.env.PORT || 3001;
