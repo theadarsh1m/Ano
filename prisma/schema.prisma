@@ -32,6 +32,9 @@ model User {
   // Friendship relations
   friendshipsAsUser   Friendship[] @relation("FriendshipUser")
   friendshipsAsFriend Friendship[] @relation("FriendshipFriend")
+
+  // Game relations
+  gameStats           GameStat[]
 }
 
 model Room {
@@ -130,4 +133,18 @@ model Friendship {
   updatedAt DateTime @updatedAt
 
   @@unique([userId, friendId])
+}
+
+model GameStat {
+  id                  String   @id @default(uuid())
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gameType            String   // "snake", "2048", "minesweeper"
+  highScore           Int      @default(0)
+  totalPlayTimeSeconds Int     @default(0)
+  lastPlayed          DateTime @default(now())
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([userId, gameType])
 }

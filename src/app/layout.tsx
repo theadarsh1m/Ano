@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Analytics } from "@vercel/analytics/next";
 import { SocketProvider } from "@/components/providers/SocketProvider";
+import { GlobalRoomProvider } from "@/components/room/GlobalRoomProvider";
 
 import { GoogleOAuthProvider } from '@react-oauth/google';
 
@@ -34,7 +35,9 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-background text-foreground bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-slate-900 via-background to-background">
         <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "1234567890"}>
           <SocketProvider>
-            {children}
+            <GlobalRoomProvider>
+              {children}
+            </GlobalRoomProvider>
           </SocketProvider>
         </GoogleOAuthProvider>
         <Analytics />

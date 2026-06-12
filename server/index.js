@@ -12,6 +12,7 @@ const dmService = require('./services/dmService');
 const cleanupService = require('./services/cleanupService');
 const authRoutes = require('./routes/authRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const gameRoutes = require('./routes/gameRoutes');
 const notificationService = require('./services/notificationService');
 const voiceService = require('./services/voiceService');
 const prisma = require('./db');
@@ -26,6 +27,7 @@ app.use(express.json());
 // Use Auth Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/games', gameRoutes);
 
 const server = http.createServer(app);
 

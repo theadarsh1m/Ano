@@ -27,7 +27,7 @@ export function VoiceChannelList({ roomId, isOwner }: { roomId: string, isOwner:
   const members = globalVoiceUsers;
 
   return (
-    <div className="flex flex-col h-full bg-white/5 border border-white/10 rounded-2xl overflow-hidden w-full md:w-64 flex-shrink-0">
+    <div className="flex flex-col h-full bg-white/5 border border-white/10 rounded-2xl overflow-hidden w-full flex-shrink-0">
       <div className="p-4 border-b border-white/10 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Voice Channel</h3>
       </div>

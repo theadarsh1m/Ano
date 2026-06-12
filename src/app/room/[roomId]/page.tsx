@@ -15,6 +15,8 @@ import { MessageInput } from "@/components/room/MessageInput";
 import { OnlineUsersSidebar } from "@/components/room/OnlineUsersSidebar";
 import { VoiceChannelList } from "@/components/room/VoiceChannelList";
 import { DropZone } from "@/components/room/DropZone";
+import { useRoomConnectionStore } from "@/store/useRoomConnectionStore";
+import { Gamepad2 } from "lucide-react";
 
 export default function RoomPage() {
   const params = useParams();
@@ -28,15 +30,8 @@ export default function RoomPage() {
   
   const { fetchRoom, removeJoinedRoom } = useRoomStore();
   const { id: userId, nickname, isAnonymous } = useUserStore();
-  
   const isConnected = useChatStore(state => state.isConnected);
-  const setConnectionStatus = useChatStore(state => state.setConnectionStatus);
-  const addMessage = useChatStore(state => state.addMessage);
-  const setMessages = useChatStore(state => state.setMessages);
-  const addTypingUser = useChatStore(state => state.addTypingUser);
-  const removeTypingUser = useChatStore(state => state.removeTypingUser);
-  const setActiveUsers = useChatStore(state => state.setActiveUsers);
-  const clearChat = useChatStore(state => state.clearChat);
+  const { joinRoom, leaveRoom } = useRoomConnectionStore();
 
   useEffect(() => {
     setIsClient(true);
@@ -56,57 +51,12 @@ export default function RoomPage() {
     loadRoom();
   }, [isClient, roomId, fetchRoom]);
 
-  // Socket.IO connection lifecycle
+  // Notify global provider to maintain connection
   useEffect(() => {
-    if (!isClient || !userId || !nickname || !room) return;
-
-    const socket = socketService.connect();
-
-    const onConnect = () => setConnectionStatus(true);
-    const onDisconnect = () => setConnectionStatus(false);
-    
-    const onReceiveMessage = (message: any) => {
-      addMessage(message);
-    };
-
-    const onChatHistory = (history: any[]) => {
-      setMessages(roomId, history);
-    };
-
-    const onUserTyping = ({ nickname: typingNickname, isTyping }: { nickname: string, isTyping: boolean }) => {
-      if (isTyping) {
-        addTypingUser(roomId, typingNickname);
-      } else {
-        removeTypingUser(roomId, typingNickname);
-      }
-    };
-
-    const onRoomUsers = (users: any[]) => {
-      setActiveUsers(roomId, users);
-    };
-
-    setConnectionStatus(socket.connected);
-
-    socket.on("connect", onConnect);
-    socket.on("disconnect", onDisconnect);
-    socket.on("receive_message", onReceiveMessage);
-    socket.on("chat_history", onChatHistory);
-    socket.on("user_typing", onUserTyping);
-    socket.on("room_users", onRoomUsers);
-
-    socket.emit("join_room", { roomId, userId, nickname, isAnonymous });
-
-    return () => {
-      socket.emit("leave_room");
-      socket.off("connect", onConnect);
-      socket.off("disconnect", onDisconnect);
-      socket.off("receive_message", onReceiveMessage);
-      socket.off("chat_history", onChatHistory);
-      socket.off("user_typing", onUserTyping);
-      socket.off("room_users", onRoomUsers);
-      clearChat(roomId);
-    };
-  }, [isClient, room, userId, nickname, roomId, setConnectionStatus, addMessage, setMessages, addTypingUser, removeTypingUser, setActiveUsers, clearChat]);
+    if (isClient && userId && room) {
+      joinRoom(roomId);
+    }
+  }, [isClient, userId, room, roomId, joinRoom]);
 
   useEffect(() => {
     if (isClient && !userId) {
@@ -123,10 +73,7 @@ export default function RoomPage() {
   }
 
   const handleLeave = () => {
-    const socket = socketService.getSocket();
-    if (socket) {
-      socket.emit("leave_room");
-    }
+    leaveRoom();
     if (room?.type === 'private') {
       removeJoinedRoom(roomId);
     }
@@ -208,9 +155,18 @@ export default function RoomPage() {
         transition={{ delay: 0.1 }}
         className="flex-1 mt-6 flex flex-col md:flex-row gap-4 min-h-0"
       >
-        {/* Voice Channels Sidebar */}
-        <div className="flex md:flex flex-shrink-0">
-          <VoiceChannelList roomId={roomId} isOwner={userId === room?.createdBy} />
+        {/* Voice Channels Sidebar & Games Launcher */}
+        <div className="flex flex-col gap-4 md:w-64 flex-shrink-0">
+          <div className="flex-1 flex min-h-0">
+            <VoiceChannelList roomId={roomId} isOwner={userId === room?.createdBy} />
+          </div>
+          <button 
+            onClick={() => router.push('/dashboard/games')}
+            className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 border border-purple-400/30"
+          >
+            <Gamepad2 className="w-5 h-5" />
+            Open Games Hub
+          </button>
         </div>
 
         {/* Chat Section */}
