@@ -4,6 +4,8 @@ import "./globals.css";
 import { Analytics } from "@vercel/analytics/next";
 import { SocketProvider } from "@/components/providers/SocketProvider";
 
+import { GoogleOAuthProvider } from '@react-oauth/google';
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -30,9 +32,11 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-slate-900 via-background to-background">
-        <SocketProvider>
-          {children}
-        </SocketProvider>
+        <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "1234567890"}>
+          <SocketProvider>
+            {children}
+          </SocketProvider>
+        </GoogleOAuthProvider>
         <Analytics />
       </body>
     </html>

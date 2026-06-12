@@ -14,8 +14,11 @@ export interface UserState {
   avatar: string | null;
   bio: string | null;
   joinedAt: number | null;
+  isAnonymous: boolean;
+  email: string | null;
   preferences: UserPreferences;
   login: (nickname: string) => void;
+  loginWithGoogle: (token: string) => Promise<{ isNewUser?: boolean }>;
   logout: () => void;
   updatePreferences: (newPreferences: Partial<UserPreferences>) => void;
   updateProfile: (data: { nickname?: string; bio?: string; avatar?: string }) => Promise<void>;
@@ -37,6 +40,8 @@ export const useUserStore = create<UserState>()(
       avatar: null,
       bio: null,
       joinedAt: null,
+      isAnonymous: true,
+      email: null,
       preferences: defaultPreferences,
       login: (nickname: string) => {
         const id = `guest_${uuidv4().substring(0, 6)}`;
@@ -48,7 +53,43 @@ export const useUserStore = create<UserState>()(
           body: JSON.stringify({ id, nickname }),
         }).catch((err) => console.error('Failed to persist user:', err));
 
-        set({ id, nickname, joinedAt: Date.now(), avatar: null, bio: null });
+        set({ id, nickname, joinedAt: Date.now(), avatar: null, bio: null, isAnonymous: true, email: null });
+      },
+      loginWithGoogle: async (token: string) => {
+        const currentId = get().id;
+        const isAnon = get().isAnonymous;
+        
+        try {
+          const res = await fetch(`${API_URL}/api/auth/google`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              token, 
+              guestId: (isAnon && currentId) ? currentId : undefined 
+            }),
+          });
+
+          if (!res.ok) {
+            const errorData = await res.json();
+            throw new Error(errorData.error || 'Failed to authenticate with Google');
+          }
+
+          const user = await res.json();
+          set({
+            id: user.id,
+            nickname: user.nickname,
+            avatar: user.avatar,
+            bio: user.bio,
+            isAnonymous: user.isAnonymous,
+            email: user.email,
+            joinedAt: new Date(user.createdAt).getTime() || Date.now(),
+          });
+          
+          return { isNewUser: user.isNewUser };
+        } catch (err) {
+          console.error('Google login error:', err);
+          throw err;
+        }
       },
       logout: () => set({
         id: null,
@@ -56,6 +97,8 @@ export const useUserStore = create<UserState>()(
         avatar: null,
         bio: null,
         joinedAt: null,
+        isAnonymous: true,
+        email: null,
         preferences: defaultPreferences,
       }),
       updatePreferences: (newPreferences) => set((state) => ({

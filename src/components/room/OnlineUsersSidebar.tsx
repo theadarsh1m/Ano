@@ -4,7 +4,7 @@ import { useChatStore } from "@/store/useChatStore";
 import { GlassCard } from "@/components/layout/GlassCard";
 import { useUserStore } from "@/store/useUserStore";
 import { useRouter } from "next/navigation";
-import { MessageSquare } from "lucide-react";
+import { MessageSquare, ShieldCheck } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
 
@@ -63,8 +63,13 @@ export function OnlineUsersSidebar({ roomId }: OnlineUsersSidebarProps) {
                   {user.nickname.substring(0, 2).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white truncate">
+                  <p className="text-sm text-white truncate flex items-center gap-1">
                     {user.nickname} {isMe && <span className="text-gray-400 text-xs">(You)</span>}
+                    {user.isAnonymous ? (
+                      <span className="text-[10px] px-1.5 py-0.5 bg-white/10 rounded-sm text-white/50 leading-none">Guest</span>
+                    ) : (
+                      <ShieldCheck className="w-3 h-3 text-green-400 flex-shrink-0" title="Verified Account" />
+                    )}
                   </p>
                   <p className="text-xs text-green-400">Online</p>
                 </div>

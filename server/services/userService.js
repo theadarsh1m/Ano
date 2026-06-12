@@ -14,6 +14,7 @@ const userService = {
       create: {
         id,
         nickname,
+        isAnonymous: true,
       },
     });
   },
@@ -25,11 +26,28 @@ const userService = {
     try {
       return await prisma.user.update({
         where: { id: userId },
-        data: { lastSeen: new Date() },
+        data: { lastSeen: new Date(), isOnline: false },
       });
     } catch (err) {
       // User might not exist yet if they never fully joined
       console.log(`Could not update lastSeen for user ${userId}`);
+    }
+  },
+
+  /**
+   * Update a user's online status.
+   */
+  async setOnlineStatus(userId, isOnline) {
+    try {
+      return await prisma.user.update({
+        where: { id: userId },
+        data: { 
+          isOnline,
+          ...(isOnline ? {} : { lastSeen: new Date() }) 
+        },
+      });
+    } catch (err) {
+      console.log(`Could not update online status for user ${userId}`);
     }
   },
 
@@ -123,6 +141,99 @@ const userService = {
       avatar: u.avatar,
       lastSeen: u.lastSeen.getTime(),
     }));
+  },
+
+  /**
+   * Check if a nickname is available (case-insensitive).
+   */
+  async checkNicknameAvailability(nickname) {
+    if (!nickname || nickname.trim().length === 0) return false;
+    
+    const existing = await prisma.user.findFirst({
+      where: {
+        nickname: {
+          equals: nickname.trim(),
+          mode: 'insensitive',
+        },
+      },
+    });
+    
+    return !existing;
+  },
+
+  /**
+   * Find or create a user from Google Profile
+   */
+  async findOrCreateGoogleUser(googleProfile) {
+    const googleUserId = `google_${googleProfile.sub}`;
+    let user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: googleUserId },
+          { googleId: googleProfile.sub },
+          { email: googleProfile.email },
+        ]
+      },
+    });
+
+    let isNewUser = false;
+
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          id: googleUserId,
+          googleId: googleProfile.sub,
+          email: googleProfile.email,
+          nickname: googleProfile.name || 'Google User',
+          avatar: googleProfile.picture,
+          isAnonymous: false,
+        },
+      });
+      isNewUser = true;
+    } else {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          googleId: googleProfile.sub,
+          email: googleProfile.email,
+          isAnonymous: false,
+          avatar: googleProfile.picture || user.avatar,
+        },
+      });
+    }
+
+    return { ...user, isNewUser };
+  },
+
+  /**
+   * Upgrade an existing Guest user to a Google user
+   */
+  async upgradeGuestToGoogle(guestId, googleProfile) {
+    const existingUser = await prisma.user.findUnique({
+      where: { email: googleProfile.email },
+    });
+
+    if (existingUser && existingUser.id !== guestId) {
+      throw new Error("Email is already connected to another account.");
+    }
+
+    const guest = await prisma.user.findUnique({ where: { id: guestId } });
+    if (!guest || !guest.isAnonymous) {
+      throw new Error("Invalid guest account.");
+    }
+
+    const user = await prisma.user.update({
+      where: { id: guestId },
+      data: {
+        email: googleProfile.email,
+        googleId: googleProfile.sub,
+        avatar: googleProfile.picture || guest.avatar,
+        nickname: googleProfile.name || guest.nickname,
+        isAnonymous: false,
+      },
+    });
+
+    return user;
   },
 };
 

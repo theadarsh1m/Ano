@@ -9,10 +9,18 @@ const userService = require('./services/userService');
 const uploadService = require('./services/uploadService');
 const conversationService = require('./services/conversationService');
 const dmService = require('./services/dmService');
+const cleanupService = require('./services/cleanupService');
+const authRoutes = require('./routes/authRoutes');
+
+// Start cleanup service
+cleanupService.start();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Use Auth Routes
+app.use('/api/auth', authRoutes);
 
 const server = http.createServer(app);
 
@@ -104,6 +112,21 @@ app.post('/api/users', async (req, res) => {
   } catch (err) {
     console.error('Error upserting user:', err);
     res.status(500).json({ error: 'Failed to upsert user' });
+  }
+});
+
+// Check nickname availability
+app.get('/api/users/check-nickname', async (req, res) => {
+  try {
+    const { nickname } = req.query;
+    if (!nickname) {
+      return res.status(400).json({ error: 'nickname is required' });
+    }
+    const available = await userService.checkNicknameAvailability(nickname);
+    res.json({ available });
+  } catch (err) {
+    console.error('Error checking nickname:', err);
+    res.status(500).json({ error: 'Failed to check nickname availability' });
   }
 });
 
@@ -359,13 +382,18 @@ io.on('connection', (socket) => {
   // GLOBAL PRESENCE
   // ========================
 
-  socket.on('register_user', ({ userId, nickname }) => {
+  socket.on('register_user', async ({ userId, nickname }) => {
     if (!userId) return;
 
     socketToUser.set(socket.id, { userId, nickname });
 
     if (!onlineUsers.has(userId)) {
       onlineUsers.set(userId, new Set());
+      try {
+        await userService.setOnlineStatus(userId, true);
+      } catch (err) {
+        console.error('Failed to set online status:', err.message);
+      }
     }
     onlineUsers.get(userId).add(socket.id);
 
@@ -381,7 +409,7 @@ io.on('connection', (socket) => {
   // ROOM CHAT
   // ========================
 
-  socket.on('join_room', async ({ roomId, userId, nickname }) => {
+  socket.on('join_room', async ({ roomId, userId, nickname, isAnonymous }) => {
     socket.join(roomId);
     userToRoom.set(socket.id, roomId);
 
@@ -389,7 +417,7 @@ io.on('connection', (socket) => {
       rooms.set(roomId, new Set());
     }
 
-    const user = { socketId: socket.id, userId, nickname };
+    const user = { socketId: socket.id, userId, nickname, isAnonymous };
     rooms.get(roomId).add(user);
 
     // Persist user to database

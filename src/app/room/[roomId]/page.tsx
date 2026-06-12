@@ -26,7 +26,7 @@ export default function RoomPage() {
   const [roomLoading, setRoomLoading] = useState(true);
   
   const { fetchRoom, removeJoinedRoom } = useRoomStore();
-  const { id: userId, nickname } = useUserStore();
+  const { id: userId, nickname, isAnonymous } = useUserStore();
   
   const isConnected = useChatStore(state => state.isConnected);
   const setConnectionStatus = useChatStore(state => state.setConnectionStatus);
@@ -93,7 +93,7 @@ export default function RoomPage() {
     socket.on("user_typing", onUserTyping);
     socket.on("room_users", onRoomUsers);
 
-    socket.emit("join_room", { roomId, userId, nickname });
+    socket.emit("join_room", { roomId, userId, nickname, isAnonymous });
 
     return () => {
       socket.emit("leave_room");

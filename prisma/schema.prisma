@@ -8,13 +8,17 @@ datasource db {
 }
 
 model User {
-  id        String    @id
-  nickname  String
-  avatar    String?
-  bio       String?
-  createdAt DateTime  @default(now())
-  lastSeen  DateTime  @default(now())
-  messages  Message[]
+  id          String    @id
+  nickname    String
+  avatar      String?
+  bio         String?
+  email       String?   @unique
+  googleId    String?   @unique
+  isAnonymous Boolean   @default(true)
+  isOnline    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  lastSeen    DateTime  @default(now())
+  messages    Message[]
 
   // DM relations
   conversationsAsA Conversation[]  @relation("ParticipantA")
