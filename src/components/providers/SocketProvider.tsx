@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useUserStore } from "@/store/useUserStore";
 import { usePresenceStore } from "@/store/usePresenceStore";
 import { useDMStore } from "@/store/useDMStore";
+import { useNotificationStore } from "@/store/useNotificationStore";
 import { socketService } from "@/lib/socket";
 
 const API_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
@@ -49,30 +50,43 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       setOnlineUsers(userIds);
     };
 
-    // DM notification — fires when a DM arrives and the user is NOT in that DM room
     const onDMNotification = ({ conversationId, message }: any) => {
       addDMMessage(conversationId, message);
-      // Only increment unread if user is NOT currently viewing that conversation
       if (activeConversationId !== conversationId) {
         incrementUnread(conversationId);
       }
-      // Refresh conversation list so it reorders
       fetch(`${API_URL}/api/conversations/${userId}`)
         .then((res) => res.json())
         .then((data) => setConversations(data))
         .catch(() => {});
     };
 
+    const onNewNotification = (notification: any) => {
+      useNotificationStore.getState().addNotification(notification);
+    };
+
     socket.on("user_online", onUserOnline);
     socket.on("user_offline", onUserOffline);
     socket.on("online_users", onOnlineUsers);
     socket.on("dm_notification", onDMNotification);
+    socket.on("new_notification", onNewNotification);
+
+    // Initial fetch of notifications
+    fetch(`${API_URL}/api/notifications/${userId}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          useNotificationStore.getState().setNotifications(data);
+        }
+      })
+      .catch(console.error);
 
     return () => {
       socket.off("user_online", onUserOnline);
       socket.off("user_offline", onUserOffline);
       socket.off("online_users", onOnlineUsers);
       socket.off("dm_notification", onDMNotification);
+      socket.off("new_notification", onNewNotification);
     };
   }, [userId, nickname, activeConversationId, setUserOnline, setUserOffline, setOnlineUsers, addDMMessage, incrementUnread, setConversations]);
 

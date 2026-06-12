@@ -11,6 +11,9 @@ const conversationService = require('./services/conversationService');
 const dmService = require('./services/dmService');
 const cleanupService = require('./services/cleanupService');
 const authRoutes = require('./routes/authRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
+const notificationService = require('./services/notificationService');
+const prisma = require('./db');
 
 // Start cleanup service
 cleanupService.start();
@@ -21,6 +24,7 @@ app.use(express.json());
 
 // Use Auth Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 const server = http.createServer(app);
 
@@ -466,8 +470,38 @@ io.on('connection', (socket) => {
 
     try {
       await messageService.saveMessage(message);
+
+      // Parse mentions
+      const mentionMatches = message.content.match(/@([a-zA-Z0-9_]+)/g);
+      if (mentionMatches) {
+        const nicknames = [...new Set(mentionMatches.map(m => m.slice(1)))];
+        const users = await prisma.user.findMany({
+          where: { nickname: { in: nicknames } },
+          select: { id: true, nickname: true }
+        });
+        
+        for (const user of users) {
+          if (user.id !== message.senderId) {
+            const notif = await notificationService.createNotification({
+              recipientId: user.id,
+              senderId: message.senderId,
+              type: 'mention',
+              title: 'New Mention',
+              message: `${message.senderName} mentioned you in a room.`,
+              metadata: { roomId: message.roomId, messageId: message.id }
+            });
+            // Emit to mentioned user
+            const recipientSockets = onlineUsers.get(user.id);
+            if (recipientSockets) {
+              for (const socketId of recipientSockets) {
+                io.to(socketId).emit('new_notification', notif);
+              }
+            }
+          }
+        }
+      }
     } catch (err) {
-      console.error('Failed to save message:', err.message);
+      console.error('Failed to save message or send mention:', err.message);
     }
   });
 
@@ -496,7 +530,6 @@ io.on('connection', (socket) => {
     io.to(`dm_${message.conversationId}`).emit('dm_receive', message);
 
     // Also send to the other participant's sockets if they're not in the DM room
-    // (so they can update unread counts)
     if (message.recipientId) {
       const recipientSockets = onlineUsers.get(message.recipientId);
       if (recipientSockets) {
@@ -515,8 +548,37 @@ io.on('connection', (socket) => {
     // Persist to database
     try {
       await dmService.saveDirectMessage(message);
+
+      // Parse mentions in DMs
+      const mentionMatches = message.content.match(/@([a-zA-Z0-9_]+)/g);
+      if (mentionMatches) {
+        const nicknames = [...new Set(mentionMatches.map(m => m.slice(1)))];
+        const users = await prisma.user.findMany({
+          where: { nickname: { in: nicknames } },
+          select: { id: true, nickname: true }
+        });
+        
+        for (const user of users) {
+          if (user.id !== message.senderId) {
+            const notif = await notificationService.createNotification({
+              recipientId: user.id,
+              senderId: message.senderId,
+              type: 'mention',
+              title: 'New Mention',
+              message: `${message.senderName} mentioned you in a DM.`,
+              metadata: { conversationId: message.conversationId, messageId: message.id }
+            });
+            const recipientSockets = onlineUsers.get(user.id);
+            if (recipientSockets) {
+              for (const socketId of recipientSockets) {
+                io.to(socketId).emit('new_notification', notif);
+              }
+            }
+          }
+        }
+      }
     } catch (err) {
-      console.error('Failed to save DM:', err.message);
+      console.error('Failed to save DM or send mention:', err.message);
     }
   });
 
@@ -534,6 +596,53 @@ io.on('connection', (socket) => {
       nickname,
       isTyping: false,
     });
+  });
+
+  // ========================
+  // NOTIFICATIONS & INVITES
+  // ========================
+
+  socket.on('send_room_invite', async ({ senderId, senderName, recipientId, roomId, roomName }) => {
+    try {
+      const notif = await notificationService.createNotification({
+        recipientId,
+        senderId,
+        type: 'room_invite',
+        title: 'Room Invitation',
+        message: `${senderName} invited you to join ${roomName || 'a room'}.`,
+        metadata: { roomId }
+      });
+      const recipientSockets = onlineUsers.get(recipientId);
+      if (recipientSockets) {
+        for (const socketId of recipientSockets) {
+          io.to(socketId).emit('new_notification', notif);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to send room invite:', err.message);
+    }
+  });
+
+  socket.on('send_friend_request', async ({ senderId, senderName, recipientId }) => {
+    try {
+      // Create friendship record and notification
+      await notificationService.createFriendship(senderId, recipientId);
+      const notif = await notificationService.createNotification({
+        recipientId,
+        senderId,
+        type: 'friend_request',
+        title: 'Friend Request',
+        message: `${senderName} sent you a friend request.`,
+      });
+      const recipientSockets = onlineUsers.get(recipientId);
+      if (recipientSockets) {
+        for (const socketId of recipientSockets) {
+          io.to(socketId).emit('new_notification', notif);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to send friend request:', err.message);
+    }
   });
 
   // ========================

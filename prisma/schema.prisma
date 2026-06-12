@@ -24,6 +24,14 @@ model User {
   conversationsAsA Conversation[]  @relation("ParticipantA")
   conversationsAsB Conversation[]  @relation("ParticipantB")
   sentDMs          DirectMessage[] @relation("DMSender")
+
+  // Notification relations
+  notificationsReceived Notification[] @relation("NotificationRecipient")
+  notificationsSent     Notification[] @relation("NotificationSender")
+
+  // Friendship relations
+  friendshipsAsUser   Friendship[] @relation("FriendshipUser")
+  friendshipsAsFriend Friendship[] @relation("FriendshipFriend")
 }
 
 model Room {
@@ -84,4 +92,32 @@ model DirectMessage {
   fileName       String?
   fileSize       Int?
   fileType       String?
+}
+
+model Notification {
+  id          String   @id @default(uuid())
+  recipientId String
+  recipient   User     @relation("NotificationRecipient", fields: [recipientId], references: [id])
+  senderId    String?
+  sender      User?    @relation("NotificationSender", fields: [senderId], references: [id])
+  
+  type        String   // e.g. "friend_request", "friend_accepted", "room_invite", "mention", "system", "activity"
+  title       String
+  message     String
+  isRead      Boolean  @default(false)
+  metadata    Json?    // Stores extra info like roomId, conversationId, etc.
+  createdAt   DateTime @default(now())
+}
+
+model Friendship {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation("FriendshipUser", fields: [userId], references: [id])
+  friendId  String
+  friend    User     @relation("FriendshipFriend", fields: [friendId], references: [id])
+  status    String   // "pending" or "accepted"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, friendId])
 }

@@ -7,6 +7,7 @@ import { useDMStore } from "@/store/useDMStore";
 import { socketService } from "@/lib/socket";
 import { ConversationList } from "@/components/dm/ConversationList";
 import { UserSearchModal } from "@/components/profile/UserSearchModal";
+import { NotificationBell } from "@/components/layout/NotificationBell";
 import {
   MessageSquare,
   Lock,
@@ -40,13 +41,14 @@ export function AppSidebar() {
     <>
       <aside className="w-72 h-full flex flex-col bg-black/40 backdrop-blur-md border-r border-white/5 flex-shrink-0">
         {/* Header */}
-        <div className="p-4 border-b border-white/5">
+        <div className="p-4 border-b border-white/5 flex items-center justify-between">
           <h1
             className="text-xl font-bold text-white cursor-pointer hover:text-blue-400 transition-colors"
             onClick={() => router.push("/dashboard")}
           >
             Ano
           </h1>
+          <NotificationBell />
         </div>
 
         {/* Navigation */}

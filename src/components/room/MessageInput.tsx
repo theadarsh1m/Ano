@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Send, Paperclip, X, Loader2, AlertCircle, Image as ImageIcon, File as FileIcon } from "lucide-react";
 import { socketService } from "@/lib/socket";
 import { useUserStore } from "@/store/useUserStore";
+import { useChatStore } from "@/store/useChatStore";
 import { v4 as uuidv4 } from "uuid";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -31,6 +32,11 @@ export function MessageInput({ roomId }: MessageInputProps) {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
+  const activeUsers = useChatStore((state) => state.activeUsers[roomId]) || [];
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const socket = socketService.getSocket();
 
@@ -118,8 +124,55 @@ export function MessageInput({ roomId }: MessageInputProps) {
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setMessage(e.target.value);
+    const val = e.target.value;
+    setMessage(val);
     handleTyping();
+
+    const lastAt = val.lastIndexOf("@");
+    if (lastAt !== -1) {
+      const afterAt = val.slice(lastAt + 1);
+      if (!afterAt.includes(" ")) {
+        setMentionQuery(afterAt);
+        // Reset selection when query changes
+        setSelectedMentionIndex(0);
+      } else {
+        setMentionQuery(null);
+      }
+    } else {
+      setMentionQuery(null);
+    }
+  };
+
+  const handleMentionSelect = (selectedNickname: string) => {
+    if (mentionQuery === null) return;
+    const lastAt = message.lastIndexOf("@");
+    if (lastAt !== -1) {
+      const newMessage = message.slice(0, lastAt) + `@${selectedNickname} ` + message.slice(lastAt + 1 + mentionQuery.length);
+      setMessage(newMessage);
+    }
+    setMentionQuery(null);
+    inputRef.current?.focus();
+  };
+
+  const mentionSuggestions = mentionQuery !== null
+    ? activeUsers.filter(u => u.nickname.toLowerCase().includes(mentionQuery.toLowerCase()) && u.id !== userId)
+    : [];
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (mentionSuggestions.length > 0) {
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSelectedMentionIndex((prev) => (prev > 0 ? prev - 1 : mentionSuggestions.length - 1));
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSelectedMentionIndex((prev) => (prev < mentionSuggestions.length - 1 ? prev + 1 : 0));
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        handleMentionSelect(mentionSuggestions[selectedMentionIndex].nickname);
+      } else if (e.key === "Escape") {
+        setMentionQuery(null);
+      }
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -195,6 +248,7 @@ export function MessageInput({ roomId }: MessageInputProps) {
       <AnimatePresence>
         {uploadError && (
           <motion.div
+            key="upload-error"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
@@ -213,6 +267,7 @@ export function MessageInput({ roomId }: MessageInputProps) {
       <AnimatePresence>
         {selectedFile && (
           <motion.div
+            key="file-preview"
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
@@ -260,7 +315,43 @@ export function MessageInput({ roomId }: MessageInputProps) {
       )}
 
       {/* Input Row */}
-      <form onSubmit={handleSubmit} className="p-4">
+      <form onSubmit={handleSubmit} className="p-4 relative">
+        {/* Mention Suggestions */}
+        <AnimatePresence>
+          {mentionSuggestions.length > 0 && (
+            <motion.div
+              key="mention-suggestions"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              className="absolute bottom-[calc(100%-1rem)] left-12 mb-2 w-64 bg-[#121315] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 max-h-48 overflow-y-auto"
+            >
+              {mentionSuggestions.map((u, index) => (
+              <button
+                key={u.id}
+                type="button"
+                onClick={() => handleMentionSelect(u.nickname)}
+                onMouseEnter={() => setSelectedMentionIndex(index)}
+                className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 ${
+                  index === selectedMentionIndex
+                    ? "bg-blue-500/20 text-white"
+                    : "hover:bg-white/5 text-gray-300 hover:text-white"
+                }`}
+              >
+                  {u.avatar ? (
+                    <img src={u.avatar} alt="" className="w-6 h-6 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-[10px] font-bold text-white">
+                      {u.nickname.substring(0, 2).toUpperCase()}
+                    </div>
+                  )}
+                  <span className="truncate">{u.nickname}</span>
+                </button>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <div className="relative flex items-center gap-2">
           {/* Attachment Button */}
           <button
@@ -284,9 +375,11 @@ export function MessageInput({ roomId }: MessageInputProps) {
 
           {/* Text Input */}
           <input
+            ref={inputRef}
             type="text"
             value={message}
             onChange={handleChange}
+            onKeyDown={handleKeyDown}
             placeholder={selectedFile ? "Add a comment..." : "Type a message..."}
             className="flex-1 bg-white/5 border border-white/10 rounded-full py-3 pl-4 pr-12 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
             maxLength={500}

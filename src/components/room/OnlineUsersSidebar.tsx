@@ -5,7 +5,7 @@ import { GlassCard } from "@/components/layout/GlassCard";
 import { useUserStore } from "@/store/useUserStore";
 import { useDMStore } from "@/store/useDMStore";
 import { useRouter } from "next/navigation";
-import { MessageSquare, ShieldCheck } from "lucide-react";
+import { MessageSquare, ShieldCheck, UserPlus } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
 
@@ -13,8 +13,12 @@ interface OnlineUsersSidebarProps {
   roomId: string;
 }
 
+import { RoomInviteModal } from "./RoomInviteModal";
+import { useState } from "react";
+
 export function OnlineUsersSidebar({ roomId }: OnlineUsersSidebarProps) {
   const router = useRouter();
+  const [inviteOpen, setInviteOpen] = useState(false);
   const activeUsers = useChatStore((state) => state.activeUsers[roomId]) || [];
   const myUserId = useUserStore((state) => state.id);
 
@@ -41,12 +45,21 @@ export function OnlineUsersSidebar({ roomId }: OnlineUsersSidebarProps) {
     <div className="w-full md:w-64 flex-shrink-0 flex flex-col gap-4">
       <GlassCard className="flex-1 overflow-hidden flex flex-col">
         <div className="flex items-center justify-between mb-4 px-1">
-          <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider">
-            Online Users
-          </h3>
-          <span className="bg-white/10 text-white text-xs px-2 py-0.5 rounded-full">
-            {activeUsers.length}
-          </span>
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider">
+              Online
+            </h3>
+            <span className="bg-white/10 text-white text-xs px-2 py-0.5 rounded-full">
+              {activeUsers.length}
+            </span>
+          </div>
+          <button
+            onClick={() => setInviteOpen(true)}
+            className="text-xs flex items-center gap-1 text-blue-400 hover:text-blue-300 transition-colors"
+          >
+            <UserPlus className="w-3.5 h-3.5" />
+            Invite
+          </button>
         </div>
         
         <div className="flex-1 overflow-y-auto space-y-1 pr-2">
@@ -98,6 +111,15 @@ export function OnlineUsersSidebar({ roomId }: OnlineUsersSidebarProps) {
           )}
         </div>
       </GlassCard>
+      
+      {inviteOpen && (
+        <RoomInviteModal
+          isOpen={inviteOpen}
+          onClose={() => setInviteOpen(false)}
+          roomId={roomId}
+          roomName="the room" // Ideally passed as prop
+        />
+      )}
     </div>
   );
 }
