@@ -32,6 +32,10 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
 // Get all public rooms
 app.get('/api/rooms/public', async (req, res) => {
   try {
