@@ -3,6 +3,7 @@
 import { useChatStore } from "@/store/useChatStore";
 import { GlassCard } from "@/components/layout/GlassCard";
 import { useUserStore } from "@/store/useUserStore";
+import { useDMStore } from "@/store/useDMStore";
 import { useRouter } from "next/navigation";
 import { MessageSquare, ShieldCheck } from "lucide-react";
 
@@ -28,6 +29,7 @@ export function OnlineUsersSidebar({ roomId }: OnlineUsersSidebarProps) {
       });
       if (res.ok) {
         const conv = await res.json();
+        useDMStore.getState().setConversationsLoaded(false);
         router.push(`/dm/${conv.id}`);
       }
     } catch (err) {
@@ -68,7 +70,9 @@ export function OnlineUsersSidebar({ roomId }: OnlineUsersSidebarProps) {
                     {user.isAnonymous ? (
                       <span className="text-[10px] px-1.5 py-0.5 bg-white/10 rounded-sm text-white/50 leading-none">Guest</span>
                     ) : (
-                      <ShieldCheck className="w-3 h-3 text-green-400 flex-shrink-0" title="Verified Account" />
+                      <span title="Verified Account" className="flex items-center">
+                        <ShieldCheck className="w-3 h-3 text-green-400 flex-shrink-0" />
+                      </span>
                     )}
                   </p>
                   <p className="text-xs text-green-400">Online</p>

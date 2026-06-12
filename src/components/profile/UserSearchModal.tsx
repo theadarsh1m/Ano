@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Search, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useUserStore } from "@/store/useUserStore";
+import { useDMStore } from "@/store/useDMStore";
 import { usePresenceStore } from "@/store/usePresenceStore";
 import { GlassModal } from "@/components/layout/GlassModal";
 
@@ -80,6 +81,7 @@ export function UserSearchModal({ isOpen, onClose }: UserSearchModalProps) {
       });
       if (res.ok) {
         const conv = await res.json();
+        useDMStore.getState().setConversationsLoaded(false);
         onClose();
         router.push(`/dm/${conv.id}`);
       }
