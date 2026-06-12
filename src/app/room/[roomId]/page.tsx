@@ -13,6 +13,7 @@ import { GlassCard } from "@/components/layout/GlassCard";
 import { ChatArea } from "@/components/room/ChatArea";
 import { MessageInput } from "@/components/room/MessageInput";
 import { OnlineUsersSidebar } from "@/components/room/OnlineUsersSidebar";
+import { VoiceChannelList } from "@/components/room/VoiceChannelList";
 import { DropZone } from "@/components/room/DropZone";
 
 export default function RoomPage() {
@@ -200,13 +201,18 @@ export default function RoomPage() {
         </Button>
       </motion.div>
 
-      {/* Main Content Area */}
+        {/* Main Content Area */}
       <motion.div 
         initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ delay: 0.1 }}
-        className="flex-1 mt-6 flex flex-col md:flex-row gap-6 min-h-0"
+        className="flex-1 mt-6 flex flex-col md:flex-row gap-4 min-h-0"
       >
+        {/* Voice Channels Sidebar */}
+        <div className="flex md:flex flex-shrink-0">
+          <VoiceChannelList roomId={roomId} isOwner={userId === room?.createdBy} />
+        </div>
+
         {/* Chat Section */}
         <DropZone
           onFileDrop={(file) => {

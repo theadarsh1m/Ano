@@ -13,6 +13,7 @@ const cleanupService = require('./services/cleanupService');
 const authRoutes = require('./routes/authRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const notificationService = require('./services/notificationService');
+const voiceService = require('./services/voiceService');
 const prisma = require('./db');
 
 // Start cleanup service
@@ -97,6 +98,45 @@ app.get('/api/rooms/:roomId/messages', async (req, res) => {
   } catch (err) {
     console.error('Error fetching messages:', err);
     res.status(500).json({ error: 'Failed to fetch messages' });
+  }
+});
+
+// ========================
+// VOICE CHANNELS ENDPOINTS
+// ========================
+
+// Get voice channels for a room
+app.get('/api/rooms/:roomId/voice-channels', async (req, res) => {
+  try {
+    const channels = await voiceService.getVoiceChannels(req.params.roomId);
+    res.json(channels);
+  } catch (err) {
+    console.error('Error fetching voice channels:', err);
+    res.status(500).json({ error: 'Failed to fetch voice channels' });
+  }
+});
+
+// Create voice channel
+app.post('/api/rooms/:roomId/voice-channels', async (req, res) => {
+  try {
+    const { name, capacity } = req.body;
+    if (!name) return res.status(400).json({ error: 'Name is required' });
+    const channel = await voiceService.createVoiceChannel(req.params.roomId, name, capacity);
+    res.status(201).json(channel);
+  } catch (err) {
+    console.error('Error creating voice channel:', err);
+    res.status(500).json({ error: 'Failed to create voice channel' });
+  }
+});
+
+// Delete voice channel
+app.delete('/api/voice-channels/:channelId', async (req, res) => {
+  try {
+    await voiceService.deleteVoiceChannel(req.params.channelId);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting voice channel:', err);
+    res.status(500).json({ error: 'Failed to delete voice channel' });
   }
 });
 
@@ -379,6 +419,10 @@ const userToRoom = new Map();   // socketId -> roomId
 const onlineUsers = new Map();  // userId -> Set<socketId> (global presence)
 const socketToUser = new Map(); // socketId -> { userId, nickname }
 
+// Store active voice channel participants
+// Map of channelId -> Array of { userId, nickname, socketId }
+const voiceChannelUsers = new Map();
+
 io.on('connection', (socket) => {
   console.log(`User connected: ${socket.id}`);
 
@@ -431,11 +475,18 @@ io.on('connection', (socket) => {
       console.error('Failed to upsert user on join:', err.message);
     }
 
-    // Send the current list of online users to the room
-    const usersInRoom = Array.from(rooms.get(roomId));
-    io.to(roomId).emit('room_users', usersInRoom);
+    // Send current online users in the room to the newly joined user
+    const usersInRoom = Array.from(io.sockets.adapter.rooms.get(roomId) || [])
+      .map(sId => socketToUser.get(sId))
+      .filter(Boolean);
+      
+    // Send unique users based on nickname (or id)
+    const uniqueUsers = Array.from(new Map(usersInRoom.map(item => [item.nickname, item])).values());
+    socket.emit('room_users', uniqueUsers);
 
-    // Send chat history to the joining user
+    // Send current voice channel participants
+    const vUsers = voiceChannelUsers.get(roomId) || [];
+    socket.emit('voice_channel_participants', { channelId: roomId, users: vUsers });
     try {
       const history = await messageService.getMessages(roomId, 50);
       socket.emit('chat_history', history);
@@ -511,6 +562,54 @@ io.on('connection', (socket) => {
 
   socket.on('typing_stop', ({ roomId, nickname }) => {
     socket.to(roomId).emit('user_typing', { nickname, isTyping: false });
+  });
+
+  // ========================
+  // VOICE CHANNELS (WebRTC Signaling)
+  // ========================
+
+  socket.on('join_voice', ({ channelId, userId, nickname }) => {
+    socket.join(`vc_${channelId}`);
+    
+    // Add to global state
+    if (!voiceChannelUsers.has(channelId)) {
+      voiceChannelUsers.set(channelId, []);
+    }
+    const users = voiceChannelUsers.get(channelId);
+    if (!users.find(u => u.userId === userId)) {
+      users.push({ userId, nickname, socketId: socket.id });
+    }
+
+    // Broadcast to the whole room (which has ID = channelId) so lobby users see it
+    io.to(channelId).emit('voice_channel_participants', { channelId, users });
+
+    // Notify others in the voice channel for WebRTC connections
+    socket.to(`vc_${channelId}`).emit('user_joined_voice', { userId, nickname, socketId: socket.id });
+    console.log(`${nickname} joined voice channel ${channelId}`);
+  });
+
+  socket.on('leave_voice', ({ channelId, userId }) => {
+    socket.leave(`vc_${channelId}`);
+    
+    if (voiceChannelUsers.has(channelId)) {
+      let users = voiceChannelUsers.get(channelId);
+      users = users.filter(u => u.userId !== userId);
+      voiceChannelUsers.set(channelId, users);
+      io.to(channelId).emit('voice_channel_participants', { channelId, users });
+    }
+
+    socket.to(`vc_${channelId}`).emit('user_left_voice', { userId, socketId: socket.id });
+    console.log(`${userId} left voice channel ${channelId}`);
+  });
+
+  socket.on('webrtc_signal', ({ targetSocketId, channelId, signal, senderId }) => {
+    // Relay WebRTC signal (offer/answer/ice-candidate) to the specific target user's socket
+    io.to(targetSocketId).emit('webrtc_signal', {
+      senderSocketId: socket.id,
+      senderId,
+      channelId,
+      signal
+    });
   });
 
   // ========================
@@ -679,6 +778,17 @@ io.on('connection', (socket) => {
           await userService.updateLastSeen(userId);
         } catch (err) {
           console.error('Failed to update lastSeen:', err.message);
+        }
+
+        // Clean up from voice channels
+        for (const [channelId, users] of voiceChannelUsers.entries()) {
+          const userInChannel = users.find(u => u.socketId === socket.id);
+          if (userInChannel) {
+            const newUsers = users.filter(u => u.socketId !== socket.id);
+            voiceChannelUsers.set(channelId, newUsers);
+            io.to(channelId).emit('voice_channel_participants', { channelId, users: newUsers });
+            socket.to(`vc_${channelId}`).emit('user_left_voice', { userId: userInChannel.userId, socketId: socket.id });
+          }
         }
       }
 

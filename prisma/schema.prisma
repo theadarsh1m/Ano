@@ -41,9 +41,19 @@ model Room {
   type        String   @default("public")
   inviteCode  String?  @unique
   capacity    Int      @default(50)
-  createdAt   DateTime @default(now())
-  createdBy   String?
-  messages    Message[]
+  createdAt     DateTime       @default(now())
+  createdBy     String?
+  messages      Message[]
+  voiceChannels VoiceChannel[]
+}
+
+model VoiceChannel {
+  id        String   @id @default(uuid())
+  name      String
+  roomId    String
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  capacity  Int      @default(25)
+  createdAt DateTime @default(now())
 }
 
 model Message {

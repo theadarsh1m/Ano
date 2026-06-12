@@ -68,7 +68,7 @@ export function OnlineUsersSidebar({ roomId }: OnlineUsersSidebarProps) {
             
             return (
               <div
-                key={user.socketId}
+                key={user.userId}
                 className={`flex items-center gap-3 px-2 py-2 rounded-lg transition-colors ${
                   isMe ? "" : "hover:bg-white/5 cursor-pointer group"
                 }`}
