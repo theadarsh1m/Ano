@@ -4,9 +4,10 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useUserStore } from "@/store/useUserStore";
 import { ArrowLeft, Loader2 } from "lucide-react";
-import { SnakeGame } from "@/components/games/SnakeGame";
 import { Game2048 } from "@/components/games/Game2048";
 import { Minesweeper } from "@/components/games/Minesweeper";
+
+const API_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
 
 export default function SinglePlayerGamePage() {
   const params = useParams();
@@ -19,7 +20,7 @@ export default function SinglePlayerGamePage() {
   useEffect(() => {
     if (!userId) return;
     // Fetch stats for this game
-    fetch(`/api/games/stats/${userId}`)
+    fetch(`${API_URL}/api/games/stats/${userId}`)
       .then(res => res.json())
       .then(data => {
         const gameStat = data.find((s: any) => s.gameType === gameType);
@@ -36,7 +37,7 @@ export default function SinglePlayerGamePage() {
   const handleSaveResult = async (score: number, playTimeSeconds: number) => {
     if (!userId) return;
     try {
-      const res = await fetch('/api/games/save', {
+      const res = await fetch(`${API_URL}/api/games/save`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, gameType, score, playTimeSeconds })
@@ -53,8 +54,6 @@ export default function SinglePlayerGamePage() {
 
   const renderGame = () => {
     switch (gameType) {
-      case 'snake':
-        return <SnakeGame onGameEnd={handleSaveResult} />;
       case '2048':
         return <Game2048 onGameEnd={handleSaveResult} />;
       case 'minesweeper':
@@ -66,7 +65,6 @@ export default function SinglePlayerGamePage() {
 
   const getGameName = () => {
     switch (gameType) {
-      case 'snake': return 'Snake';
       case '2048': return '2048';
       case 'minesweeper': return 'Minesweeper';
       default: return 'Game';
@@ -84,7 +82,14 @@ export default function SinglePlayerGamePage() {
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <div>
+          
+          <button onClick={() => router.push("/dashboard")} className="flex items-center gap-3 cursor-pointer group hover:opacity-80 transition-opacity">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
+              <span className="text-white font-bold text-xs">A</span>
+            </div>
+          </button>
+          
+          <div className="ml-2 border-l border-white/20 pl-4">
             <h1 className="text-xl font-bold text-white flex items-center gap-2">
               {getGameName()}
             </h1>

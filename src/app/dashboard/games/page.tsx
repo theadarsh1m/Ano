@@ -1,17 +1,10 @@
 import { GlassCard } from "@/components/layout/GlassCard";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Gamepad2, Play, Trophy, Clock } from "lucide-react";
+import { Gamepad2, Play, Trophy, Clock, ArrowLeft, MessageSquare } from "lucide-react";
 
 export default function GamesHubPage() {
   const games = [
-    {
-      id: "snake",
-      title: "Snake",
-      description: "The classic arcade game. Eat food to grow longer, but don't hit the walls or yourself!",
-      icon: "🐍",
-      color: "from-green-500 to-emerald-700",
-    },
     {
       id: "2048",
       title: "2048",
@@ -29,8 +22,29 @@ export default function GamesHubPage() {
   ];
 
   return (
-    <div className="flex flex-col h-full space-y-6 max-w-6xl mx-auto w-full">
-      <div className="flex items-center justify-between">
+    <div className="flex flex-col h-full space-y-6 max-w-6xl mx-auto w-full p-6">
+      {/* Global Navbar for Games Hub */}
+      <div className="flex items-center justify-between bg-white/5 border border-white/10 rounded-2xl p-4 shadow-lg backdrop-blur-md">
+        <div className="flex items-center gap-4">
+          <Link href="/dashboard">
+            <div className="flex items-center gap-3 cursor-pointer group hover:opacity-80 transition-opacity">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
+                <MessageSquare className="w-5 h-5 text-white" />
+              </div>
+              <span className="text-xl font-bold text-white tracking-wide">Ano</span>
+            </div>
+          </Link>
+        </div>
+        
+        <Link href="/dashboard">
+          <Button variant="ghost" className="text-gray-400 hover:text-white">
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Dashboard
+          </Button>
+        </Link>
+      </div>
+
+      <div className="flex items-center justify-between pt-4">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl shadow-lg">
             <Gamepad2 className="w-6 h-6 text-white" />
