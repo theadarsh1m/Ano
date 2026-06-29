@@ -8,11 +8,28 @@ import { Input } from "@/components/ui/input";
 import { GlassCard } from "@/components/layout/GlassCard";
 import { motion, AnimatePresence } from "framer-motion";
 import { GoogleLogin } from '@react-oauth/google';
-import { Loader2, Check, X } from "lucide-react";
+import { Loader2, Check, X, Link2, Globe } from "lucide-react";
 
 export default function Home() {
   const router = useRouter();
   const { id, login, loginWithGoogle, updateProfile } = useUserStore();
+  const socials = [
+    {
+      label: "GitHub",
+      href: "https://github.com/theadarsh1m",
+      icon: Link2,
+    },
+    {
+      label: "LinkedIn",
+      href: "https://www.linkedin.com/in/adarshsachan01",
+      icon: Link2,
+    },
+    {
+      label: "Portfolio",
+      href: "https://theadarsh.me/",
+      icon: Globe,
+    },
+  ];
   const [nickname, setNickname] = useState("");
   const [isClient, setIsClient] = useState(false);
 
@@ -209,6 +226,24 @@ export default function Home() {
                   theme="filled_black"
                   shape="pill"
                 />
+              </div>
+
+              <div className="pt-2 border-t border-white/10">
+                <p className="text-xs uppercase tracking-[0.2em] text-white/40 mb-3">Find me online</p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {socials.map(({ label, href, icon: Icon }) => (
+                    <a
+                      key={label}
+                      href={href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-2 px-3 py-2 rounded-full border border-white/10 bg-white/5 text-sm text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+                    >
+                      <Icon className="w-4 h-4" />
+                      {label}
+                    </a>
+                  ))}
+                </div>
               </div>
             </GlassCard>
           </motion.div>
