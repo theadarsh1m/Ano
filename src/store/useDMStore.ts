@@ -30,6 +30,7 @@ export interface ConversationPreview {
     timestamp: number;
     senderId: string;
   } | null;
+  unreadCount?: number;
   updatedAt: number;
 }
 
@@ -49,6 +50,7 @@ export interface DMState {
   setDMMessages: (conversationId: string, messages: DMMessage[]) => void;
   incrementUnread: (conversationId: string) => void;
   markConversationAsRead: (conversationId: string) => void;
+  markMessagesAsSeen: (conversationId: string, readerId: string) => void;
   addDMTypingUser: (conversationId: string, nickname: string) => void;
   removeDMTypingUser: (conversationId: string, nickname: string) => void;
   getTotalUnreadDMs: () => number;
@@ -63,8 +65,17 @@ export const useDMStore = create<DMState>((set, get) => ({
   dmUnreadCounts: {},
   conversationsLoaded: false,
 
-  setConversations: (conversations) =>
-    set({ conversations, conversationsLoaded: true }),
+  setConversations: (conversations) => {
+    const counts: Record<string, number> = {};
+    conversations.forEach((c) => {
+      counts[c.id] = c.unreadCount || 0;
+    });
+    set({ 
+      conversations, 
+      dmUnreadCounts: { ...get().dmUnreadCounts, ...counts },
+      conversationsLoaded: true 
+    });
+  },
 
   addOrUpdateConversation: (conversation) =>
     set((state) => {
@@ -120,6 +131,20 @@ export const useDMStore = create<DMState>((set, get) => ({
         [conversationId]: 0,
       },
     })),
+
+  markMessagesAsSeen: (conversationId, readerId) =>
+    set((state) => {
+      const existing = state.dmMessages[conversationId] || [];
+      const updated = existing.map((msg) =>
+        msg.senderId !== readerId ? { ...msg, isRead: true } : msg
+      );
+      return {
+        dmMessages: {
+          ...state.dmMessages,
+          [conversationId]: updated,
+        },
+      };
+    }),
 
   addDMTypingUser: (conversationId, nickname) =>
     set((state) => {

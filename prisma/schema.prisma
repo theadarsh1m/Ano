@@ -99,6 +99,7 @@ model DirectMessage {
   id             String       @id @default(uuid())
   content        String
   type           String       @default("text")
+  isRead         Boolean      @default(false)
   createdAt      DateTime     @default(now())
 
   senderId       String

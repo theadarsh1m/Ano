@@ -197,11 +197,11 @@ app.post('/api/users', async (req, res) => {
 // Check nickname availability
 app.get('/api/users/check-nickname', async (req, res) => {
   try {
-    const { nickname } = req.query;
+    const { nickname, excludeUserId } = req.query;
     if (!nickname) {
       return res.status(400).json({ error: 'nickname is required' });
     }
-    const available = await userService.checkNicknameAvailability(nickname);
+    const available = await userService.checkNicknameAvailability(nickname, excludeUserId);
     res.json({ available });
   } catch (err) {
     console.error('Error checking nickname:', err);
@@ -303,6 +303,32 @@ app.get('/api/dm/:conversationId', async (req, res) => {
   } catch (err) {
     console.error('Error fetching conversation:', err);
     res.status(500).json({ error: 'Failed to fetch conversation' });
+  }
+});
+
+// Mark messages in a conversation as read
+app.post('/api/dm/:conversationId/read', async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId is required' });
+
+    await prisma.directMessage.updateMany({
+      where: {
+        conversationId,
+        senderId: { not: userId },
+        isRead: false
+      },
+      data: { isRead: true }
+    });
+
+    // Notify the room that messages are seen
+    io.to(`dm_${conversationId}`).emit('dm_seen', { conversationId, readerId: userId });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error marking messages as read:', err);
+    res.status(500).json({ error: 'Failed to mark messages as read' });
   }
 });
 
@@ -650,11 +676,28 @@ io.on('connection', (socket) => {
   });
 
   socket.on('dm_send', async (message) => {
+    // Check if the recipient is online and currently viewing the DM room
+    let isRead = false;
+    if (message.recipientId) {
+      const recipientSockets = onlineUsers.get(message.recipientId);
+      if (recipientSockets) {
+        for (const socketId of recipientSockets) {
+          const recipientSocket = io.sockets.sockets.get(socketId);
+          if (recipientSocket && recipientSocket.rooms.has(`dm_${message.conversationId}`)) {
+            isRead = true;
+            break;
+          }
+        }
+      }
+    }
+
+    message.isRead = isRead;
+
     // Broadcast to the DM room
     io.to(`dm_${message.conversationId}`).emit('dm_receive', message);
 
-    // Also send to the other participant's sockets if they're not in the DM room
-    if (message.recipientId) {
+    // Also send to the other participant's sockets if they're not in the DM room and message is unread
+    if (message.recipientId && !isRead) {
       const recipientSockets = onlineUsers.get(message.recipientId);
       if (recipientSockets) {
         for (const socketId of recipientSockets) {

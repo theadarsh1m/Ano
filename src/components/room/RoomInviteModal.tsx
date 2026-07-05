@@ -28,7 +28,9 @@ export function RoomInviteModal({ isOpen, onClose, roomId, roomName }: RoomInvit
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
+  const [onlineUsers, setOnlineUsers] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [onlineLoading, setOnlineLoading] = useState(false);
   const [invitedIds, setInvitedIds] = useState<Set<string>>(new Set());
   
   const inputRef = useRef<HTMLInputElement>(null);
@@ -38,11 +40,31 @@ export function RoomInviteModal({ isOpen, onClose, roomId, roomName }: RoomInvit
     if (isOpen) {
       setTimeout(() => inputRef.current?.focus(), 100);
       setInvitedIds(new Set());
+
+      // Fetch online users immediately on open
+      const fetchOnlineUsers = async () => {
+        setOnlineLoading(true);
+        try {
+          const res = await fetch(`${API_URL}/api/users/online`);
+          if (res.ok) {
+            const data = await res.json();
+            // Filter out current user
+            setOnlineUsers(data.filter((u: SearchResult) => u.id !== myUserId));
+          }
+        } catch (err) {
+          console.error("Failed to load online users:", err);
+        } finally {
+          setOnlineLoading(false);
+        }
+      };
+
+      fetchOnlineUsers();
     } else {
       setQuery("");
       setResults([]);
+      setOnlineUsers([]);
     }
-  }, [isOpen]);
+  }, [isOpen, myUserId]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -90,6 +112,9 @@ export function RoomInviteModal({ isOpen, onClose, roomId, roomName }: RoomInvit
     });
   };
 
+  const displayUsers = query.trim() ? results : onlineUsers;
+  const isLoading = query.trim() ? loading : onlineLoading;
+
   return (
     <GlassModal isOpen={isOpen} onClose={onClose} title="Invite to Room">
       <div className="relative mb-4">
@@ -113,19 +138,19 @@ export function RoomInviteModal({ isOpen, onClose, roomId, roomName }: RoomInvit
       </div>
 
       <div className="max-h-64 overflow-y-auto space-y-1">
-        {loading && (
+        {isLoading && (
           <div className="text-center py-4">
             <Loader2 className="w-5 h-5 animate-spin mx-auto text-blue-400" />
           </div>
         )}
 
-        {!loading && query && results.length === 0 && (
+        {!isLoading && displayUsers.length === 0 && (
           <p className="text-center text-gray-500 text-sm py-4">
-            No online users found
+            {query.trim() ? "No online users found" : "No other users online to invite"}
           </p>
         )}
 
-        {results.map((user) => {
+        {!isLoading && displayUsers.map((user) => {
           const isInvited = invitedIds.has(user.id);
           return (
             <div

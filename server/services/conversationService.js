@@ -62,28 +62,39 @@ const conversationService = {
       orderBy: { updatedAt: 'desc' },
     });
 
-    return conversations.map((conv) => {
-      const otherUser = conv.participantAId === userId
-        ? conv.participantB
-        : conv.participantA;
+    return Promise.all(
+      conversations.map(async (conv) => {
+        const otherUser = conv.participantAId === userId
+          ? conv.participantB
+          : conv.participantA;
 
-      const lastMessage = conv.messages[0] || null;
+        const lastMessage = conv.messages[0] || null;
 
-      return {
-        id: conv.id,
-        otherUser,
-        lastMessage: lastMessage
-          ? {
-              id: lastMessage.id,
-              content: lastMessage.content,
-              type: lastMessage.type,
-              timestamp: lastMessage.createdAt.getTime(),
-              senderId: lastMessage.senderId,
-            }
-          : null,
-        updatedAt: conv.updatedAt.getTime(),
-      };
-    });
+        const unreadCount = await prisma.directMessage.count({
+          where: {
+            conversationId: conv.id,
+            senderId: otherUser.id,
+            isRead: false,
+          },
+        });
+
+        return {
+          id: conv.id,
+          otherUser,
+          lastMessage: lastMessage
+            ? {
+                id: lastMessage.id,
+                content: lastMessage.content,
+                type: lastMessage.type,
+                timestamp: lastMessage.createdAt.getTime(),
+                senderId: lastMessage.senderId,
+              }
+            : null,
+          unreadCount,
+          updatedAt: conv.updatedAt.getTime(),
+        };
+      })
+    );
   },
 
   /**

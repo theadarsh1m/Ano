@@ -75,6 +75,13 @@ export default function DMPage() {
     setActiveConversation(conversationId);
     markConversationAsRead(conversationId);
 
+    // Mark as read on backend
+    fetch(`${API_URL}/api/dm/${conversationId}/read`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    }).catch(console.error);
+
     // Load DM history
     const loadHistory = async () => {
       try {

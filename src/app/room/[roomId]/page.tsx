@@ -7,7 +7,7 @@ import { useUserStore } from "@/store/useUserStore";
 import { useChatStore } from "@/store/useChatStore";
 import { socketService } from "@/lib/socket";
 import { Button } from "@/components/ui/button";
-import { LogOut, Lock, Unlock, Copy, Check, Wifi, WifiOff, Loader2 } from "lucide-react";
+import { LogOut, Lock, Unlock, Copy, Check, Wifi, WifiOff, Loader2, ArrowLeft, MessageSquare } from "lucide-react";
 import { motion } from "framer-motion";
 import { GlassCard } from "@/components/layout/GlassCard";
 import { ChatArea } from "@/components/room/ChatArea";
@@ -106,35 +106,55 @@ export default function RoomPage() {
         animate={{ opacity: 1, y: 0 }}
         className="flex justify-between items-center bg-black/40 backdrop-blur-md p-4 rounded-2xl border border-white/10 flex-shrink-0"
       >
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-white">{room.name}</h1>
-            <div className="bg-white/10 p-1.5 rounded-md">
-              {isPrivate ? <Lock className="w-4 h-4 text-purple-400" /> : <Unlock className="w-4 h-4 text-blue-400" />}
+        <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            onClick={handleLeave}
+            className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+
+          <div 
+            onClick={() => router.push("/dashboard")} 
+            className="flex items-center gap-3 cursor-pointer group hover:opacity-85 transition-opacity"
+          >
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
+              <MessageSquare className="w-4 h-4 text-white" />
             </div>
-            {isConnected ? (
-              <div className="flex items-center gap-1.5 ml-2 text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded-full border border-green-500/30">
-                <Wifi className="w-3 h-3" />
-                <span>Connected</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5 ml-2 text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded-full border border-red-500/30">
-                <WifiOff className="w-3 h-3" />
-                <span>Disconnected</span>
-              </div>
-            )}
+            <span className="text-lg font-bold text-white tracking-wide">Ano</span>
           </div>
-          
-          <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-            {isPrivate && (
-              <button 
-                onClick={copyRoomCode}
-                className="flex items-center gap-1.5 hover:text-white transition-colors cursor-pointer bg-white/5 px-2 py-0.5 rounded border border-white/10"
-              >
-                Code: <span className="font-mono tracking-wider">{room.inviteCode || room.id}</span>
-                {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
-              </button>
-            )}
+
+          <div className="ml-2 border-l border-white/20 pl-4">
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl font-bold text-white">{room.name}</h1>
+              <div className="bg-white/10 p-1.5 rounded-md">
+                {isPrivate ? <Lock className="w-4 h-4 text-purple-400" /> : <Unlock className="w-4 h-4 text-blue-400" />}
+              </div>
+              {isConnected ? (
+                <div className="flex items-center gap-1.5 ml-2 text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded-full border border-green-500/30">
+                  <Wifi className="w-3 h-3" />
+                  <span>Connected</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 ml-2 text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded-full border border-red-500/30">
+                  <WifiOff className="w-3 h-3" />
+                  <span>Disconnected</span>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex items-center gap-4 mt-1.5 text-xs text-muted-foreground">
+              {isPrivate && (
+                <button 
+                  onClick={copyRoomCode}
+                  className="flex items-center gap-1.5 hover:text-white transition-colors cursor-pointer bg-white/5 px-2 py-0.5 rounded border border-white/10"
+                >
+                  Code: <span className="font-mono tracking-wider">{room.inviteCode || room.id}</span>
+                  {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                </button>
+              )}
+            </div>
           </div>
         </div>
 

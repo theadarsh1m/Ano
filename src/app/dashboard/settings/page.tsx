@@ -6,7 +6,7 @@ import { GlassCard } from "@/components/layout/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useState, useEffect } from "react";
-import { ShieldCheck, ArrowLeft } from "lucide-react";
+import { ShieldCheck, ArrowLeft, MessageSquare } from "lucide-react";
 import Link from "next/link";
 
 export default function SettingsPage() {
@@ -32,10 +32,22 @@ export default function SettingsPage() {
     <div className="max-w-2xl mx-auto p-4 md:p-6 lg:p-8 w-full">
       <div className="flex items-center gap-4 mb-6">
         <Link href="/dashboard">
-          <Button variant="ghost" size="icon" className="text-white hover:bg-white/10 rounded-full">
+          <Button variant="ghost" size="icon" className="text-white hover:bg-white/10 rounded-full h-8 w-8 flex items-center justify-center">
             <ArrowLeft className="w-5 h-5" />
           </Button>
         </Link>
+        
+        <Link href="/dashboard">
+          <div className="flex items-center gap-3 cursor-pointer group hover:opacity-85 transition-opacity">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
+              <MessageSquare className="w-4 h-4 text-white" />
+            </div>
+            <span className="text-lg font-bold text-white tracking-wide">Ano</span>
+          </div>
+        </Link>
+      </div>
+
+      <div className="mb-6">
         <h1 className="text-3xl font-bold text-white">Account Settings</h1>
       </div>
 
@@ -72,9 +84,9 @@ export default function SettingsPage() {
                 <Button 
                   onClick={handleSave} 
                   disabled={isSaving || newNickname === nickname}
-                  className="glass-button text-white"
+                  className="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-4 border-none"
                 >
-                  Save
+                  {isSaving ? "Saving..." : "Save"}
                 </Button>
               </div>
             </div>

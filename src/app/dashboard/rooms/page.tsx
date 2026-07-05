@@ -6,7 +6,7 @@ import { RoomCard } from "@/components/room/RoomCard";
 import { CreateRoomModal } from "@/components/room/CreateRoomModal";
 import { JoinRoomModal } from "@/components/room/JoinRoomModal";
 import { Button } from "@/components/ui/button";
-import { Plus, ArrowLeft, KeyRound, Loader2, Globe, Lock } from "lucide-react";
+import { Plus, ArrowLeft, KeyRound, Loader2, Globe, Lock, MessageSquare } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -67,17 +67,31 @@ export default function RoomsPage() {
           animate={{ opacity: 1, y: 0 }}
           className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
         >
-          <div>
-            <Button 
-              variant="ghost" 
-              onClick={() => router.push("/dashboard")}
-              className="mb-4 text-muted-foreground hover:text-white"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Dashboard
-            </Button>
-            <h1 className="text-3xl font-bold text-white">Chat Rooms</h1>
-            <p className="text-muted-foreground mt-2">Join an open conversation or access your private spaces.</p>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-4">
+              <Button 
+                variant="ghost" 
+                onClick={() => router.push("/dashboard")}
+                className="text-muted-foreground hover:text-white px-2 rounded-full h-8 w-8 flex items-center justify-center"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </Button>
+              
+              <div 
+                onClick={() => router.push("/dashboard")} 
+                className="flex items-center gap-3 cursor-pointer group hover:opacity-85 transition-opacity"
+              >
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
+                  <MessageSquare className="w-4 h-4 text-white" />
+                </div>
+                <span className="text-lg font-bold text-white tracking-wide">Ano</span>
+              </div>
+            </div>
+
+            <div className="mt-2">
+              <h1 className="text-3xl font-bold text-white">Chat Rooms</h1>
+              <p className="text-muted-foreground mt-1">Join an open conversation or access your private spaces.</p>
+            </div>
           </div>
           
           <div className="flex gap-3 w-full md:w-auto">

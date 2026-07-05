@@ -66,7 +66,7 @@ export default function Home() {
     const checkAvailability = async () => {
       setIsChecking(true);
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001'}/api/users/check-nickname?nickname=${encodeURIComponent(debouncedUsername)}`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001'}/api/users/check-nickname?nickname=${encodeURIComponent(debouncedUsername)}&excludeUserId=${id || ''}`);
         const data = await res.json();
         setIsAvailable(data.available);
       } catch (err) {
@@ -76,7 +76,7 @@ export default function Home() {
       }
     };
     checkAvailability();
-  }, [debouncedUsername]);
+  }, [debouncedUsername, id]);
 
   const handleJoin = (e: React.FormEvent) => {
     e.preventDefault();

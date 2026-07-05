@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useUserStore } from "@/store/useUserStore";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, MessageSquare } from "lucide-react";
 import { Game2048 } from "@/components/games/Game2048";
 import { Minesweeper } from "@/components/games/Minesweeper";
 
@@ -85,8 +85,9 @@ export default function SinglePlayerGamePage() {
           
           <button onClick={() => router.push("/dashboard")} className="flex items-center gap-3 cursor-pointer group hover:opacity-80 transition-opacity">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
-              <span className="text-white font-bold text-xs">A</span>
+              <MessageSquare className="w-4 h-4 text-white" />
             </div>
+            <span className="text-lg font-bold text-white tracking-wide">Ano</span>
           </button>
           
           <div className="ml-2 border-l border-white/20 pl-4">

@@ -144,9 +144,9 @@ const userService = {
   },
 
   /**
-   * Check if a nickname is available (case-insensitive).
+   * Check if a nickname is available (case-insensitive), optionally excluding a user ID.
    */
-  async checkNicknameAvailability(nickname) {
+  async checkNicknameAvailability(nickname, excludeUserId) {
     if (!nickname || nickname.trim().length === 0) return false;
     
     const existing = await prisma.user.findFirst({
@@ -155,6 +155,9 @@ const userService = {
           equals: nickname.trim(),
           mode: 'insensitive',
         },
+        NOT: excludeUserId ? {
+          id: excludeUserId,
+        } : undefined,
       },
     });
     

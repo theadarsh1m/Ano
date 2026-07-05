@@ -61,6 +61,10 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         .catch(() => {});
     };
 
+    const onDMSeen = ({ conversationId, readerId }: any) => {
+      useDMStore.getState().markMessagesAsSeen(conversationId, readerId);
+    };
+
     const onNewNotification = (notification: any) => {
       useNotificationStore.getState().addNotification(notification);
     };
@@ -69,6 +73,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     socket.on("user_offline", onUserOffline);
     socket.on("online_users", onOnlineUsers);
     socket.on("dm_notification", onDMNotification);
+    socket.on("dm_seen", onDMSeen);
     socket.on("new_notification", onNewNotification);
 
     // Initial fetch of notifications
@@ -86,6 +91,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       socket.off("user_offline", onUserOffline);
       socket.off("online_users", onOnlineUsers);
       socket.off("dm_notification", onDMNotification);
+      socket.off("dm_seen", onDMSeen);
       socket.off("new_notification", onNewNotification);
     };
   }, [userId, nickname, activeConversationId, setUserOnline, setUserOffline, setOnlineUsers, addDMMessage, incrementUnread, setConversations]);

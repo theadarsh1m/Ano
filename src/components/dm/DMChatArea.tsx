@@ -114,11 +114,16 @@ export function DMChatArea({ conversationId }: DMChatAreaProps) {
                     >
                       {renderContent(msg)}
                     </div>
-                    <span className="text-[10px] text-gray-500 mt-1">
+                    <span className="text-[10px] text-gray-500 mt-1 flex items-center gap-1">
                       {new Date(msg.timestamp).toLocaleTimeString([], {
                         hour: "2-digit",
                         minute: "2-digit",
                       })}
+                      {isMe && (
+                        <span className={msg.isRead ? "text-blue-400 font-medium" : "text-gray-500"}>
+                          • {msg.isRead ? "Seen" : "Sent"}
+                        </span>
+                      )}
                     </span>
                   </div>
                 </div>
