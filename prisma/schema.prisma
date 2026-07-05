@@ -35,6 +35,12 @@ model User {
 
   // Game relations
   gameStats           GameStat[]
+
+  // Feed relations
+  posts      Post[]      @relation("PostAuthor")
+  comments   Comment[]   @relation("CommentAuthor")
+  votes      Vote[]      @relation("UserVotes")
+  savedPosts SavedPost[] @relation("UserSavedPosts")
 }
 
 model Room {
@@ -148,3 +154,65 @@ model GameStat {
 
   @@unique([userId, gameType])
 }
+
+// ========================
+// COMMUNITY FEED MODELS
+// ========================
+
+model Post {
+  id           String      @id @default(uuid())
+  content      String?     // Text content
+  imageUrl     String?     // Cloudinary image URL
+  isAnonymous  Boolean     @default(false)
+  score        Int         @default(0)  // Cached vote score
+  authorId     String
+  author       User        @relation("PostAuthor", fields: [authorId], references: [id])
+  tags         String[]    @default([])
+  commentCount Int         @default(0)
+  isLocked     Boolean     @default(false) // Lock comments
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  votes    Vote[]
+  comments Comment[]
+  savedBy  SavedPost[]
+}
+
+model Comment {
+  id          String    @id @default(uuid())
+  content     String
+  isAnonymous Boolean   @default(false)
+  authorId    String
+  author      User      @relation("CommentAuthor", fields: [authorId], references: [id])
+  postId      String
+  post        Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  parentId    String?   // null = top-level, set = nested reply
+  parent      Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  replies     Comment[] @relation("CommentReplies")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Vote {
+  id        String   @id @default(uuid())
+  value     Int      // +1 upvote, -1 downvote
+  userId    String
+  user      User     @relation("UserVotes", fields: [userId], references: [id])
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, postId])
+}
+
+model SavedPost {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation("UserSavedPosts", fields: [userId], references: [id])
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, postId])
+}
+

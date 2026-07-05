@@ -6,7 +6,7 @@ import { useUserStore } from "@/store/useUserStore";
 import { GlassCard } from "@/components/layout/GlassCard";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { motion } from "framer-motion";
-import { MessageSquare, Lock, Gamepad2, Settings } from "lucide-react";
+import { MessageSquare, Lock, Gamepad2, Settings, Newspaper } from "lucide-react";
 import { OnlineUsersList } from "@/components/dashboard/OnlineUsersList";
 
 export default function Dashboard() {
@@ -29,8 +29,8 @@ export default function Dashboard() {
   const joinDate = joinedAt ? new Date(joinedAt).toLocaleDateString() : "Unknown";
 
   const cards = [
-    { title: "Public Rooms", desc: "Join open communities and chat with everyone", icon: MessageSquare, href: "/dashboard/public-rooms", color: "from-blue-500 to-blue-600" },
-    { title: "Private Rooms", desc: "Create secure rooms with invite codes", icon: Lock, href: "/dashboard/private-rooms", color: "from-purple-500 to-purple-600" },
+    { title: "Community Feed", desc: "Share thoughts, memes, and discussions", icon: Newspaper, href: "/feed", color: "from-orange-500 to-pink-600" },
+    { title: "Rooms", desc: "Join public rooms or access private spaces", icon: MessageSquare, href: "/dashboard/rooms", color: "from-blue-500 to-indigo-600" },
     { title: "Games", desc: "Play games with friends", icon: Gamepad2, href: "/dashboard/games", color: "from-green-500 to-green-600" },
     { title: "Settings", desc: "Customize your experience", icon: Settings, href: "/dashboard/settings", color: "from-gray-500 to-gray-600" },
   ];

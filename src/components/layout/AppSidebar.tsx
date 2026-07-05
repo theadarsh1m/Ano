@@ -15,6 +15,8 @@ import {
   LogOut,
   Home,
   UserPlus,
+  Newspaper,
+  Bookmark,
 } from "lucide-react";
 
 export function AppSidebar() {
@@ -32,8 +34,9 @@ export function AppSidebar() {
 
   const navItems = [
     { label: "Dashboard", icon: Home, href: "/dashboard", active: pathname === "/dashboard" },
-    { label: "Public Rooms", icon: MessageSquare, href: "/dashboard/public-rooms", active: pathname === "/dashboard/public-rooms" },
-    { label: "Private Rooms", icon: Lock, href: "/dashboard/private-rooms", active: pathname === "/dashboard/private-rooms" },
+    { label: "Feed", icon: Newspaper, href: "/feed", active: pathname?.startsWith("/feed") ?? false },
+    { label: "Rooms", icon: MessageSquare, href: "/dashboard/rooms", active: pathname === "/dashboard/rooms" },
+    { label: "Saved Posts", icon: Bookmark, href: "/feed/saved", active: pathname === "/feed/saved" },
     { label: "Settings", icon: Settings, href: "/dashboard/settings", active: pathname === "/dashboard/settings" },
   ];
 

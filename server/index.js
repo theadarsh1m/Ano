@@ -13,6 +13,7 @@ const cleanupService = require('./services/cleanupService');
 const authRoutes = require('./routes/authRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const gameRoutes = require('./routes/gameRoutes');
+const feedRoutes = require('./routes/feedRoutes');
 const notificationService = require('./services/notificationService');
 const voiceService = require('./services/voiceService');
 const prisma = require('./db');
@@ -28,6 +29,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/games', gameRoutes);
+app.use('/api/feed', feedRoutes);
 
 const server = http.createServer(app);
 
