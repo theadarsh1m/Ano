@@ -32,7 +32,7 @@ export function RoomCard({ room, onClick }: RoomCardProps) {
           </div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground bg-black/20 px-3 py-1 rounded-full">
             <Users className="w-4 h-4" />
-            <span>Cap: {room.capacity}</span>
+            <span>{room.activeMembers ?? 0} / {room.capacity}</span>
           </div>
         </div>
         

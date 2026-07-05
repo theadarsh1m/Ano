@@ -41,7 +41,7 @@ export function ConversationList() {
           setConversations(data);
         }
       } catch (err) {
-        console.error("Failed to load conversations:", err);
+        console.warn("Failed to load conversations:", err);
       }
     };
 

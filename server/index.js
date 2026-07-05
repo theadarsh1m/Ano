@@ -38,6 +38,16 @@ const io = new Server(server, {
   }
 });
 
+// In-memory state
+const rooms = new Map();        // roomId -> Set of { socketId, userId, nickname }
+const userToRoom = new Map();   // socketId -> roomId
+const onlineUsers = new Map();  // userId -> Set<socketId> (global presence)
+const socketToUser = new Map(); // socketId -> { userId, nickname }
+
+// Store active voice channel participants
+// Map of channelId -> Array of { userId, nickname, socketId }
+const voiceChannelUsers = new Map();
+
 // ========================
 // REST API ENDPOINTS
 // ========================
@@ -54,8 +64,12 @@ app.get('/health', (req, res) => {
 // Get all public rooms
 app.get('/api/rooms/public', async (req, res) => {
   try {
-    const rooms = await roomService.getAllPublicRooms();
-    res.json(rooms);
+    const roomsFromDb = await roomService.getAllPublicRooms();
+    const enrichedRooms = roomsFromDb.map(r => ({
+      ...r,
+      activeMembers: rooms.has(r.id) ? rooms.get(r.id).size : 0
+    }));
+    res.json(enrichedRooms);
   } catch (err) {
     console.error('Error fetching public rooms:', err);
     res.status(500).json({ error: 'Failed to fetch rooms' });
@@ -69,7 +83,8 @@ app.get('/api/rooms/:roomId', async (req, res) => {
     if (!room) {
       return res.status(404).json({ error: 'Room not found' });
     }
-    res.json(room);
+    const activeMembers = rooms.has(room.id) ? rooms.get(room.id).size : 0;
+    res.json({ ...room, activeMembers });
   } catch (err) {
     console.error('Error fetching room:', err);
     res.status(500).json({ error: 'Failed to fetch room' });
@@ -145,6 +160,22 @@ app.delete('/api/voice-channels/:channelId', async (req, res) => {
 // ========================
 // USER ENDPOINTS
 // ========================
+
+// Get currently online users
+app.get('/api/users/online', async (req, res) => {
+  try {
+    const onlineIds = Array.from(onlineUsers.keys());
+    if (onlineIds.length === 0) return res.json([]);
+    const users = await prisma.user.findMany({
+      where: { id: { in: onlineIds } },
+      select: { id: true, nickname: true, avatar: true, bio: true }
+    });
+    res.json(users);
+  } catch (err) {
+    console.error('Error fetching online users:', err);
+    res.status(500).json({ error: 'Failed to fetch online users' });
+  }
+});
 
 // Upsert an anonymous user
 app.post('/api/users', async (req, res) => {
@@ -414,16 +445,6 @@ app.delete('/api/upload', async (req, res) => {
 // ========================
 // SOCKET.IO HANDLERS
 // ========================
-
-// In-memory state
-const rooms = new Map();        // roomId -> Set of { socketId, userId, nickname }
-const userToRoom = new Map();   // socketId -> roomId
-const onlineUsers = new Map();  // userId -> Set<socketId> (global presence)
-const socketToUser = new Map(); // socketId -> { userId, nickname }
-
-// Store active voice channel participants
-// Map of channelId -> Array of { userId, nickname, socketId }
-const voiceChannelUsers = new Map();
 
 io.on('connection', (socket) => {
   console.log(`User connected: ${socket.id}`);

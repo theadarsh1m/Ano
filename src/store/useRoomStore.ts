@@ -7,6 +7,7 @@ export interface Room {
   description?: string | null;
   inviteCode?: string | null;
   capacity: number;
+  activeMembers?: number;
   createdAt: string | number;
   createdBy: string | null;
 }

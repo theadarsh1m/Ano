@@ -7,6 +7,7 @@ import { GlassCard } from "@/components/layout/GlassCard";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { motion } from "framer-motion";
 import { MessageSquare, Lock, Gamepad2, Settings } from "lucide-react";
+import { OnlineUsersList } from "@/components/dashboard/OnlineUsersList";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -84,6 +85,15 @@ export default function Dashboard() {
                 </GlassCard>
               </motion.div>
             ))}
+          </motion.div>
+
+          {/* Online Users List */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6 }}
+          >
+            <OnlineUsersList />
           </motion.div>
         </div>
       </main>
