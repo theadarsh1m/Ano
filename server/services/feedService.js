@@ -11,7 +11,7 @@ const feedService = {
   /**
    * Create a new post.
    */
-  async createPost(authorId, { content, imageUrl, isAnonymous = false, tags = [] }) {
+  async createPost(authorId, { content, imageUrl, isAnonymous = false, tags = [], moderationStatus, isNSFW, nsfwConfidence }) {
     // Filter to only valid tags
     const validTags = tags.filter(t => AVAILABLE_TAGS.includes(t));
 
@@ -22,6 +22,9 @@ const feedService = {
         isAnonymous,
         authorId,
         tags: validTags,
+        moderationStatus,
+        isNSFW,
+        nsfwConfidence,
       },
       include: {
         author: {
@@ -43,6 +46,12 @@ const feedService = {
     if (tag) {
       where.tags = { has: tag };
     }
+
+    // Hide posts that are not fully moderated (PENDING/SCANNING) from other users
+    where.OR = [
+      { moderationStatus: { in: ['APPROVED', 'FLAGGED'] } },
+      ...(userId ? [{ authorId: userId }] : []),
+    ];
 
     let orderBy;
     if (tab === 'trending') {
@@ -134,6 +143,11 @@ const feedService = {
     });
 
     if (!post) return null;
+
+    // Block non-author if post is still PENDING or SCANNING
+    if (['PENDING', 'SCANNING'].includes(post.moderationStatus) && post.authorId !== requesterId) {
+      return null;
+    }
 
     const userVote = post.votes?.[0]?.value || 0;
     const isSaved = post.savedBy?.length > 0;

@@ -165,7 +165,7 @@ export function CreatePostModal({ isOpen, onClose }: CreatePostModalProps) {
         {/* Submit */}
         <button
           onClick={handleSubmit}
-          disabled={submitting || (!content.trim() && !imageUrl)}
+          disabled={submitting || uploading || (!content.trim() && !imageUrl)}
           className="w-full py-2.5 rounded-xl text-sm font-semibold bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {submitting ? (
@@ -173,6 +173,8 @@ export function CreatePostModal({ isOpen, onClose }: CreatePostModalProps) {
               <Loader2 className="w-4 h-4 animate-spin" />
               Posting...
             </span>
+          ) : uploading ? (
+            "Uploading image..."
           ) : (
             "Post"
           )}

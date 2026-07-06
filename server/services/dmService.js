@@ -19,6 +19,9 @@ const dmService = {
           fileName: message.fileName || null,
           fileSize: message.fileSize || null,
           fileType: message.fileType || null,
+          moderationStatus: message.moderationStatus || 'APPROVED',
+          isNSFW: message.isNSFW || false,
+          nsfwConfidence: message.nsfwConfidence || 0,
         },
       }),
       prisma.conversation.update({

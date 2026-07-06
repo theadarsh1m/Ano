@@ -591,25 +591,32 @@ io.on('connection', (socket) => {
   });
 
   socket.on('send_message', async (message) => {
-    io.to(message.roomId).emit('receive_message', message);
-
     try {
-      await messageService.saveMessage(message);
-
-      // Asynchronously moderate image attachments
+      // Synchronously moderate image attachments
       const isImage = message.fileUrl && message.fileType && message.fileType.startsWith('image/');
+      let moderationData = {
+        moderationStatus: 'APPROVED',
+        isNSFW: false,
+        nsfwConfidence: 0,
+      };
+
       if (isImage) {
-        moderationService.moderateMessage(message.id, message.roomId, message.fileUrl).catch((err) => {
-          console.error(`Failed to moderate room message ${message.id} asynchronously:`, err);
-        });
-      } else {
-        prisma.message.update({
-          where: { id: message.id },
-          data: { moderationStatus: 'APPROVED', isNSFW: false, nsfwConfidence: 0 },
-        }).catch((err) => {
-          console.error(`Failed to approve text room message ${message.id}:`, err);
-        });
+        const scan = await moderationService.moderateImage(message.fileUrl);
+        moderationData = {
+          moderationStatus: scan.moderationStatus,
+          isNSFW: scan.isNSFW,
+          nsfwConfidence: scan.nsfwConfidence,
+        };
       }
+
+      const moderatedMessage = {
+        ...message,
+        ...moderationData,
+      };
+
+      io.to(message.roomId).emit('receive_message', moderatedMessage);
+
+      await messageService.saveMessage(moderatedMessage);
 
       // Parse mentions
       const mentionMatches = message.content.match(/@([a-zA-Z0-9_]+)/g);
@@ -714,6 +721,28 @@ io.on('connection', (socket) => {
   });
 
   socket.on('dm_send', async (message) => {
+    // Synchronously moderate image attachments
+    const isImage = message.fileUrl && message.fileType && message.fileType.startsWith('image/');
+    let moderationData = {
+      moderationStatus: 'APPROVED',
+      isNSFW: false,
+      nsfwConfidence: 0,
+    };
+
+    if (isImage) {
+      const scan = await moderationService.moderateImage(message.fileUrl);
+      moderationData = {
+        moderationStatus: scan.moderationStatus,
+        isNSFW: scan.isNSFW,
+        nsfwConfidence: scan.nsfwConfidence,
+      };
+    }
+
+    const moderatedMessage = {
+      ...message,
+      ...moderationData,
+    };
+
     // Check if the recipient is online and currently viewing the DM room
     let isRead = false;
     if (message.recipientId) {
@@ -729,10 +758,10 @@ io.on('connection', (socket) => {
       }
     }
 
-    message.isRead = isRead;
+    moderatedMessage.isRead = isRead;
 
     // Broadcast to the DM room
-    io.to(`dm_${message.conversationId}`).emit('dm_receive', message);
+    io.to(`dm_${message.conversationId}`).emit('dm_receive', moderatedMessage);
 
     // Also send to the other participant's sockets if they're not in the DM room and message is unread
     if (message.recipientId && !isRead) {
@@ -743,7 +772,7 @@ io.on('connection', (socket) => {
           if (recipientSocket && !recipientSocket.rooms.has(`dm_${message.conversationId}`)) {
             recipientSocket.emit('dm_notification', {
               conversationId: message.conversationId,
-              message,
+              message: moderatedMessage,
             });
           }
         }
@@ -752,22 +781,7 @@ io.on('connection', (socket) => {
 
     // Persist to database
     try {
-      await dmService.saveDirectMessage(message);
-
-      // Asynchronously moderate image attachments in DMs
-      const isImage = message.fileUrl && message.fileType && message.fileType.startsWith('image/');
-      if (isImage) {
-        moderationService.moderateDirectMessage(message.id, message.conversationId, message.fileUrl).catch((err) => {
-          console.error(`Failed to moderate DM message ${message.id} asynchronously:`, err);
-        });
-      } else {
-        prisma.directMessage.update({
-          where: { id: message.id },
-          data: { moderationStatus: 'APPROVED', isNSFW: false, nsfwConfidence: 0 },
-        }).catch((err) => {
-          console.error(`Failed to approve text DM message ${message.id}:`, err);
-        });
-      }
+      await dmService.saveDirectMessage(moderatedMessage);
 
       // Parse mentions in DMs
       const mentionMatches = message.content.match(/@([a-zA-Z0-9_]+)/g);

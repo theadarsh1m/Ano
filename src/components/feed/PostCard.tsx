@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { MessageCircle, Bookmark, BookmarkCheck, Share2, Trash2, MoreHorizontal, User, Check } from "lucide-react";
+import { MessageCircle, Bookmark, BookmarkCheck, Share2, Trash2, MoreHorizontal, User, Check, Loader2 } from "lucide-react";
 import { VoteButtons } from "./VoteButtons";
 import { FeedPost } from "@/store/useFeedStore";
 import { SafeMedia } from "../ui/SafeMedia";
@@ -99,13 +99,20 @@ export function PostCard({ post, onVote, onSave, onUnsave, onDelete, isOwner }: 
         {/* Image */}
         {post.imageUrl && (
           <div className="mb-3 rounded-lg overflow-hidden max-h-80">
-            <SafeMedia
-              src={post.imageUrl}
-              isNSFW={!!post.isNSFW}
-              mediaId={`post_${post.id}`}
-              alt="Post image"
-              className="w-full h-full object-cover"
-            />
+            {['PENDING', 'SCANNING'].includes(post.moderationStatus || '') ? (
+              <div className="w-full h-48 bg-white/5 border border-dashed border-white/20 rounded-lg flex flex-col items-center justify-center gap-2 select-none animate-pulse">
+                <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />
+                <span className="text-xs text-gray-400 font-medium">Scanning image for safety...</span>
+              </div>
+            ) : (
+              <SafeMedia
+                src={post.imageUrl}
+                isNSFW={!!post.isNSFW}
+                mediaId={`post_${post.id}`}
+                alt="Post image"
+                className="w-full h-full object-cover"
+              />
+            )}
           </div>
         )}
 

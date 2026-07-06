@@ -56,22 +56,21 @@ router.post('/', async (req, res) => {
     if (!authorId) return res.status(400).json({ error: 'authorId is required' });
     if (!content && !imageUrl) return res.status(400).json({ error: 'Content or image is required' });
 
-    const post = await feedService.createPost(authorId, { content, imageUrl, isAnonymous, tags });
+    const post = await feedService.createPost(authorId, {
+      content,
+      imageUrl,
+      isAnonymous,
+      tags,
+      moderationStatus: imageUrl ? 'PENDING' : 'APPROVED',
+      isNSFW: false,
+      nsfwConfidence: 0,
+    });
 
-    // Asynchronously run moderation pipeline in background
+    // Run moderation pipeline asynchronously in the background
     if (imageUrl) {
       const moderationService = require('../services/moderationService');
       moderationService.moderatePost(post.id, imageUrl).catch((err) => {
         console.error(`Failed to moderate post ${post.id} asynchronously:`, err);
-      });
-    } else {
-      // Set to APPROVED immediately if no media
-      const prisma = require('../db');
-      prisma.post.update({
-        where: { id: post.id },
-        data: { moderationStatus: 'APPROVED', isNSFW: false, nsfwConfidence: 0 },
-      }).catch((err) => {
-        console.error(`Failed to approve text-only post ${post.id}:`, err);
       });
     }
 

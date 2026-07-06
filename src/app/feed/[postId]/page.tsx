@@ -204,13 +204,20 @@ export default function PostDetailPage() {
               {/* Image */}
               {post.imageUrl && (
                 <div className="mb-3 rounded-xl overflow-hidden">
-                  <SafeMedia
-                    src={post.imageUrl}
-                    isNSFW={!!post.isNSFW}
-                    mediaId={`post_${post.id}`}
-                    alt="Post image"
-                    className="w-full max-h-[500px] object-contain bg-black/20"
-                  />
+                  {['PENDING', 'SCANNING'].includes(post.moderationStatus || '') ? (
+                    <div className="w-full h-64 bg-white/5 border border-dashed border-white/20 rounded-xl flex flex-col items-center justify-center gap-2 select-none animate-pulse">
+                      <Loader2 className="w-6 h-6 text-blue-400 animate-spin" />
+                      <span className="text-sm text-gray-400 font-medium">Scanning image for safety...</span>
+                    </div>
+                  ) : (
+                    <SafeMedia
+                      src={post.imageUrl}
+                      isNSFW={!!post.isNSFW}
+                      mediaId={`post_${post.id}`}
+                      alt="Post image"
+                      className="w-full max-h-[500px] object-contain bg-black/20"
+                    />
+                  )}
                 </div>
               )}
 
