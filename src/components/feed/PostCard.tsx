@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { MessageCircle, Bookmark, BookmarkCheck, Share2, Trash2, MoreHorizontal, User, Check } from "lucide-react";
 import { VoteButtons } from "./VoteButtons";
 import { FeedPost } from "@/store/useFeedStore";
+import { SafeMedia } from "../ui/SafeMedia";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -98,11 +99,12 @@ export function PostCard({ post, onVote, onSave, onUnsave, onDelete, isOwner }: 
         {/* Image */}
         {post.imageUrl && (
           <div className="mb-3 rounded-lg overflow-hidden max-h-80">
-            <img
+            <SafeMedia
               src={post.imageUrl}
+              isNSFW={!!post.isNSFW}
+              mediaId={`post_${post.id}`}
               alt="Post image"
               className="w-full h-full object-cover"
-              loading="lazy"
             />
           </div>
         )}

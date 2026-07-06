@@ -24,6 +24,9 @@ export interface FeedPost {
   userVote: number; // +1, -1, or 0
   isSaved: boolean;
   isOwner?: boolean;
+  isNSFW?: boolean;
+  moderationStatus?: string;
+  nsfwConfidence?: number;
 }
 
 export interface FeedComment {
@@ -82,6 +85,7 @@ interface FeedState {
     isAnonymous?: boolean;
   }) => Promise<FeedComment | null>;
   deleteComment: (commentId: string, authorId: string) => Promise<boolean>;
+  updatePostModeration: (postId: string, data: { moderationStatus: string; isNSFW: boolean; nsfwConfidence: number }) => void;
 
   clearFeed: () => void;
 }
@@ -381,6 +385,16 @@ export const useFeedStore = create<FeedState>((set, get) => ({
       return false;
     }
   },
+
+  updatePostModeration: (postId, data) => set((state) => {
+    const posts = state.posts.map((p) =>
+      p.id === postId ? { ...p, ...data } : p
+    );
+    const currentPost = state.currentPost && state.currentPost.id === postId
+      ? { ...state.currentPost, ...data }
+      : state.currentPost;
+    return { posts, currentPost };
+  }),
 
   clearFeed: () => {
     set({

@@ -8,6 +8,7 @@ import { AppSidebar } from "@/components/layout/AppSidebar";
 import { VoteButtons } from "@/components/feed/VoteButtons";
 import { CommentThread } from "@/components/feed/CommentThread";
 import { CommentInput } from "@/components/feed/CommentInput";
+import { SafeMedia } from "@/components/ui/SafeMedia";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -203,8 +204,10 @@ export default function PostDetailPage() {
               {/* Image */}
               {post.imageUrl && (
                 <div className="mb-3 rounded-xl overflow-hidden">
-                  <img
+                  <SafeMedia
                     src={post.imageUrl}
+                    isNSFW={!!post.isNSFW}
+                    mediaId={`post_${post.id}`}
                     alt="Post image"
                     className="w-full max-h-[500px] object-contain bg-black/20"
                   />

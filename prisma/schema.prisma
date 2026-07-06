@@ -18,6 +18,7 @@ model User {
   isOnline    Boolean   @default(false)
   createdAt   DateTime  @default(now())
   lastSeen    DateTime  @default(now())
+  nsfwMode    NsfwMode  @default(ALWAYS)
   messages    Message[]
 
   // DM relations
@@ -75,10 +76,13 @@ model Message {
   room      Room     @relation(fields: [roomId], references: [id])
   roomId    String
   // Media fields (populated for image/file messages)
-  fileUrl   String?
-  fileName  String?
-  fileSize  Int?
-  fileType  String?  // MIME type e.g. "image/png", "application/pdf"
+  fileUrl          String?
+  fileName         String?
+  fileSize         Int?
+  fileType         String?  // MIME type e.g. "image/png", "application/pdf"
+  moderationStatus ModerationStatus @default(PENDING)
+  isNSFW           Boolean          @default(false)
+  nsfwConfidence   Float            @default(0)
 }
 
 model Conversation {
@@ -108,10 +112,13 @@ model DirectMessage {
   conversation   Conversation @relation(fields: [conversationId], references: [id])
 
   // Media fields
-  fileUrl        String?
-  fileName       String?
-  fileSize       Int?
-  fileType       String?
+  fileUrl          String?
+  fileName         String?
+  fileSize         Int?
+  fileType         String?
+  moderationStatus ModerationStatus @default(PENDING)
+  isNSFW           Boolean          @default(false)
+  nsfwConfidence   Float            @default(0)
 }
 
 model Notification {
@@ -170,9 +177,12 @@ model Post {
   author       User        @relation("PostAuthor", fields: [authorId], references: [id])
   tags         String[]    @default([])
   commentCount Int         @default(0)
-  isLocked     Boolean     @default(false) // Lock comments
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  isLocked     Boolean          @default(false) // Lock comments
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  moderationStatus ModerationStatus @default(PENDING)
+  isNSFW           Boolean          @default(false)
+  nsfwConfidence   Float            @default(0)
 
   votes    Vote[]
   comments Comment[]
@@ -216,4 +226,26 @@ model SavedPost {
 
   @@unique([userId, postId])
 }
+
+enum NsfwMode {
+  ALWAYS
+  NEVER
+}
+
+enum ModerationStatus {
+  PENDING
+  SCANNING
+  APPROVED
+  FLAGGED
+}
+
+model ModerationCache {
+  id             String           @id @default(uuid())
+  publicId       String           @unique
+  isNSFW         Boolean
+  nsfwConfidence Float
+  status         ModerationStatus
+  createdAt      DateTime         @default(now())
+}
+
 

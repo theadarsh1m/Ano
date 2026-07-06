@@ -5,6 +5,7 @@ import { Message, useChatStore } from "@/store/useChatStore";
 import { useUserStore } from "@/store/useUserStore";
 import { FileCard } from "./FileCard";
 import { ImageLightbox } from "./ImageLightbox";
+import { SafeMedia } from "@/components/ui/SafeMedia";
 
 interface ChatAreaProps {
   roomId: string;
@@ -32,17 +33,14 @@ export function ChatArea({ roomId }: ChatAreaProps) {
       return (
         <div className="mt-1">
           {msg.content && <p className="break-words mb-2">{msg.content}</p>}
-          <button
+          <SafeMedia
+            src={msg.fileUrl}
+            isNSFW={!!msg.isNSFW}
+            mediaId={`msg_${msg.id}`}
+            alt={msg.fileName || "Image"}
+            className="block rounded-lg overflow-hidden max-w-[300px] cursor-pointer hover:opacity-90 transition-opacity w-full h-auto"
             onClick={() => setLightboxSrc(msg.fileUrl!)}
-            className="block rounded-lg overflow-hidden max-w-[300px] cursor-pointer hover:opacity-90 transition-opacity"
-          >
-            <img
-              src={msg.fileUrl}
-              alt={msg.fileName || "Image"}
-              className="w-full h-auto rounded-lg"
-              loading="lazy"
-            />
-          </button>
+          />
           {msg.fileName && (
             <p className="text-[10px] text-gray-500 mt-1">{msg.fileName}</p>
           )}

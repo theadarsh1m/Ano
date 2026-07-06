@@ -13,6 +13,9 @@ export interface Message {
   fileName?: string;
   fileSize?: number;
   fileType?: string;
+  isNSFW?: boolean;
+  moderationStatus?: string;
+  nsfwConfidence?: number;
 }
 
 export interface ChatState {
@@ -36,6 +39,7 @@ export interface ChatState {
   addTypingUser: (roomId: string, nickname: string) => void;
   removeTypingUser: (roomId: string, nickname: string) => void;
   setActiveUsers: (roomId: string, users: any[]) => void;
+  updateMessageModeration: (messageId: string, roomId: string, data: { moderationStatus: string; isNSFW: boolean; nsfwConfidence: number }) => void;
 }
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -74,6 +78,19 @@ export const useChatStore = create<ChatState>((set) => ({
       [roomId]: messages,
     }
   })),
+
+  updateMessageModeration: (messageId, roomId, data) => set((state) => {
+    const roomMessages = state.messages[roomId] || [];
+    const updated = roomMessages.map((m) =>
+      m.id === messageId ? { ...m, ...data } : m
+    );
+    return {
+      messages: {
+        ...state.messages,
+        [roomId]: updated
+      }
+    };
+  }),
   
   markRoomAsRead: (roomId) => set((state) => ({
     unreadCounts: {

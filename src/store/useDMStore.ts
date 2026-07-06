@@ -13,6 +13,10 @@ export interface DMMessage {
   fileName?: string;
   fileSize?: number;
   fileType?: string;
+  isRead?: boolean;
+  isNSFW?: boolean;
+  moderationStatus?: string;
+  nsfwConfidence?: number;
 }
 
 export interface ConversationPreview {
@@ -51,6 +55,7 @@ export interface DMState {
   incrementUnread: (conversationId: string) => void;
   markConversationAsRead: (conversationId: string) => void;
   markMessagesAsSeen: (conversationId: string, readerId: string) => void;
+  updateDMModeration: (messageId: string, conversationId: string, data: { moderationStatus: string; isNSFW: boolean; nsfwConfidence: number }) => void;
   addDMTypingUser: (conversationId: string, nickname: string) => void;
   removeDMTypingUser: (conversationId: string, nickname: string) => void;
   getTotalUnreadDMs: () => number;
@@ -137,6 +142,20 @@ export const useDMStore = create<DMState>((set, get) => ({
       const existing = state.dmMessages[conversationId] || [];
       const updated = existing.map((msg) =>
         msg.senderId !== readerId ? { ...msg, isRead: true } : msg
+      );
+      return {
+        dmMessages: {
+          ...state.dmMessages,
+          [conversationId]: updated,
+        },
+      };
+    }),
+
+  updateDMModeration: (messageId, conversationId, data) =>
+    set((state) => {
+      const dmMessages = state.dmMessages[conversationId] || [];
+      const updated = dmMessages.map((m) =>
+        m.id === messageId ? { ...m, ...data } : m
       );
       return {
         dmMessages: {

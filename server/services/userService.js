@@ -62,6 +62,7 @@ const userService = {
         nickname: true,
         avatar: true,
         bio: true,
+        nsfwMode: true,
         createdAt: true,
         lastSeen: true,
       },
@@ -74,6 +75,7 @@ const userService = {
       nickname: user.nickname,
       avatar: user.avatar,
       bio: user.bio,
+      nsfwMode: user.nsfwMode,
       createdAt: user.createdAt.getTime(),
       lastSeen: user.lastSeen.getTime(),
     };
@@ -87,6 +89,7 @@ const userService = {
     if (data.nickname !== undefined) updateData.nickname = data.nickname;
     if (data.bio !== undefined) updateData.bio = data.bio;
     if (data.avatar !== undefined) updateData.avatar = data.avatar;
+    if (data.nsfwMode !== undefined) updateData.nsfwMode = data.nsfwMode;
 
     const user = await prisma.user.update({
       where: { id: userId },
@@ -96,6 +99,7 @@ const userService = {
         nickname: true,
         avatar: true,
         bio: true,
+        nsfwMode: true,
         createdAt: true,
         lastSeen: true,
       },
@@ -106,6 +110,7 @@ const userService = {
       nickname: user.nickname,
       avatar: user.avatar,
       bio: user.bio,
+      nsfwMode: user.nsfwMode,
       createdAt: user.createdAt.getTime(),
       lastSeen: user.lastSeen.getTime(),
     };

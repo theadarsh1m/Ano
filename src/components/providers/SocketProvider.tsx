@@ -5,6 +5,8 @@ import { useUserStore } from "@/store/useUserStore";
 import { usePresenceStore } from "@/store/usePresenceStore";
 import { useDMStore } from "@/store/useDMStore";
 import { useNotificationStore } from "@/store/useNotificationStore";
+import { useFeedStore } from "@/store/useFeedStore";
+import { useChatStore } from "@/store/useChatStore";
 import { socketService } from "@/lib/socket";
 
 const API_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
@@ -69,12 +71,27 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       useNotificationStore.getState().addNotification(notification);
     };
 
+    const onPostModerated = ({ postId, moderationStatus, isNSFW, nsfwConfidence }: any) => {
+      useFeedStore.getState().updatePostModeration(postId, { moderationStatus, isNSFW, nsfwConfidence });
+    };
+
+    const onMessageModerated = ({ messageId, roomId, moderationStatus, isNSFW, nsfwConfidence }: any) => {
+      useChatStore.getState().updateMessageModeration(messageId, roomId, { moderationStatus, isNSFW, nsfwConfidence });
+    };
+
+    const onDMModerated = ({ messageId, conversationId, moderationStatus, isNSFW, nsfwConfidence }: any) => {
+      useDMStore.getState().updateDMModeration(messageId, conversationId, { moderationStatus, isNSFW, nsfwConfidence });
+    };
+
     socket.on("user_online", onUserOnline);
     socket.on("user_offline", onUserOffline);
     socket.on("online_users", onOnlineUsers);
     socket.on("dm_notification", onDMNotification);
     socket.on("dm_seen", onDMSeen);
     socket.on("new_notification", onNewNotification);
+    socket.on("post_moderated", onPostModerated);
+    socket.on("message_moderated", onMessageModerated);
+    socket.on("dm_moderated", onDMModerated);
 
     // Initial fetch of notifications
     fetch(`${API_URL}/api/notifications/${userId}`)
@@ -93,6 +110,9 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       socket.off("dm_notification", onDMNotification);
       socket.off("dm_seen", onDMSeen);
       socket.off("new_notification", onNewNotification);
+      socket.off("post_moderated", onPostModerated);
+      socket.off("message_moderated", onMessageModerated);
+      socket.off("dm_moderated", onDMModerated);
     };
   }, [userId, nickname, activeConversationId, setUserOnline, setUserOffline, setOnlineUsers, addDMMessage, incrementUnread, setConversations]);
 

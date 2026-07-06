@@ -92,6 +92,9 @@ const feedService = {
         isLocked: post.isLocked,
         createdAt: post.createdAt,
         updatedAt: post.updatedAt,
+        moderationStatus: post.moderationStatus,
+        isNSFW: post.isNSFW,
+        nsfwConfidence: post.nsfwConfidence,
         author: post.isAnonymous
           ? { id: null, nickname: 'Anonymous', avatar: null }
           : post.author,
@@ -146,6 +149,9 @@ const feedService = {
       isLocked: post.isLocked,
       createdAt: post.createdAt,
       updatedAt: post.updatedAt,
+      moderationStatus: post.moderationStatus,
+      isNSFW: post.isNSFW,
+      nsfwConfidence: post.nsfwConfidence,
       author: post.isAnonymous
         ? { id: null, nickname: 'Anonymous', avatar: null }
         : post.author,

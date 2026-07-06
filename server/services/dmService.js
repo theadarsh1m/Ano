@@ -64,6 +64,9 @@ const dmService = {
       fileName: msg.fileName,
       fileSize: msg.fileSize,
       fileType: msg.fileType,
+      isNSFW: msg.isNSFW,
+      moderationStatus: msg.moderationStatus,
+      nsfwConfidence: msg.nsfwConfidence,
     }));
   },
 };

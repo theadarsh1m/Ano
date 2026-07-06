@@ -40,6 +40,10 @@ const io = new Server(server, {
   }
 });
 
+// Inject Socket.IO into moderation service
+const moderationService = require('./services/moderationService');
+moderationService.setSocketIO(io);
+
 // In-memory state
 const rooms = new Map();        // roomId -> Set of { socketId, userId, nickname }
 const userToRoom = new Map();   // socketId -> roomId
@@ -238,8 +242,27 @@ app.get('/api/users/:userId', async (req, res) => {
 // Update user profile
 app.put('/api/users/:userId', async (req, res) => {
   try {
-    const { nickname, bio, avatar } = req.body;
-    const profile = await userService.updateProfile(req.params.userId, { nickname, bio, avatar });
+    const { nickname, bio, avatar, nsfwMode } = req.body;
+
+    if (avatar) {
+      try {
+        const moderationService = require('./services/moderationService');
+        const scan = await moderationService.moderateImage(avatar);
+        if (scan.isNSFW) {
+          // Delete from Cloudinary
+          const publicId = moderationService.extractPublicId(avatar);
+          if (publicId) {
+            const uploadService = require('./services/uploadService');
+            await uploadService.deleteImage(publicId).catch(console.error);
+          }
+          return res.status(400).json({ error: 'This profile picture violates community guidelines.' });
+        }
+      } catch (modErr) {
+        console.error('Failed to moderate profile picture synchronously:', modErr);
+      }
+    }
+
+    const profile = await userService.updateProfile(req.params.userId, { nickname, bio, avatar, nsfwMode });
     res.json(profile);
   } catch (err) {
     console.error('Error updating user profile:', err);
@@ -573,6 +596,21 @@ io.on('connection', (socket) => {
     try {
       await messageService.saveMessage(message);
 
+      // Asynchronously moderate image attachments
+      const isImage = message.fileUrl && message.fileType && message.fileType.startsWith('image/');
+      if (isImage) {
+        moderationService.moderateMessage(message.id, message.roomId, message.fileUrl).catch((err) => {
+          console.error(`Failed to moderate room message ${message.id} asynchronously:`, err);
+        });
+      } else {
+        prisma.message.update({
+          where: { id: message.id },
+          data: { moderationStatus: 'APPROVED', isNSFW: false, nsfwConfidence: 0 },
+        }).catch((err) => {
+          console.error(`Failed to approve text room message ${message.id}:`, err);
+        });
+      }
+
       // Parse mentions
       const mentionMatches = message.content.match(/@([a-zA-Z0-9_]+)/g);
       if (mentionMatches) {
@@ -715,6 +753,21 @@ io.on('connection', (socket) => {
     // Persist to database
     try {
       await dmService.saveDirectMessage(message);
+
+      // Asynchronously moderate image attachments in DMs
+      const isImage = message.fileUrl && message.fileType && message.fileType.startsWith('image/');
+      if (isImage) {
+        moderationService.moderateDirectMessage(message.id, message.conversationId, message.fileUrl).catch((err) => {
+          console.error(`Failed to moderate DM message ${message.id} asynchronously:`, err);
+        });
+      } else {
+        prisma.directMessage.update({
+          where: { id: message.id },
+          data: { moderationStatus: 'APPROVED', isNSFW: false, nsfwConfidence: 0 },
+        }).catch((err) => {
+          console.error(`Failed to approve text DM message ${message.id}:`, err);
+        });
+      }
 
       // Parse mentions in DMs
       const mentionMatches = message.content.match(/@([a-zA-Z0-9_]+)/g);

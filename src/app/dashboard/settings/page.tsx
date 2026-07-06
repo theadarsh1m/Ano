@@ -10,7 +10,7 @@ import { ShieldCheck, ArrowLeft, MessageSquare } from "lucide-react";
 import Link from "next/link";
 
 export default function SettingsPage() {
-  const { nickname, isAnonymous, email, updateProfile, loginWithGoogle } = useUserStore();
+  const { nickname, isAnonymous, email, nsfwMode, updateProfile, loginWithGoogle } = useUserStore();
   const [newNickname, setNewNickname] = useState(nickname || "");
   const [isSaving, setIsSaving] = useState(false);
   const [isClient, setIsClient] = useState(false);
@@ -26,6 +26,14 @@ export default function SettingsPage() {
     setIsSaving(true);
     await updateProfile({ nickname: newNickname });
     setIsSaving(false);
+  };
+
+  const handleNsfwModeChange = async (mode: "ALWAYS" | "NEVER") => {
+    try {
+      await updateProfile({ nsfwMode: mode });
+    } catch (err) {
+      console.error("Failed to update sensitive content mode:", err);
+    }
   };
 
   return (
@@ -89,6 +97,42 @@ export default function SettingsPage() {
                   {isSaving ? "Saving..." : "Save"}
                 </Button>
               </div>
+            </div>
+          </div>
+        </GlassCard>
+
+        <GlassCard>
+          <h3 className="text-lg font-semibold text-white mb-4">Content Preferences</h3>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-white/70 mb-2">Sensitive Content</label>
+              <div className="flex flex-col sm:flex-row gap-4 mt-2">
+                <label className="flex items-center gap-2.5 cursor-pointer text-white/80 hover:text-white bg-white/5 px-4 py-2.5 rounded-xl border border-white/5 hover:bg-white/10 transition-colors">
+                  <input
+                    type="radio"
+                    name="nsfwMode"
+                    value="ALWAYS"
+                    checked={nsfwMode === "ALWAYS"}
+                    onChange={() => handleNsfwModeChange("ALWAYS")}
+                    className="accent-blue-500 w-4 h-4 cursor-pointer"
+                  />
+                  <span className="text-sm font-medium">Always Blur (Default)</span>
+                </label>
+                <label className="flex items-center gap-2.5 cursor-pointer text-white/80 hover:text-white bg-white/5 px-4 py-2.5 rounded-xl border border-white/5 hover:bg-white/10 transition-colors">
+                  <input
+                    type="radio"
+                    name="nsfwMode"
+                    value="NEVER"
+                    checked={nsfwMode === "NEVER"}
+                    onChange={() => handleNsfwModeChange("NEVER")}
+                    className="accent-blue-500 w-4 h-4 cursor-pointer"
+                  />
+                  <span className="text-sm font-medium">Never Blur</span>
+                </label>
+              </div>
+              <p className="text-xs text-white/50 mt-3">
+                Configure whether uploaded posts and chat attachments flagged as NSFW are automatically hidden behind a blur overlay.
+              </p>
             </div>
           </div>
         </GlassCard>
