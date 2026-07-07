@@ -263,22 +263,32 @@ export function Minesweeper({ onGameEnd }: { onGameEnd: (score: number, playTime
               className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center backdrop-blur-sm rounded-xl z-20"
             >
               {isGameOver && (
-                <motion.div 
-                  initial={{ scale: 0, rotate: -10 }}
-                  animate={{ scale: 1, rotate: 0 }}
-                  className="text-red-500 text-5xl font-black mb-6 drop-shadow-[0_0_15px_rgba(239,68,68,0.8)]"
-                >
-                  BOOM!
-                </motion.div>
+                <div className="flex flex-col items-center">
+                  <motion.div 
+                    initial={{ scale: 0, rotate: -10 }}
+                    animate={{ scale: 1, rotate: 0 }}
+                    className="text-red-500 text-5xl font-black mb-2 drop-shadow-[0_0_15px_rgba(239,68,68,0.8)]"
+                  >
+                    BOOM!
+                  </motion.div>
+                  <div className="text-white text-xl font-bold mb-6">
+                    Final Score: <span className="text-gray-400">0</span>
+                  </div>
+                </div>
               )}
               {isWon && (
-                <motion.div 
-                  initial={{ scale: 0, y: 50 }}
-                  animate={{ scale: 1, y: 0 }}
-                  className="text-green-500 text-5xl font-black mb-6 drop-shadow-[0_0_15px_rgba(34,197,94,0.8)]"
-                >
-                  YOU WIN!
-                </motion.div>
+                <div className="flex flex-col items-center">
+                  <motion.div 
+                    initial={{ scale: 0, y: 50 }}
+                    animate={{ scale: 1, y: 0 }}
+                    className="text-green-500 text-5xl font-black mb-2 drop-shadow-[0_0_15px_rgba(34,197,94,0.8)]"
+                  >
+                    YOU WIN!
+                  </motion.div>
+                  <div className="text-white text-xl font-bold mb-6">
+                    Score: <span className="text-yellow-400">{1000 - playTime}</span>
+                  </div>
+                </div>
               )}
               <Button 
                 onClick={startGame} 

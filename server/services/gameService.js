@@ -52,6 +52,26 @@ class GameService {
       orderBy: { lastPlayed: 'desc' }
     });
   }
+  /**
+   * Get global leaderboard for a game type
+   * @param {string} gameType 
+   * @param {number} limit 
+   */
+  async getLeaderboard(gameType, limit = 10) {
+    return prisma.gameStat.findMany({
+      where: { gameType },
+      orderBy: { highScore: 'desc' },
+      take: limit,
+      include: {
+        user: {
+          select: {
+            nickname: true,
+            avatar: true
+          }
+        }
+      }
+    });
+  }
 }
 
 module.exports = new GameService();

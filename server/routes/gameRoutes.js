@@ -15,6 +15,19 @@ router.get('/stats/:userId', async (req, res) => {
   }
 });
 
+// Get leaderboard for a game type
+router.get('/leaderboard/:gameType', async (req, res) => {
+  try {
+    const { gameType } = req.params;
+    const limit = parseInt(req.query.limit) || 10;
+    const leaderboard = await gameService.getLeaderboard(gameType, limit);
+    res.json(leaderboard);
+  } catch (error) {
+    console.error('Error fetching leaderboard:', error);
+    res.status(500).json({ error: 'Failed to fetch leaderboard' });
+  }
+});
+
 // Save game result
 router.post('/save', async (req, res) => {
   try {

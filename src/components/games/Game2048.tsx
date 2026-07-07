@@ -41,6 +41,10 @@ const spawnTile = (tiles: Tile[]): Tile[] => {
   return tiles;
 };
 
+// Touch swipe tracking variables
+let touchStartX = 0;
+let touchStartY = 0;
+
 export function Game2048({ onGameEnd }: { onGameEnd: (score: number, playTimeSeconds: number) => void }) {
   const [tiles, setTiles] = useState<Tile[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -191,6 +195,32 @@ export function Game2048({ onGameEnd }: { onGameEnd: (score: number, playTimeSec
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [move, isPlaying]);
 
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!isPlaying) return;
+    const touchEndX = e.changedTouches[0].clientX;
+    const touchEndY = e.changedTouches[0].clientY;
+    
+    const dx = touchEndX - touchStartX;
+    const dy = touchEndY - touchStartY;
+    
+    if (Math.abs(dx) > Math.abs(dy)) {
+      if (Math.abs(dx) > 30) {
+        if (dx > 0) move('RIGHT');
+        else move('LEFT');
+      }
+    } else {
+      if (Math.abs(dy) > 30) {
+        if (dy > 0) move('DOWN');
+        else move('UP');
+      }
+    }
+  };
+
   const startGame = () => {
     let initialTiles = spawnTile([]);
     initialTiles = spawnTile(initialTiles);
@@ -238,8 +268,15 @@ export function Game2048({ onGameEnd }: { onGameEnd: (score: number, playTimeSec
       <motion.div 
         animate={isGameOver ? { x: [-10, 10, -10, 10, 0], transition: { duration: 0.4 } } : {}}
         className="relative p-3 bg-amber-900/60 rounded-xl shadow-[0_0_30px_rgba(120,53,15,0.4)] border border-amber-500/20"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
       >
-        <div className="grid grid-cols-4 gap-3 bg-amber-950/80 p-3 rounded-lg relative w-[316px] h-[316px] md:w-[380px] md:h-[380px]">
+        <div className="grid grid-cols-4 gap-3 bg-amber-950/80 p-3 rounded-lg relative w-[316px] h-[316px] md:w-[380px] md:h-[380px] tile-container overflow-hidden">
+          <style>{`
+            .tile-container { --tile-size: 64px; }
+            @media (min-width: 768px) { .tile-container { --tile-size: 80px; } }
+          `}</style>
+          
           {/* Background Empty Cells */}
           {Array.from({ length: GRID_SIZE * GRID_SIZE }).map((_, i) => (
             <div key={`bg-${i}`} className="w-16 h-16 md:w-20 md:h-20 bg-amber-900/40 rounded"></div>
@@ -260,38 +297,12 @@ export function Game2048({ onGameEnd }: { onGameEnd: (score: number, playTimeSec
               }}
               style={{
                 position: 'absolute',
-                top: 12 + tile.r * (64 + 12), // 12px padding, 64px cell width + 12px gap
-                left: 12 + tile.c * (64 + 12),
-                width: 64,
-                height: 64,
+                top: `calc(12px + ${tile.r} * (var(--tile-size) + 12px))`,
+                left: `calc(12px + ${tile.c} * (var(--tile-size) + 12px))`,
+                width: 'var(--tile-size)',
+                height: 'var(--tile-size)',
               }}
-              className={`rounded flex items-center justify-center text-2xl font-black md:hidden ${getColor(tile.val)} shadow-md`}
-            >
-              {tile.val}
-            </motion.div>
-          ))}
-          
-          {/* Desktop Sized Animated Tiles */}
-          {tiles.map(tile => (
-            <motion.div 
-              key={`${tile.id}-desktop`}
-              layout
-              initial={tile.isNew ? { scale: 0.5, opacity: 0 } : false}
-              animate={tile.isMerged ? { scale: [1, 1.2, 1], opacity: 1 } : { scale: 1, opacity: 1 }}
-              transition={{ 
-                type: 'spring', 
-                stiffness: 400, 
-                damping: 30,
-                scale: tile.isMerged ? { duration: 0.2 } : { type: 'spring', stiffness: 300, damping: 20 }
-              }}
-              style={{
-                position: 'absolute',
-                top: 12 + tile.r * (80 + 12), // 12px padding, 80px cell width + 12px gap
-                left: 12 + tile.c * (80 + 12),
-                width: 80,
-                height: 80,
-              }}
-              className={`rounded flex items-center justify-center text-3xl font-black hidden md:flex ${getColor(tile.val)} shadow-md`}
+              className={`rounded flex items-center justify-center text-2xl md:text-3xl font-black ${getColor(tile.val)} shadow-md`}
             >
               {tile.val}
             </motion.div>
@@ -307,16 +318,20 @@ export function Game2048({ onGameEnd }: { onGameEnd: (score: number, playTimeSec
               className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center backdrop-blur-sm rounded-xl z-20"
             >
               {isGameOver && (
-                <motion.div 
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  className="text-red-500 text-4xl font-black mb-6 drop-shadow-[0_0_15px_rgba(239,68,68,0.8)]"
-                >
-                  GAME OVER
-                </motion.div>
+                <div className="flex flex-col items-center">
+                  <div className="text-red-500 text-5xl font-black mb-2 drop-shadow-[0_0_15px_rgba(239,68,68,0.8)]">
+                    GAME OVER
+                  </div>
+                  <div className="text-white text-xl font-bold mb-6">
+                    Final Score: <span className="text-yellow-400">{score}</span>
+                  </div>
+                </div>
               )}
-              <Button onClick={startGame} className="bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-3 px-8 rounded-full shadow-[0_0_20px_rgba(202,138,4,0.4)] text-lg transition-transform hover:scale-105 active:scale-95">
-                {isGameOver ? 'Try Again' : 'Start 2048'}
+              <Button 
+                onClick={startGame} 
+                className="bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 px-8 rounded-full shadow-[0_0_20px_rgba(217,119,6,0.5)] border border-amber-400 text-lg transition-transform hover:scale-105 active:scale-95"
+              >
+                {isGameOver ? 'Play Again' : 'Start Game'}
               </Button>
             </motion.div>
           )}
