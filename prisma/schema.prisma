@@ -254,6 +254,7 @@ model ModerationCache {
 
 enum GameType {
   BLUFF
+  MEMORY_MATCH
   TIC_TAC_TOE
   CONNECT_4
   CHESS
@@ -276,6 +277,7 @@ enum MoveType {
   PLAY_CARDS
   CHALLENGE_BLUFF
   PASS_TURN
+  FLIP_CARD
 }
 
 model GameSession {

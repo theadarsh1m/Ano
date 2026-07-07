@@ -29,6 +29,14 @@ export default function GamesHubPage() {
       icon: "🃏",
       color: "from-emerald-500 to-teal-700",
       href: "/dashboard/games/bluff"
+    },
+    {
+      id: "memory-match",
+      title: "Memory Match",
+      description: "Flip cards, find matching pairs, and outscore your opponents in this classic multiplayer memory game!",
+      icon: "🧠",
+      color: "from-violet-500 to-fuchsia-700",
+      href: "/dashboard/games/memory-match"
     }
   ];
 

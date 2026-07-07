@@ -1,5 +1,11 @@
 const GamePersistenceService = require('../services/GamePersistenceService');
 
+const MAX_PLAYERS = {
+  'BLUFF': 6,
+  'MEMORY_MATCH': 8,
+};
+const DEFAULT_MAX_PLAYERS = 6;
+
 class LobbyService {
   constructor() {
     this.lobbies = new Map(); // lobbyId -> { id, hostId, gameType, players: Map(userId -> { userId, nickname, isReady, role }), status: "WAITING" }
@@ -22,7 +28,8 @@ class LobbyService {
   async joinLobby(lobbyId, userId, nickname) {
     const lobby = this.lobbies.get(lobbyId);
     if (!lobby) return null;
-    if (lobby.players.size >= 6) return null; // limit to 6 players max
+    const maxPlayers = MAX_PLAYERS[lobby.gameType] || DEFAULT_MAX_PLAYERS;
+    if (lobby.players.size >= maxPlayers) return null; // limit to max players
 
     const player = { userId, nickname, isReady: false, role: 'PLAYER' };
     lobby.players.set(userId, player);
@@ -89,7 +96,7 @@ class LobbyService {
         hostName: host ? host.nickname : 'Unknown',
         gameType: lobby.gameType,
         playerCount: lobby.players.size,
-        maxPlayers: 6,
+        maxPlayers: MAX_PLAYERS[lobby.gameType] || DEFAULT_MAX_PLAYERS,
         status: lobby.status,
       });
     }

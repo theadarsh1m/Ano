@@ -43,7 +43,7 @@ export function SafeMedia({
   }
 
   const shouldHide = isNSFW && nsfwMode === "HIDE";
-  const shouldBlur = isNSFW && (nsfwMode === "BLUR" || nsfwMode === "ALWAYS") && !revealed;
+  const shouldBlur = isNSFW && nsfwMode === "BLUR" && !revealed;
 
   if (shouldHide) {
     return (

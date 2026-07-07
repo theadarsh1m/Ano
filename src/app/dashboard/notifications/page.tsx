@@ -58,7 +58,9 @@ export default function NotificationsPage() {
     
     if (notification.type === "room_invite") {
       if (notification.metadata?.gameId) {
-        router.push(`/dashboard/games/bluff?gameId=${notification.metadata.gameId}`);
+        const gameTypeMap: Record<string, string> = { 'BLUFF': 'bluff', 'MEMORY_MATCH': 'memory-match' };
+        const gamePath = gameTypeMap[notification.metadata?.gameType] || 'bluff';
+        router.push(`/dashboard/games/${gamePath}?gameId=${notification.metadata.gameId}`);
       } else if (notification.metadata?.roomId) {
         router.push(`/room/${notification.metadata.roomId}`);
       }

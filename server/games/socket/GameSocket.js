@@ -1,6 +1,17 @@
 const LobbyService = require('../lobby/LobbyService');
 const BluffEngine = require('../bluff/BluffEngine');
+const MemoryMatchEngine = require('../memory-match/MemoryMatchEngine');
 const userService = require('../../services/userService');
+
+const ENGINE_MAP = {
+  'BLUFF': BluffEngine,
+  'MEMORY_MATCH': MemoryMatchEngine,
+};
+
+const GAME_DISPLAY_NAMES = {
+  'BLUFF': 'Bluff',
+  'MEMORY_MATCH': 'Memory Match',
+};
 
 function registerGameSockets(io, socket, onlineUsers, activeGames) {
   // Helper to update and broadcast user presence changes
@@ -52,7 +63,7 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
 
     socket.join(gameId);
     io.to(gameId).emit('lobby_state', serializeLobby(lobby));
-    await updatePresence(userId, `In ${gameType === 'BLUFF' ? 'Bluff' : gameType} Lobby`);
+    await updatePresence(userId, `In ${GAME_DISPLAY_NAMES[gameType] || gameType} Lobby`);
     broadcastLobbies();
   });
 
@@ -65,7 +76,7 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
 
     socket.join(gameId);
     io.to(gameId).emit('lobby_state', serializeLobby(lobby));
-    await updatePresence(userId, `In ${lobby.gameType === 'BLUFF' ? 'Bluff' : lobby.gameType} Lobby`);
+    await updatePresence(userId, `In ${GAME_DISPLAY_NAMES[lobby.gameType] || lobby.gameType} Lobby`);
     broadcastLobbies();
   });
 
@@ -106,7 +117,7 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
         senderId,
         type: 'room_invite',
         title: `${senderName} invited you to play!`,
-        message: `Join their ${gameType === 'BLUFF' ? 'Bluff' : gameType} lobby.`,
+        message: `Join their ${GAME_DISPLAY_NAMES[gameType] || gameType} lobby.`,
         metadata: { gameId, gameType }
       });
       const targetSockets = onlineUsers.get(targetUserId);
@@ -138,12 +149,11 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
       return socket.emit('game_error', { message: 'Wait for all players to be ready!' });
     }
 
-    let engine;
-    if (lobby.gameType === 'BLUFF') {
-      engine = new BluffEngine(gameId);
-    } else {
+    const EngineClass = ENGINE_MAP[lobby.gameType];
+    if (!EngineClass) {
       return socket.emit('game_error', { message: 'Unsupported game type.' });
     }
+    let engine = new EngineClass(gameId);
 
     lobby.players.forEach(p => {
       engine.players.set(p.userId, {
@@ -162,7 +172,7 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
     broadcastLobbies();
 
     for (const p of playersList) {
-      await updatePresence(p.userId, `Playing ${lobby.gameType === 'BLUFF' ? 'Bluff' : lobby.gameType}`);
+      await updatePresence(p.userId, `Playing ${GAME_DISPLAY_NAMES[lobby.gameType] || lobby.gameType}`);
     }
 
     broadcastGameStates(gameId, engine);
@@ -207,7 +217,17 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
       io.to(gameId).emit('game_challenge_reveal', res.challengeResult);
     }
 
+    // Generic broadcast event support for any engine
+    if (res.broadcastEvent) {
+      io.to(gameId).emit(res.broadcastEvent.type, res.broadcastEvent.data);
+    }
+
     broadcastGameStates(gameId, engine);
+
+    // Wire up delayed broadcast callback (used by MemoryMatch for mismatch flip-back)
+    engine._broadcastCallback = () => {
+      broadcastGameStates(gameId, engine);
+    };
 
     if (engine.status === 'FINISHED') {
       setTimeout(() => {
