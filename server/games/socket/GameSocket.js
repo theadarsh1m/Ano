@@ -1,16 +1,19 @@
 const LobbyService = require('../lobby/LobbyService');
 const BluffEngine = require('../bluff/BluffEngine');
 const MemoryMatchEngine = require('../memory-match/MemoryMatchEngine');
+const DotsAndBoxesEngine = require('../dots-and-boxes/DotsAndBoxesEngine');
 const userService = require('../../services/userService');
 
 const ENGINE_MAP = {
   'BLUFF': BluffEngine,
   'MEMORY_MATCH': MemoryMatchEngine,
+  'DOTS_AND_BOXES': DotsAndBoxesEngine,
 };
 
 const GAME_DISPLAY_NAMES = {
   'BLUFF': 'Bluff',
   'MEMORY_MATCH': 'Memory Match',
+  'DOTS_AND_BOXES': 'Dots and Boxes',
 };
 
 function registerGameSockets(io, socket, onlineUsers, activeGames) {
@@ -38,7 +41,8 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
       hostId: lobby.hostId,
       gameType: lobby.gameType,
       players: playersList,
-      status: lobby.status
+      status: lobby.status,
+      settings: lobby.settings || null
     };
   };
 
@@ -129,6 +133,15 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
     }
   });
 
+  socket.on('lobby_settings_update', ({ gameId, hostId, settings }) => {
+    const lobby = LobbyService.getLobby(gameId);
+    if (lobby && lobby.hostId === hostId) {
+      lobby.settings = { ...lobby.settings, ...settings };
+      io.to(gameId).emit('lobby_state', serializeLobby(lobby));
+      broadcastLobbies();
+    }
+  });
+
   // ========================
   // GAME CONTROL EVENTS
   // ========================
@@ -154,6 +167,9 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
       return socket.emit('game_error', { message: 'Unsupported game type.' });
     }
     let engine = new EngineClass(gameId);
+    if (lobby.settings) {
+      engine.settings = lobby.settings;
+    }
 
     lobby.players.forEach(p => {
       engine.players.set(p.userId, {

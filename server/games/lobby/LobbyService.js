@@ -3,6 +3,7 @@ const GamePersistenceService = require('../services/GamePersistenceService');
 const MAX_PLAYERS = {
   'BLUFF': 6,
   'MEMORY_MATCH': 8,
+  'DOTS_AND_BOXES': 8,
 };
 const DEFAULT_MAX_PLAYERS = 6;
 
@@ -18,6 +19,11 @@ class LobbyService {
       gameType,
       players: new Map([[hostId, { userId: hostId, nickname: hostName, isReady: true, role: 'HOST' }]]),
       status: 'WAITING',
+      settings: {
+        maxPlayers: MAX_PLAYERS[gameType] || DEFAULT_MAX_PLAYERS,
+        boardSize: gameType === 'DOTS_AND_BOXES' ? 5 : undefined, // 5x5 dots for Dots & Boxes
+        turnTimer: gameType === 'DOTS_AND_BOXES' ? 30 : undefined, // 30s turn timer for Dots & Boxes
+      }
     };
     this.lobbies.set(lobbyId, lobby);
     await GamePersistenceService.createSession(lobbyId, gameType);
@@ -28,7 +34,7 @@ class LobbyService {
   async joinLobby(lobbyId, userId, nickname) {
     const lobby = this.lobbies.get(lobbyId);
     if (!lobby) return null;
-    const maxPlayers = MAX_PLAYERS[lobby.gameType] || DEFAULT_MAX_PLAYERS;
+    const maxPlayers = lobby.settings?.maxPlayers || MAX_PLAYERS[lobby.gameType] || DEFAULT_MAX_PLAYERS;
     if (lobby.players.size >= maxPlayers) return null; // limit to max players
 
     const player = { userId, nickname, isReady: false, role: 'PLAYER' };
@@ -96,7 +102,7 @@ class LobbyService {
         hostName: host ? host.nickname : 'Unknown',
         gameType: lobby.gameType,
         playerCount: lobby.players.size,
-        maxPlayers: MAX_PLAYERS[lobby.gameType] || DEFAULT_MAX_PLAYERS,
+        maxPlayers: lobby.settings?.maxPlayers || MAX_PLAYERS[lobby.gameType] || DEFAULT_MAX_PLAYERS,
         status: lobby.status,
       });
     }

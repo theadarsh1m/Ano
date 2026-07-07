@@ -37,6 +37,14 @@ export default function GamesHubPage() {
       icon: "🧠",
       color: "from-violet-500 to-fuchsia-700",
       href: "/dashboard/games/memory-match"
+    },
+    {
+      id: "dots-and-boxes",
+      title: "Dots and Boxes",
+      description: "Connect the dots, close the boxes, and capture the board in this classic strategy game!",
+      icon: "✏️",
+      color: "from-blue-500 to-indigo-700",
+      href: "/dashboard/games/dots-and-boxes"
     }
   ];
 
