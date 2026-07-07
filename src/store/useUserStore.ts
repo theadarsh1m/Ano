@@ -1,3 +1,4 @@
+import { API_URL } from "@/lib/config";
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
@@ -31,7 +32,7 @@ const defaultPreferences: UserPreferences = {
   theme: 'dark',
 };
 
-const API_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001';
+
 
 export const useUserStore = create<UserState>()(
   persist(

@@ -1,4 +1,5 @@
 "use client";
+import { API_URL } from "@/lib/config";
 
 import { useEffect, useState } from "react";
 import { GlassCard } from "@/components/layout/GlassCard";
@@ -27,7 +28,7 @@ export function OnlineUsersList() {
   useEffect(() => {
     const fetchOnlineUsers = async () => {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001'}/api/users/online`);
+        const res = await fetch(`${API_URL}/api/users/online`);
         if (!res.ok) throw new Error("Failed to fetch online users");
         const data = await res.json();
         setUsers(data.filter((u: OnlineUser) => u.id !== myUserId));
@@ -48,7 +49,7 @@ export function OnlineUsersList() {
   const handleUserClick = async (user: OnlineUser) => {
     if (!myUserId) return;
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001'}/api/conversations`, {
+      const res = await fetch(`${API_URL}/api/conversations`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userAId: myUserId, userBId: user.id }),

@@ -1,4 +1,5 @@
 "use client";
+import { API_URL } from "@/lib/config";
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -7,7 +8,7 @@ import { ArrowLeft, Loader2, MessageSquare } from "lucide-react";
 import { Game2048 } from "@/components/games/Game2048";
 import { Minesweeper } from "@/components/games/Minesweeper";
 
-const API_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
+
 
 export default function SinglePlayerGamePage() {
   const params = useParams();

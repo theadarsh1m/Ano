@@ -1,4 +1,5 @@
 "use client";
+import { API_URL } from "@/lib/config";
 
 import { useState, useEffect, useRef } from "react";
 import { Search, X, Check, Loader2 } from "lucide-react";
@@ -7,7 +8,7 @@ import { usePresenceStore } from "@/store/usePresenceStore";
 import { socketService } from "@/lib/socket";
 import { GlassModal } from "@/components/layout/GlassModal";
 
-const API_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
+
 
 interface SearchResult {
   id: string;

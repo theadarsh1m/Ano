@@ -1,4 +1,5 @@
 "use client";
+import { API_URL } from "@/lib/config";
 
 import { useState, useRef, useEffect } from "react";
 import { Bell, Check, Users, MessageSquare, AtSign, Settings, Megaphone } from "lucide-react";
@@ -8,7 +9,7 @@ import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 
-const API_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
+
 
 export function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);

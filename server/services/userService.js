@@ -26,7 +26,7 @@ const userService = {
     try {
       return await prisma.user.update({
         where: { id: userId },
-        data: { lastSeen: new Date(), isOnline: false },
+        data: { lastSeen: new Date(), isOnline: false, presenceStatus: null },
       });
     } catch (err) {
       // User might not exist yet if they never fully joined
@@ -43,11 +43,23 @@ const userService = {
         where: { id: userId },
         data: { 
           isOnline,
-          ...(isOnline ? {} : { lastSeen: new Date() }) 
+          ...(isOnline ? {} : { lastSeen: new Date() }),
+          ...(isOnline ? {} : { presenceStatus: null }) // Clear status when offline
         },
       });
     } catch (err) {
       console.log(`Could not update online status for user ${userId}`);
+    }
+  },
+
+  async updatePresenceStatus(userId, presenceStatus) {
+    try {
+      return await prisma.user.update({
+        where: { id: userId },
+        data: { presenceStatus }
+      });
+    } catch (err) {
+      console.log(`Could not update presence status for user ${userId}`);
     }
   },
 
@@ -65,6 +77,7 @@ const userService = {
         nsfwMode: true,
         createdAt: true,
         lastSeen: true,
+        presenceStatus: true,
       },
     });
 
@@ -78,6 +91,7 @@ const userService = {
       nsfwMode: user.nsfwMode,
       createdAt: user.createdAt.getTime(),
       lastSeen: user.lastSeen.getTime(),
+      presenceStatus: user.presenceStatus,
     };
   },
 

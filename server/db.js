@@ -1,14 +1,15 @@
 require('dotenv').config();
 const { PrismaClient } = require('@prisma/client');
-const { PrismaPg } = require('@prisma/adapter-pg');
-const { Pool } = require('pg');
+const { PrismaNeon } = require('@prisma/adapter-neon');
+const { neonConfig, Pool } = require('@neondatabase/serverless');
 
-// Prisma 7 requires a driver adapter for database connections
-const pool = new Pool({
+// Use secure WebSocket connections for Neon serverless pool
+neonConfig.useSecureWebSocket = true;
+neonConfig.wsProxy = undefined;
+
+const adapter = new PrismaNeon({
   connectionString: process.env.DATABASE_URL,
 });
-
-const adapter = new PrismaPg(pool);
 
 let prisma;
 

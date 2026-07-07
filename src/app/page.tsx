@@ -1,4 +1,5 @@
 "use client";
+import { API_URL } from "@/lib/config";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -66,7 +67,7 @@ export default function Home() {
     const checkAvailability = async () => {
       setIsChecking(true);
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001'}/api/users/check-nickname?nickname=${encodeURIComponent(debouncedUsername)}&excludeUserId=${id || ''}`);
+        const res = await fetch(`${API_URL}/api/users/check-nickname?nickname=${encodeURIComponent(debouncedUsername)}&excludeUserId=${id || ''}`);
         const data = await res.json();
         setIsAvailable(data.available);
       } catch (err) {

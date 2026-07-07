@@ -1,4 +1,5 @@
 "use client";
+import { API_URL } from "@/lib/config";
 
 import { useState } from "react";
 import { GlassModal } from "@/components/layout/GlassModal";
@@ -7,7 +8,7 @@ import { useRoomStore } from "@/store/useRoomStore";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 
-const API_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001';
+
 
 interface JoinRoomModalProps {
   isOpen: boolean;

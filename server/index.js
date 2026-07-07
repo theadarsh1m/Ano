@@ -1,3 +1,5 @@
+require('dotenv').config();
+console.log('DATABASE_URL loaded:', process.env.DATABASE_URL ? 'YES (starts with ' + process.env.DATABASE_URL.substring(0, 15) + '...)' : 'NO');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -43,6 +45,10 @@ const io = new Server(server, {
 // Inject Socket.IO into moderation service
 const moderationService = require('./services/moderationService');
 moderationService.setSocketIO(io);
+
+// Reusable Multiplayer Game Framework Imports
+const registerGameSockets = require('./games/socket/GameSocket');
+const activeGames = new Map(); // gameId -> gameEngine instance
 
 // In-memory state
 const rooms = new Map();        // roomId -> Set of { socketId, userId, nickname }
@@ -174,7 +180,7 @@ app.get('/api/users/online', async (req, res) => {
     if (onlineIds.length === 0) return res.json([]);
     const users = await prisma.user.findMany({
       where: { id: { in: onlineIds } },
-      select: { id: true, nickname: true, avatar: true, bio: true }
+      select: { id: true, nickname: true, avatar: true, bio: true, presenceStatus: true }
     });
     res.json(users);
   } catch (err) {
@@ -499,6 +505,9 @@ app.delete('/api/upload', async (req, res) => {
 
 io.on('connection', (socket) => {
   console.log(`User connected: ${socket.id}`);
+
+  // Register generic multiplayer framework socket listeners
+  registerGameSockets(io, socket, onlineUsers, activeGames);
 
   // ========================
   // GLOBAL PRESENCE

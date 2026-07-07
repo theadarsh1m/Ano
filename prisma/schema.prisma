@@ -19,6 +19,7 @@ model User {
   createdAt   DateTime  @default(now())
   lastSeen    DateTime  @default(now())
   nsfwMode    NsfwMode  @default(ALWAYS)
+  presenceStatus String?
   messages    Message[]
 
   // DM relations
@@ -246,6 +247,76 @@ model ModerationCache {
   nsfwConfidence Float
   status         ModerationStatus
   createdAt      DateTime         @default(now())
+}
+
+enum GameType {
+  BLUFF
+  TIC_TAC_TOE
+  CONNECT_4
+  CHESS
+  UNO
+}
+
+enum GameStatus {
+  WAITING
+  PLAYING
+  FINISHED
+}
+
+enum PlayerRole {
+  HOST
+  PLAYER
+  SPECTATOR
+}
+
+enum MoveType {
+  PLAY_CARDS
+  CHALLENGE_BLUFF
+  PASS_TURN
+}
+
+model GameSession {
+  id             String       @id @default(uuid())
+  gameType       GameType
+  status         GameStatus   @default(WAITING)
+  gameState      Json?        // Full serialized persistent state for server recovery
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  players        GamePlayer[]
+  moves          GameMove[]
+  results        GameResult[]
+}
+
+model GamePlayer {
+  id             String       @id @default(uuid())
+  gameSessionId  String
+  gameSession    GameSession  @relation(fields: [gameSessionId], references: [id], onDelete: Cascade)
+  userId         String
+  nickname       String
+  role           PlayerRole   @default(PLAYER)
+  joinedAt       DateTime     @default(now())
+
+  @@unique([gameSessionId, userId])
+}
+
+model GameMove {
+  id             String       @id @default(uuid())
+  gameSessionId  String
+  gameSession    GameSession  @relation(fields: [gameSessionId], references: [id], onDelete: Cascade)
+  playerId       String       // The player userId
+  moveType       MoveType
+  moveData       Json         // Public log details (never expose private cards/details)
+  createdAt      DateTime     @default(now())
+}
+
+model GameResult {
+  id             String       @id @default(uuid())
+  gameSessionId  String
+  gameSession    GameSession  @relation(fields: [gameSessionId], references: [id], onDelete: Cascade)
+  winnerId       String?      // The winning userId
+  durationSeconds Int
+  createdAt      DateTime     @default(now())
 }
 
 

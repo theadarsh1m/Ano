@@ -9,7 +9,11 @@ import { useFeedStore } from "@/store/useFeedStore";
 import { useChatStore } from "@/store/useChatStore";
 import { socketService } from "@/lib/socket";
 
-const API_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
+const getApiUrl = () => {
+  if (process.env.NEXT_PUBLIC_SOCKET_URL) return process.env.NEXT_PUBLIC_SOCKET_URL;
+  if (typeof window !== "undefined") return `http://${window.location.hostname}:3001`;
+  return "http://localhost:3001";
+};
 
 /**
  * Global socket provider — mounts once and handles:
@@ -37,8 +41,15 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
     const socket = socketService.connect();
 
-    // Register for global presence
-    socket.emit("register_user", { userId, nickname });
+    // Register for global presence (both immediately and on reconnects)
+    const registerUser = () => {
+      socket.emit("register_user", { userId, nickname });
+    };
+
+    if (socket.connected) {
+      registerUser();
+    }
+    socket.on("connect", registerUser);
 
     const onUserOnline = ({ userId: uid }: { userId: string }) => {
       setUserOnline(uid);
@@ -57,7 +68,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       if (activeConversationId !== conversationId) {
         incrementUnread(conversationId);
       }
-      fetch(`${API_URL}/api/conversations/${userId}`)
+      fetch(`${getApiUrl()}/api/conversations/${userId}`)
         .then((res) => res.json())
         .then((data) => setConversations(data))
         .catch(() => {});
@@ -94,7 +105,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     socket.on("dm_moderated", onDMModerated);
 
     // Initial fetch of notifications
-    fetch(`${API_URL}/api/notifications/${userId}`)
+    fetch(`${getApiUrl()}/api/notifications/${userId}`)
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data)) {
@@ -113,6 +124,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       socket.off("post_moderated", onPostModerated);
       socket.off("message_moderated", onMessageModerated);
       socket.off("dm_moderated", onDMModerated);
+      socket.off("connect", registerUser);
     };
   }, [userId, nickname, activeConversationId, setUserOnline, setUserOffline, setOnlineUsers, addDMMessage, incrementUnread, setConversations]);
 

@@ -1,6 +1,7 @@
+import { API_URL } from "@/lib/config";
 import { create } from 'zustand';
 
-const API_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001';
+
 
 export interface PostAuthor {
   id: string | null;

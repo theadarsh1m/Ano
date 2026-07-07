@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Gamepad2, Play, Trophy, Clock, ArrowLeft, MessageSquare } from "lucide-react";
 
 export default function GamesHubPage() {
-  const games = [
+  const singlePlayerGames = [
     {
       id: "2048",
       title: "2048",
@@ -21,8 +21,19 @@ export default function GamesHubPage() {
     }
   ];
 
+  const multiplayerGames = [
+    {
+      id: "bluff",
+      title: "Bluff Card Game",
+      description: "Card game of lies, deception, and challenges. Get rid of your cards and catch other players bluffing!",
+      icon: "🃏",
+      color: "from-emerald-500 to-teal-700",
+      href: "/dashboard/games/bluff"
+    }
+  ];
+
   return (
-    <div className="flex flex-col h-full space-y-6 max-w-6xl mx-auto w-full p-6">
+    <div className="flex flex-col h-full space-y-6 max-w-6xl mx-auto w-full p-6 pb-12">
       {/* Global Navbar for Games Hub */}
       <div className="flex items-center justify-between bg-white/5 border border-white/10 rounded-2xl p-4 shadow-lg backdrop-blur-md">
         <div className="flex items-center gap-4">
@@ -44,7 +55,46 @@ export default function GamesHubPage() {
         </Link>
       </div>
 
+      {/* Multiplayer Games Section */}
       <div className="flex items-center justify-between pt-4">
+        <div className="flex items-center gap-3">
+          <div className="p-3 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl shadow-lg">
+            <Gamepad2 className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-white tracking-wide">Multiplayer Games</h1>
+            <p className="text-gray-400 text-sm mt-1">Play cards and social games with other users in real time!</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {multiplayerGames.map(game => (
+          <GlassCard key={game.id} className="p-6 flex flex-col hover:border-emerald-500/50 transition-colors group relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity animate-pulse">
+              <div className="text-8xl">{game.icon}</div>
+            </div>
+            
+            <div className={`w-16 h-16 bg-gradient-to-br ${game.color} rounded-2xl flex items-center justify-center text-white text-3xl mb-4 group-hover:scale-105 transition-transform shadow-lg relative z-10`}>
+              {game.icon}
+            </div>
+            
+            <h2 className="text-xl font-bold text-white mb-2 relative z-10">{game.title}</h2>
+            <p className="text-gray-400 text-sm mb-6 flex-1 relative z-10">
+              {game.description}
+            </p>
+            
+            <Link href={game.href} className="relative z-10">
+              <button className="w-full py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2 group-hover:bg-emerald-500 group-hover:text-white">
+                <Play className="w-4 h-4" /> Play Now
+              </button>
+            </Link>
+          </GlassCard>
+        ))}
+      </div>
+
+      {/* Single Player Section */}
+      <div className="flex items-center justify-between pt-8 border-t border-white/5">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl shadow-lg">
             <Gamepad2 className="w-6 h-6 text-white" />
@@ -57,7 +107,7 @@ export default function GamesHubPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {games.map(game => (
+        {singlePlayerGames.map(game => (
           <GlassCard key={game.id} className="p-6 flex flex-col hover:border-purple-500/50 transition-colors group relative overflow-hidden">
             <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
               <div className="text-8xl">{game.icon}</div>

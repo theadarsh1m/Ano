@@ -1,4 +1,5 @@
 "use client";
+import { API_URL } from "@/lib/config";
 
 import { useEffect } from "react";
 import { useDMStore, ConversationPreview } from "@/store/useDMStore";
@@ -7,7 +8,7 @@ import { usePresenceStore } from "@/store/usePresenceStore";
 import { useRouter } from "next/navigation";
 import { MessageSquare } from "lucide-react";
 
-const API_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
+
 
 function timeAgo(timestamp: number): string {
   const seconds = Math.floor((Date.now() - timestamp) / 1000);

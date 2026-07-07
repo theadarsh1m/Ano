@@ -1,4 +1,5 @@
 "use client";
+import { API_URL } from "@/lib/config";
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -15,7 +16,7 @@ import { AppSidebar } from "@/components/layout/AppSidebar";
 import { Loader2, ArrowLeft } from "lucide-react";
 import { motion } from "framer-motion";
 
-const API_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
+
 
 interface ConversationInfo {
   id: string;

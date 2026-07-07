@@ -1,4 +1,5 @@
 "use client";
+import { API_URL } from "@/lib/config";
 
 import { useChatStore } from "@/store/useChatStore";
 import { GlassCard } from "@/components/layout/GlassCard";
@@ -7,7 +8,7 @@ import { useDMStore } from "@/store/useDMStore";
 import { useRouter } from "next/navigation";
 import { MessageSquare, ShieldCheck, UserPlus } from "lucide-react";
 
-const API_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
+
 
 interface OnlineUsersSidebarProps {
   roomId: string;

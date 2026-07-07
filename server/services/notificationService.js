@@ -101,8 +101,8 @@ const notificationService = {
         status: 'accepted'
       },
       include: {
-        user: { select: { id: true, nickname: true, avatar: true, isOnline: true } },
-        friend: { select: { id: true, nickname: true, avatar: true, isOnline: true } }
+        user: { select: { id: true, nickname: true, avatar: true, isOnline: true, presenceStatus: true } },
+        friend: { select: { id: true, nickname: true, avatar: true, isOnline: true, presenceStatus: true } }
       }
     });
     

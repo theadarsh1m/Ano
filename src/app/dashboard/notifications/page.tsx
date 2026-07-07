@@ -1,4 +1,5 @@
 "use client";
+import { API_URL } from "@/lib/config";
 
 import { useState } from "react";
 import { GlassCard } from "@/components/layout/GlassCard";
@@ -9,7 +10,7 @@ import { formatDistanceToNow } from "date-fns";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 
-const API_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
+
 
 export default function NotificationsPage() {
   const { notifications, unreadCount, markAsRead, markAllAsRead, setNotifications } = useNotificationStore();

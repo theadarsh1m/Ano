@@ -1,3 +1,4 @@
+import { API_URL } from "@/lib/config";
 /**
  * Client-side upload helpers for Ano.
  *
@@ -20,7 +21,7 @@ import {
   MAX_FILE_SIZE,
 } from '@/types/cloudinary';
 
-const API_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001';
+
 
 // Re-export validation constants so components can import from one place
 export { ALLOWED_IMAGE_TYPES, ALLOWED_FILE_TYPES, MAX_IMAGE_SIZE, MAX_FILE_SIZE };

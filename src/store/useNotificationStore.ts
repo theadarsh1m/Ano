@@ -42,6 +42,7 @@ export const useNotificationStore = create<NotificationState>((set) => ({
 
   addNotification: (notification) =>
     set((state) => {
+      if (!notification || !notification.id) return state;
       // Avoid duplicates
       if (state.notifications.some((n) => n.id === notification.id)) return state;
       const newNotifications = [notification, ...state.notifications];

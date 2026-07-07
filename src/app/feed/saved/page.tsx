@@ -1,4 +1,5 @@
 "use client";
+import { API_URL } from "@/lib/config";
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
@@ -9,7 +10,7 @@ import { PostCard } from "@/components/feed/PostCard";
 import { motion } from "framer-motion";
 import { ArrowLeft, Bookmark, Loader2 } from "lucide-react";
 
-const API_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
+
 
 export default function SavedPostsPage() {
   const router = useRouter();

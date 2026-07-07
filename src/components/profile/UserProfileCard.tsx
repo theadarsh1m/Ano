@@ -1,4 +1,5 @@
 "use client";
+import { API_URL } from "@/lib/config";
 
 import { useEffect, useState } from "react";
 import { usePresenceStore } from "@/store/usePresenceStore";
@@ -8,7 +9,7 @@ import { Camera, Edit3, Check, X, MessageSquare, Calendar } from "lucide-react";
 import { uploadProfilePicture, validateImageFile } from "@/lib/upload";
 import { motion } from "framer-motion";
 
-const API_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
+
 
 interface UserProfile {
   id: string;

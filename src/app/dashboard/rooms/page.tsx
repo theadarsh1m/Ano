@@ -1,4 +1,5 @@
 "use client";
+import { API_URL } from "@/lib/config";
 
 import { useEffect, useState } from "react";
 import { useRoomStore, Room } from "@/store/useRoomStore";
@@ -10,7 +11,7 @@ import { Plus, ArrowLeft, KeyRound, Loader2, Globe, Lock, MessageSquare } from "
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 
-const API_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001';
+
 
 export default function RoomsPage() {
   const router = useRouter();
