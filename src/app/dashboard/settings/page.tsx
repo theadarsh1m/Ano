@@ -28,7 +28,7 @@ export default function SettingsPage() {
     setIsSaving(false);
   };
 
-  const handleNsfwModeChange = async (mode: "ALWAYS" | "NEVER") => {
+  const handleNsfwModeChange = async (mode: "HIDE" | "BLUR" | "SHOW") => {
     try {
       await updateProfile({ nsfwMode: mode });
     } catch (err) {
@@ -111,27 +111,38 @@ export default function SettingsPage() {
                   <input
                     type="radio"
                     name="nsfwMode"
-                    value="ALWAYS"
-                    checked={nsfwMode === "ALWAYS"}
-                    onChange={() => handleNsfwModeChange("ALWAYS")}
+                    value="HIDE"
+                    checked={nsfwMode === "HIDE"}
+                    onChange={() => handleNsfwModeChange("HIDE")}
                     className="accent-blue-500 w-4 h-4 cursor-pointer"
                   />
-                  <span className="text-sm font-medium">Always Blur (Default)</span>
+                  <span className="text-sm font-medium">Hide Completely (Default)</span>
                 </label>
                 <label className="flex items-center gap-2.5 cursor-pointer text-white/80 hover:text-white bg-white/5 px-4 py-2.5 rounded-xl border border-white/5 hover:bg-white/10 transition-colors">
                   <input
                     type="radio"
                     name="nsfwMode"
-                    value="NEVER"
-                    checked={nsfwMode === "NEVER"}
-                    onChange={() => handleNsfwModeChange("NEVER")}
+                    value="BLUR"
+                    checked={nsfwMode === "BLUR"}
+                    onChange={() => handleNsfwModeChange("BLUR")}
                     className="accent-blue-500 w-4 h-4 cursor-pointer"
                   />
-                  <span className="text-sm font-medium">Never Blur</span>
+                  <span className="text-sm font-medium">Blur (Tap to Reveal)</span>
+                </label>
+                <label className="flex items-center gap-2.5 cursor-pointer text-white/80 hover:text-white bg-white/5 px-4 py-2.5 rounded-xl border border-white/5 hover:bg-white/10 transition-colors">
+                  <input
+                    type="radio"
+                    name="nsfwMode"
+                    value="SHOW"
+                    checked={nsfwMode === "SHOW"}
+                    onChange={() => handleNsfwModeChange("SHOW")}
+                    className="accent-blue-500 w-4 h-4 cursor-pointer"
+                  />
+                  <span className="text-sm font-medium">Show Uncensored</span>
                 </label>
               </div>
               <p className="text-xs text-white/50 mt-3">
-                Configure whether uploaded posts and chat attachments flagged as NSFW are automatically hidden behind a blur overlay.
+                Configure how uploaded posts and chat attachments flagged as sensitive content are displayed.
               </p>
             </div>
           </div>

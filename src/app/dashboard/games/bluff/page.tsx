@@ -18,6 +18,17 @@ import { socketService } from "@/lib/socket";
 
 const DECLARED_RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'Jack', 'Queen', 'King', 'Ace'];
 
+const RANK_ORDER: Record<string, number> = { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'Jack': 11, 'Queen': 12, 'King': 13, 'Ace': 14 };
+const SUIT_ORDER: Record<string, number> = { 'spades': 4, 'hearts': 3, 'diamonds': 2, 'clubs': 1 };
+
+function sortCards(cards: { id: string; suit: string; value: string }[]) {
+  return [...cards].sort((a, b) => {
+    const rankDiff = (RANK_ORDER[a.value] || 0) - (RANK_ORDER[b.value] || 0);
+    if (rankDiff !== 0) return rankDiff;
+    return (SUIT_ORDER[a.suit] || 0) - (SUIT_ORDER[b.suit] || 0);
+  });
+}
+
 function BluffGamePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -55,6 +66,7 @@ function BluffGamePageContent() {
   const [friendsList, setFriendsList] = useState<any[]>([]);
   const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
   const [roomMembers, setRoomMembers] = useState<any[]>([]);
+  const [invitedUsers, setInvitedUsers] = useState<Set<string>>(new Set());
 
   // 1. Setup listeners on mount
   useEffect(() => {
@@ -166,6 +178,7 @@ function BluffGamePageContent() {
     const activeGameId = gameState?.gameId || lobby?.id;
     if (!activeGameId || !userId || !nickname) return;
     invitePlayer(activeGameId, userId, nickname, targetId, 'BLUFF');
+    setInvitedUsers(prev => new Set(prev).add(targetId));
   };
 
   // Hydration guard to avoid Next.js CSR bails and Zustand mismatch
@@ -327,9 +340,14 @@ function BluffGamePageContent() {
                             </div>
                             <button
                               onClick={() => sendInvite(u.id)}
-                              className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-semibold transition-all"
+                              disabled={invitedUsers.has(u.id)}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                                invitedUsers.has(u.id)
+                                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 cursor-default'
+                                  : 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                              }`}
                             >
-                              Invite
+                              {invitedUsers.has(u.id) ? '✓ Invited' : 'Invite'}
                             </button>
                           </div>
                         );
@@ -362,9 +380,14 @@ function BluffGamePageContent() {
                           </div>
                           <button
                             onClick={() => sendInvite(f.id)}
-                            className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-gray-300 rounded-lg text-xs font-semibold transition-all"
+                            disabled={invitedUsers.has(f.id)}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                              invitedUsers.has(f.id)
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 cursor-default'
+                                : 'bg-white/10 hover:bg-white/20 text-gray-300'
+                            }`}
                           >
-                            Invite
+                            {invitedUsers.has(f.id) ? '✓ Invited' : 'Invite'}
                           </button>
                         </div>
                       ))}
@@ -697,7 +720,7 @@ function BluffGamePageContent() {
 
               {/* Hand cards selection row */}
               <div className="flex gap-3 overflow-x-auto py-2 pr-4 scrollbar-thin select-none max-w-full">
-                {self.hand && self.hand.map((c) => {
+                {self.hand && sortCards(self.hand).map((c) => {
                   const isSelected = selectedCards.includes(c.id);
                   return (
                     <motion.div

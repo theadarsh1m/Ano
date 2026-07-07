@@ -42,7 +42,22 @@ export function SafeMedia({
     return <div className={`bg-white/5 animate-pulse rounded-xl ${className}`} />;
   }
 
-  const shouldBlur = isNSFW && nsfwMode === "ALWAYS" && !revealed;
+  const shouldHide = isNSFW && nsfwMode === "HIDE";
+  const shouldBlur = isNSFW && (nsfwMode === "BLUR" || nsfwMode === "ALWAYS") && !revealed;
+
+  if (shouldHide) {
+    return (
+      <div className={`relative overflow-hidden group/safe-media bg-neutral-900 border border-white/5 flex flex-col items-center justify-center p-6 text-center ${className}`}>
+        <div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mb-3">
+          <EyeOff className="w-6 h-6 text-white/50" />
+        </div>
+        <h4 className="text-white/80 font-semibold text-base mb-1 tracking-wide">Sensitive Content Hidden</h4>
+        <p className="text-white/40 text-xs max-w-[220px] leading-relaxed">
+          This content is hidden by your settings. Change your NSFW preferences to view it.
+        </p>
+      </div>
+    );
+  }
 
   if (shouldBlur) {
     return (

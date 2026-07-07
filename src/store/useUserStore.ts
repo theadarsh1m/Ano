@@ -17,13 +17,13 @@ export interface UserState {
   joinedAt: number | null;
   isAnonymous: boolean;
   email: string | null;
-  nsfwMode: 'ALWAYS' | 'NEVER';
+  nsfwMode: 'HIDE' | 'BLUR' | 'SHOW';
   preferences: UserPreferences;
   login: (nickname: string) => void;
   loginWithGoogle: (token: string) => Promise<{ isNewUser?: boolean }>;
   logout: () => void;
   updatePreferences: (newPreferences: Partial<UserPreferences>) => void;
-  updateProfile: (data: { nickname?: string; bio?: string; avatar?: string; nsfwMode?: 'ALWAYS' | 'NEVER' }) => Promise<void>;
+  updateProfile: (data: { nickname?: string; bio?: string; avatar?: string; nsfwMode?: 'HIDE' | 'BLUR' | 'SHOW' }) => Promise<void>;
 }
 
 const defaultPreferences: UserPreferences = {
@@ -44,7 +44,7 @@ export const useUserStore = create<UserState>()(
       joinedAt: null,
       isAnonymous: true,
       email: null,
-      nsfwMode: 'ALWAYS',
+      nsfwMode: 'HIDE',
       preferences: defaultPreferences,
       login: (nickname: string) => {
         const id = `guest_${uuidv4().substring(0, 6)}`;
@@ -56,7 +56,7 @@ export const useUserStore = create<UserState>()(
           body: JSON.stringify({ id, nickname }),
         }).catch((err) => console.error('Failed to persist user:', err));
 
-        set({ id, nickname, joinedAt: Date.now(), avatar: null, bio: null, isAnonymous: true, email: null, nsfwMode: 'ALWAYS' });
+        set({ id, nickname, joinedAt: Date.now(), avatar: null, bio: null, isAnonymous: true, email: null, nsfwMode: 'HIDE' });
       },
       loginWithGoogle: async (token: string) => {
         const currentId = get().id;
@@ -85,7 +85,7 @@ export const useUserStore = create<UserState>()(
             bio: user.bio,
             isAnonymous: user.isAnonymous,
             email: user.email,
-            nsfwMode: user.nsfwMode || 'ALWAYS',
+            nsfwMode: (user.nsfwMode === 'ALWAYS' ? 'HIDE' : user.nsfwMode === 'NEVER' ? 'SHOW' : user.nsfwMode) || 'HIDE',
             joinedAt: new Date(user.createdAt).getTime() || Date.now(),
           });
           
@@ -103,7 +103,7 @@ export const useUserStore = create<UserState>()(
         joinedAt: null,
         isAnonymous: true,
         email: null,
-        nsfwMode: 'ALWAYS',
+        nsfwMode: 'HIDE',
         preferences: defaultPreferences,
       }),
       updatePreferences: (newPreferences) => set((state) => ({
@@ -133,7 +133,7 @@ export const useUserStore = create<UserState>()(
             nickname: profile.nickname,
             avatar: profile.avatar,
             bio: profile.bio,
-            nsfwMode: profile.nsfwMode || 'ALWAYS',
+            nsfwMode: (profile.nsfwMode === 'ALWAYS' ? 'HIDE' : profile.nsfwMode === 'NEVER' ? 'SHOW' : profile.nsfwMode) || 'HIDE',
           });
         } catch (err) {
           console.error('Failed to update profile:', err);
@@ -143,6 +143,14 @@ export const useUserStore = create<UserState>()(
     }),
     {
       name: 'ano-session',
+      version: 1,
+      migrate: (persistedState: any, version: number) => {
+        if (version === 0) {
+          if (persistedState.nsfwMode === 'ALWAYS') persistedState.nsfwMode = 'HIDE';
+          if (persistedState.nsfwMode === 'NEVER') persistedState.nsfwMode = 'SHOW';
+        }
+        return persistedState;
+      },
     }
   )
 );

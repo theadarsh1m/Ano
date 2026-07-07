@@ -56,7 +56,13 @@ export default function NotificationsPage() {
       handleMarkAsRead(notification.id);
     }
     
-    if (notification.type === "room_invite" || notification.type === "mention") {
+    if (notification.type === "room_invite") {
+      if (notification.metadata?.gameId) {
+        router.push(`/dashboard/games/bluff?gameId=${notification.metadata.gameId}`);
+      } else if (notification.metadata?.roomId) {
+        router.push(`/room/${notification.metadata.roomId}`);
+      }
+    } else if (notification.type === "mention") {
       if (notification.metadata?.roomId) {
         router.push(`/room/${notification.metadata.roomId}`);
       }

@@ -64,7 +64,14 @@ export function NotificationBell() {
     }
     
     // Route based on type
-    if (notification.type === "room_invite" || notification.type === "mention") {
+    if (notification.type === "room_invite") {
+      if (notification.metadata?.gameId) {
+        // Game invite — join the game lobby
+        router.push(`/dashboard/games/bluff?gameId=${notification.metadata.gameId}`);
+      } else if (notification.metadata?.roomId) {
+        router.push(`/room/${notification.metadata.roomId}`);
+      }
+    } else if (notification.type === "mention") {
       if (notification.metadata?.roomId) {
         router.push(`/room/${notification.metadata.roomId}`);
       }

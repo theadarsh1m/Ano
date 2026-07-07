@@ -18,7 +18,7 @@ model User {
   isOnline    Boolean   @default(false)
   createdAt   DateTime  @default(now())
   lastSeen    DateTime  @default(now())
-  nsfwMode    NsfwMode  @default(ALWAYS)
+  nsfwMode    NsfwMode  @default(HIDE)
   presenceStatus String?
   messages    Message[]
 
@@ -231,6 +231,9 @@ model SavedPost {
 enum NsfwMode {
   ALWAYS
   NEVER
+  HIDE
+  BLUR
+  SHOW
 }
 
 enum ModerationStatus {
