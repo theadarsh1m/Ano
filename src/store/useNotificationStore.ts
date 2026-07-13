@@ -46,6 +46,16 @@ export const useNotificationStore = create<NotificationState>((set) => ({
       // Avoid duplicates
       if (state.notifications.some((n) => n.id === notification.id)) return state;
       const newNotifications = [notification, ...state.notifications];
+      
+      // Trigger browser notification if in background
+      if (typeof document !== 'undefined' && document.hidden) {
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          new Notification(notification.title || 'Ano', { 
+            body: notification.message || 'You have a new notification' 
+          });
+        }
+      }
+
       return {
         notifications: newNotifications,
         unreadCount: newNotifications.filter((n) => !n.isRead).length,

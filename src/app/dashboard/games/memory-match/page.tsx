@@ -54,6 +54,7 @@ function MemoryMatchPageContent() {
     kickPlayer,
     leaveLobby,
     invitePlayer,
+    updateLobbySettings,
     startGame,
     flipCard,
     clearState,
@@ -79,6 +80,18 @@ function MemoryMatchPageContent() {
 
     return () => { cleanup(); };
   }, [userId, lobby?.id, gameState?.gameId, gameIdParam]);
+
+  // Leave lobby on unmount
+  useEffect(() => {
+    return () => {
+      const state = useMemoryMatchStore.getState();
+      const currentGameId = state.lobby?.id || state.gameState?.gameId;
+      const currentUserId = useUserStore.getState().id;
+      if (currentGameId && currentUserId) {
+        state.leaveLobby(currentGameId, currentUserId);
+      }
+    };
+  }, []);
 
   // Fetch friends/online users for invites
   useEffect(() => {
@@ -293,6 +306,27 @@ function MemoryMatchPageContent() {
               ))}
             </div>
 
+            {isHost && (
+              <div className="mb-6 p-4 bg-white/5 rounded-xl border border-white/10">
+                <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
+                  <Brain className="w-4 h-4 text-violet-400" /> Game Settings
+                </h3>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-300">Board Size</span>
+                  <select
+                    value={lobby.settings?.pairCount || 12}
+                    onChange={(e) => updateLobbySettings(lobby.id, userId, { pairCount: parseInt(e.target.value) })}
+                    className="bg-black border border-white/20 rounded px-2 py-1 text-sm outline-none focus:border-violet-500"
+                  >
+                    <option value={12}>Small (12 Pairs)</option>
+                    <option value={18}>Medium (18 Pairs)</option>
+                    <option value={24}>Large (24 Pairs)</option>
+                    <option value={32}>Giant (32 Pairs)</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-3">
               {!isHost && (
                 <button
@@ -388,7 +422,7 @@ function MemoryMatchPageContent() {
     return (
       <div className="flex flex-col h-screen bg-black text-white">
         {/* Top Bar */}
-        <div className="flex items-center justify-between p-3 bg-white/5 border-b border-white/10 flex-shrink-0">
+        <div className="flex items-center justify-between p-2 md:p-3 bg-white/5 border-b border-white/10 flex-shrink-0">
           <div className="flex items-center gap-3">
             <button onClick={() => router.push("/dashboard")} className="flex items-center gap-2 cursor-pointer group hover:opacity-80 transition-opacity">
               <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
@@ -431,11 +465,11 @@ function MemoryMatchPageContent() {
           )}
 
           {/* Main Game Board */}
-          <div className="flex-1 flex items-center justify-center p-4 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-violet-950/30 via-gray-900 to-black overflow-auto">
+          <div className="flex-1 flex items-center justify-center p-2 md:p-4 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-violet-950/30 via-gray-900 to-black overflow-auto">
             <div className="relative">
               {/* Card Grid */}
               <div
-                className="grid gap-2 md:gap-3"
+                className="grid gap-1.5 sm:gap-2 md:gap-3"
                 style={{ gridTemplateColumns: `repeat(${gameState.boardCols}, minmax(0, 1fr))` }}
               >
                 {gameState.board.map((card) => {
@@ -521,9 +555,11 @@ function MemoryMatchPageContent() {
                       </motion.div>
                     )}
                     <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.5 }}
-                      className="text-gray-400 mb-6"
+                      className="text-gray-400 mb-6 text-center px-4"
                     >
-                      All {gameState.totalPairs} pairs found!
+                      {gameState.matchedPairs < gameState.totalPairs 
+                        ? "The other players have left the game." 
+                        : `All ${gameState.totalPairs} pairs found!`}
                     </motion.div>
                     <motion.button
                       initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.7 }}
@@ -604,7 +640,7 @@ function MemoryMatchPageContent() {
         </div>
 
         {/* Bottom Bar */}
-        <div className="flex items-center justify-between p-3 bg-white/5 border-t border-white/10 flex-shrink-0">
+        <div className="flex items-center justify-between p-2 md:p-3 bg-white/5 border-t border-white/10 flex-shrink-0">
           <div className="flex items-center gap-2">
             {currentRoomId && (
               <button onClick={() => setShowChatSidebar(!showChatSidebar)} className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors">

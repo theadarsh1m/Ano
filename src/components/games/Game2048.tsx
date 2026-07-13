@@ -41,10 +41,6 @@ const spawnTile = (tiles: Tile[]): Tile[] => {
   return tiles;
 };
 
-// Touch swipe tracking variables
-let touchStartX = 0;
-let touchStartY = 0;
-
 export function Game2048({ onGameEnd }: { onGameEnd: (score: number, playTimeSeconds: number) => void }) {
   const [tiles, setTiles] = useState<Tile[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -53,6 +49,15 @@ export function Game2048({ onGameEnd }: { onGameEnd: (score: number, playTimeSec
   const [playTime, setPlayTime] = useState(0);
   const [isMuted, setIsMuted] = useState(sounds.isMuted);
   const pendingMoveRef = useRef(false);
+  const gameContainerRef = useRef<HTMLDivElement>(null);
+
+  // Tracking refs for unmount save
+  const latestScore = useRef(0);
+  const latestPlayTime = useRef(0);
+  const hasEnded = useRef(false);
+
+  // Touch tracking refs (not state to avoid re-renders)
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const toggleMute = () => {
     setIsMuted(sounds.toggleMute());
@@ -62,11 +67,25 @@ export function Game2048({ onGameEnd }: { onGameEnd: (score: number, playTimeSec
     let timer: NodeJS.Timeout;
     if (isPlaying && !isGameOver) {
       timer = setInterval(() => {
-        setPlayTime(prev => prev + 1);
+        setPlayTime(prev => {
+          const next = prev + 1;
+          latestPlayTime.current = next;
+          return next;
+        });
       }, 1000);
     }
     return () => clearInterval(timer);
   }, [isPlaying, isGameOver]);
+
+  // Unmount effect to save score if mid-game
+  useEffect(() => {
+    return () => {
+      // If the component is unmounting while playing and not explicitly over
+      if (!hasEnded.current && latestScore.current > 0) {
+        onGameEnd(latestScore.current, latestPlayTime.current);
+      }
+    };
+  }, [onGameEnd]);
 
   const checkGameOver = (currentTiles: Tile[]) => {
     if (currentTiles.length < GRID_SIZE * GRID_SIZE) return false;
@@ -126,13 +145,12 @@ export function Game2048({ onGameEnd }: { onGameEnd: (score: number, playTimeSec
             newScore += line[j].val * 2;
             mergedThisTurn = true;
             newLine.push({
-              id: line[j].id, // Keep the ID of the first one to animate it into the merged spot
+              id: line[j].id,
               val: line[j].val * 2,
               isMerged: true,
               r: direction === 'LEFT' || direction === 'RIGHT' ? i : 0,
               c: direction === 'UP' || direction === 'DOWN' ? i : 0,
             });
-            // We don't add the second one, it visually disappears (you could improve this by tracking disappearing tiles, but this is simple and works okay with framer-motion)
             skipNext = true;
             moved = true;
           } else {
@@ -162,9 +180,11 @@ export function Game2048({ onGameEnd }: { onGameEnd: (score: number, playTimeSec
 
         const spawnedTiles = spawnTile(newTiles);
         setScore(newScore);
+        latestScore.current = newScore;
         if (checkGameOver(spawnedTiles)) {
           sounds.playCrash();
           setIsGameOver(true);
+          hasEnded.current = true;
           onGameEnd(newScore, playTime);
         }
         
@@ -195,38 +215,54 @@ export function Game2048({ onGameEnd }: { onGameEnd: (score: number, playTimeSec
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [move, isPlaying]);
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartX = e.touches[0].clientX;
-    touchStartY = e.touches[0].clientY;
-  };
-
-  const handleTouchEnd = (e: React.TouchEvent) => {
+  // Touch handlers with scroll prevention
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (!isPlaying) return;
+    touchStartRef.current = {
+      x: e.touches[0].clientX,
+      y: e.touches[0].clientY,
+    };
+  }, [isPlaying]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    // Prevent page scrolling while swiping on the game board
+    if (touchStartRef.current) {
+      e.preventDefault();
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (!isPlaying || !touchStartRef.current) return;
     const touchEndX = e.changedTouches[0].clientX;
     const touchEndY = e.changedTouches[0].clientY;
     
-    const dx = touchEndX - touchStartX;
-    const dy = touchEndY - touchStartY;
+    const dx = touchEndX - touchStartRef.current.x;
+    const dy = touchEndY - touchStartRef.current.y;
+
+    touchStartRef.current = null;
     
+    const MIN_SWIPE = 30;
     if (Math.abs(dx) > Math.abs(dy)) {
-      if (Math.abs(dx) > 30) {
+      if (Math.abs(dx) > MIN_SWIPE) {
         if (dx > 0) move('RIGHT');
         else move('LEFT');
       }
     } else {
-      if (Math.abs(dy) > 30) {
+      if (Math.abs(dy) > MIN_SWIPE) {
         if (dy > 0) move('DOWN');
         else move('UP');
       }
     }
-  };
+  }, [isPlaying, move]);
 
   const startGame = () => {
     let initialTiles = spawnTile([]);
     initialTiles = spawnTile(initialTiles);
     setTiles(initialTiles);
     setScore(0);
-    setPlayTime(0);
+    latestScore.current = 0;
+    latestPlayTime.current = 0;
+    hasEnded.current = false;
     setIsGameOver(false);
     setIsPlaying(true);
     sounds.playWin(); // Startup sound
@@ -250,9 +286,9 @@ export function Game2048({ onGameEnd }: { onGameEnd: (score: number, playTimeSec
   };
 
   return (
-    <div className="flex flex-col items-center">
-      <div className="mb-4 w-full flex justify-between items-center px-4">
-        <div className="text-xl font-bold text-white flex gap-8">
+    <div className="flex flex-col items-center w-full max-w-[400px] mx-auto">
+      <div className="mb-3 md:mb-4 w-full flex justify-between items-center px-1 md:px-4">
+        <div className="text-base md:text-xl font-bold text-white flex gap-4 md:gap-8">
           <div>Score: <motion.span key={score} initial={{ scale: 1.5, color: '#facc15' }} animate={{ scale: 1, color: '#eab308' }} className="inline-block text-yellow-400">{score}</motion.span></div>
           <div>Time: <span className="text-blue-400">{playTime}s</span></div>
         </div>
@@ -266,20 +302,31 @@ export function Game2048({ onGameEnd }: { onGameEnd: (score: number, playTimeSec
       </div>
       
       <motion.div 
+        ref={gameContainerRef}
         animate={isGameOver ? { x: [-10, 10, -10, 10, 0], transition: { duration: 0.4 } } : {}}
-        className="relative p-3 bg-amber-900/60 rounded-xl shadow-[0_0_30px_rgba(120,53,15,0.4)] border border-amber-500/20"
+        className="relative p-2 md:p-3 bg-amber-900/60 rounded-xl shadow-[0_0_30px_rgba(120,53,15,0.4)] border border-amber-500/20 w-full touch-game"
         onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        <div className="grid grid-cols-4 gap-3 bg-amber-950/80 p-3 rounded-lg relative w-[316px] h-[316px] md:w-[380px] md:h-[380px] tile-container overflow-hidden">
-          <style>{`
-            .tile-container { --tile-size: 64px; }
-            @media (min-width: 768px) { .tile-container { --tile-size: 80px; } }
-          `}</style>
+        {/* CSS custom properties for responsive tile sizing */}
+        <style>{`
+          .game-2048-grid {
+            --grid-gap: 8px;
+            --tile-size: calc((100% - var(--grid-gap) * 3) / 4);
+          }
+          @media (min-width: 768px) {
+            .game-2048-grid {
+              --grid-gap: 12px;
+            }
+          }
+        `}</style>
+
+        <div className="game-2048-grid grid grid-cols-4 gap-[var(--grid-gap)] bg-amber-950/80 p-2 md:p-3 rounded-lg relative aspect-square overflow-hidden">
           
           {/* Background Empty Cells */}
           {Array.from({ length: GRID_SIZE * GRID_SIZE }).map((_, i) => (
-            <div key={`bg-${i}`} className="w-16 h-16 md:w-20 md:h-20 bg-amber-900/40 rounded"></div>
+            <div key={`bg-${i}`} className="bg-amber-900/40 rounded aspect-square"></div>
           ))}
 
           {/* Animated Tiles */}
@@ -297,12 +344,12 @@ export function Game2048({ onGameEnd }: { onGameEnd: (score: number, playTimeSec
               }}
               style={{
                 position: 'absolute',
-                top: `calc(12px + ${tile.r} * (var(--tile-size) + 12px))`,
-                left: `calc(12px + ${tile.c} * (var(--tile-size) + 12px))`,
+                top: `calc(var(--grid-gap) + ${tile.r} * (var(--tile-size) + var(--grid-gap)))`,
+                left: `calc(var(--grid-gap) + ${tile.c} * (var(--tile-size) + var(--grid-gap)))`,
                 width: 'var(--tile-size)',
                 height: 'var(--tile-size)',
               }}
-              className={`rounded flex items-center justify-center text-2xl md:text-3xl font-black ${getColor(tile.val)} shadow-md`}
+              className={`rounded flex items-center justify-center text-lg sm:text-xl md:text-3xl font-black ${getColor(tile.val)} shadow-md`}
             >
               {tile.val}
             </motion.div>
@@ -319,17 +366,17 @@ export function Game2048({ onGameEnd }: { onGameEnd: (score: number, playTimeSec
             >
               {isGameOver && (
                 <div className="flex flex-col items-center">
-                  <div className="text-red-500 text-5xl font-black mb-2 drop-shadow-[0_0_15px_rgba(239,68,68,0.8)]">
+                  <div className="text-red-500 text-3xl md:text-5xl font-black mb-2 drop-shadow-[0_0_15px_rgba(239,68,68,0.8)]">
                     GAME OVER
                   </div>
-                  <div className="text-white text-xl font-bold mb-6">
+                  <div className="text-white text-lg md:text-xl font-bold mb-6">
                     Final Score: <span className="text-yellow-400">{score}</span>
                   </div>
                 </div>
               )}
               <Button 
                 onClick={startGame} 
-                className="bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 px-8 rounded-full shadow-[0_0_20px_rgba(217,119,6,0.5)] border border-amber-400 text-lg transition-transform hover:scale-105 active:scale-95"
+                className="bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 px-6 md:px-8 rounded-full shadow-[0_0_20px_rgba(217,119,6,0.5)] border border-amber-400 text-base md:text-lg transition-transform hover:scale-105 active:scale-95"
               >
                 {isGameOver ? 'Play Again' : 'Start Game'}
               </Button>
@@ -338,8 +385,8 @@ export function Game2048({ onGameEnd }: { onGameEnd: (score: number, playTimeSec
         </AnimatePresence>
       </motion.div>
 
-      <div className="mt-6 text-gray-400 text-sm">
-        Use Arrow Keys to slide tiles.
+      <div className="mt-4 md:mt-6 text-gray-400 text-xs md:text-sm text-center">
+        Swipe or use Arrow Keys to slide tiles.
       </div>
     </div>
   );

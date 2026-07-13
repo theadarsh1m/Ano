@@ -39,14 +39,14 @@ export default function Dashboard() {
     <div className="flex h-screen max-h-screen">
       <AppSidebar />
 
-      <main className="flex-1 overflow-y-auto p-6 md:p-10">
+      <main className="flex-1 overflow-y-auto p-4 pt-14 md:pt-6 md:p-10">
         <div className="max-w-4xl mx-auto space-y-8">
           {/* Header */}
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            <h1 className="text-3xl font-bold text-white mb-1">
+            <h1 className="text-2xl md:text-3xl font-bold text-white mb-1">
               Welcome back, {nickname}!
             </h1>
             <div className="flex items-center gap-3 text-sm text-gray-400">

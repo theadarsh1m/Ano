@@ -26,8 +26,11 @@ class MemoryMatchEngine extends BaseGameEngine {
     const playerIds = Array.from(this.players.keys());
     const count = playerIds.length;
 
-    // Calculate board size based on player count
-    const pairCount = getPairCount(count);
+    // Calculate board size based on settings or player count
+    let pairCount = getPairCount(count);
+    if (this.settings && this.settings.pairCount) {
+      pairCount = parseInt(this.settings.pairCount, 10);
+    }
     this.totalPairs = pairCount;
     this.matchedPairs = 0;
     const totalCards = pairCount * 2;
@@ -87,6 +90,27 @@ class MemoryMatchEngine extends BaseGameEngine {
       default:
         return { success: false, error: 'Unknown action!' };
     }
+  }
+
+  removePlayer(userId) {
+    if (!this.players.has(userId)) return false;
+    
+    const wasCurrentTurn = (this.currentTurnPlayerId === userId);
+    const playerIds = Array.from(this.players.keys());
+    const idx = playerIds.indexOf(userId);
+    
+    this.players.delete(userId);
+    
+    if (wasCurrentTurn && this.players.size > 0) {
+      // Pass turn to the next player
+      let nextIdx = idx >= this.players.size ? 0 : idx;
+      this.currentTurnPlayerId = Array.from(this.players.keys())[nextIdx];
+    }
+
+    if (this.players.size < 2 && this.status !== 'FINISHED') {
+       this.endGame();
+    }
+    return true;
   }
 
   flipCard(playerId, cardIndex) {
@@ -248,6 +272,9 @@ class MemoryMatchEngine extends BaseGameEngine {
     let winners = [];
 
     this.scores.forEach((score, playerId) => {
+      // Ignore players who have left the game
+      if (!this.players.has(playerId)) return;
+
       if (score > maxScore) {
         maxScore = score;
         winners = [playerId];
@@ -261,11 +288,15 @@ class MemoryMatchEngine extends BaseGameEngine {
       this.isDraw = false;
       const winnerPlayer = this.players.get(this.winnerId);
       this.historyLogs.push(`${winnerPlayer.nickname} wins with ${maxScore} pairs!`);
-    } else {
+    } else if (winners.length > 1) {
       this.winnerId = null;
       this.isDraw = true;
       const winnerNames = winners.map(id => this.players.get(id).nickname).join(', ');
       this.historyLogs.push(`It's a draw! ${winnerNames} tied with ${maxScore} pairs each!`);
+    } else {
+      this.winnerId = null;
+      this.isDraw = true;
+      this.historyLogs.push(`Game ended because all players left.`);
     }
 
     const durationSeconds = Math.floor((Date.now() - (this.startTime || Date.now())) / 1000);

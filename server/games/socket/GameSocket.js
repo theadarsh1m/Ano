@@ -110,6 +110,19 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
     if (lobby) {
       io.to(gameId).emit('lobby_state', serializeLobby(lobby));
     }
+    
+    // Also remove from active game if playing
+    const engine = activeGames.get(gameId);
+    if (engine) {
+      const removed = engine.removePlayer(userId);
+      if (removed) {
+        broadcastGameStates(gameId, engine);
+        if (engine.players.size === 0) {
+          activeGames.delete(gameId);
+        }
+      }
+    }
+
     broadcastLobbies();
   });
 
@@ -248,10 +261,52 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
     if (engine.status === 'FINISHED') {
       setTimeout(() => {
         engine.players.forEach(p => {
-          updatePresence(p.userId, null);
+          updatePresence(p.userId, null).catch(console.error);
         });
         activeGames.delete(gameId);
       }, 5000);
+    }
+  });
+
+  // Handle sudden disconnects (e.g. closing tab)
+  socket.on('disconnect', () => {
+    let disconnectedUserId = null;
+    for (const [uId, sockets] of onlineUsers.entries()) {
+      if (sockets.has(socket.id)) {
+        disconnectedUserId = uId;
+        break;
+      }
+    }
+
+    if (disconnectedUserId) {
+      const userSockets = onlineUsers.get(disconnectedUserId);
+      if (userSockets && userSockets.size > 1) {
+        // User has other active tabs, don't remove from games
+        return;
+      }
+
+      // 1. Clean up lobbies
+      for (const [lobbyId, lobby] of LobbyService.lobbies.entries()) {
+        if (lobby.players.has(disconnectedUserId)) {
+          LobbyService.leaveLobby(lobbyId, disconnectedUserId).then(updatedLobby => {
+            if (updatedLobby) {
+              io.to(lobbyId).emit('lobby_state', serializeLobby(updatedLobby));
+            }
+            broadcastLobbies();
+          }).catch(console.error);
+        }
+      }
+
+      // 2. Clean up active games
+      for (const [gameId, engine] of activeGames.entries()) {
+        if (engine.players.has(disconnectedUserId)) {
+          const removed = engine.removePlayer(disconnectedUserId);
+          if (removed) {
+            broadcastGameStates(gameId, engine);
+            if (engine.players.size === 0) activeGames.delete(gameId);
+          }
+        }
+      }
     }
   });
 

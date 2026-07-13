@@ -60,7 +60,7 @@ export default function RoomsPage() {
   };
 
   return (
-    <main className="flex-1 p-6 md:p-12 min-h-screen">
+    <main className="flex-1 p-4 md:p-6 lg:p-12 min-h-screen">
       <div className="max-w-6xl mx-auto space-y-8">
         {/* Header */}
         <motion.div 
@@ -90,7 +90,7 @@ export default function RoomsPage() {
             </div>
 
             <div className="mt-2">
-              <h1 className="text-3xl font-bold text-white">Chat Rooms</h1>
+              <h1 className="text-2xl md:text-3xl font-bold text-white">Chat Rooms</h1>
               <p className="text-muted-foreground mt-1">Join an open conversation or access your private spaces.</p>
             </div>
           </div>

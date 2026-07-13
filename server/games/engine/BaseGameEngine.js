@@ -19,6 +19,17 @@ class BaseGameEngine {
     throw new Error('validateAction() not implemented');
   }
 
+  removePlayer(userId) {
+    if (this.players.has(userId)) {
+      this.players.delete(userId);
+      if (this.players.size < 2 && this.status !== 'FINISHED') {
+         this.status = 'FINISHED';
+      }
+      return true;
+    }
+    return false;
+  }
+
   endGame(winnerId) {
     throw new Error('endGame() not implemented');
   }

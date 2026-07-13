@@ -49,9 +49,9 @@ export default function GamesHubPage() {
   ];
 
   return (
-    <div className="flex flex-col h-full space-y-6 max-w-6xl mx-auto w-full p-6 pb-12">
+    <div className="flex flex-col h-full space-y-4 md:space-y-6 max-w-6xl mx-auto w-full p-3 pb-12 md:p-6 md:pb-12">
       {/* Global Navbar for Games Hub */}
-      <div className="flex items-center justify-between bg-white/5 border border-white/10 rounded-2xl p-4 shadow-lg backdrop-blur-md">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white/5 border border-white/10 rounded-2xl p-3 md:p-4 shadow-lg backdrop-blur-md">
         <div className="flex items-center gap-4">
           <Link href="/dashboard">
             <div className="flex items-center gap-3 cursor-pointer group hover:opacity-80 transition-opacity">
@@ -64,9 +64,10 @@ export default function GamesHubPage() {
         </div>
         
         <Link href="/dashboard">
-          <Button variant="ghost" className="text-gray-400 hover:text-white">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Dashboard
+          <Button variant="ghost" className="text-gray-400 hover:text-white text-xs sm:text-sm">
+            <ArrowLeft className="w-4 h-4 mr-1 sm:mr-2" />
+            <span className="hidden sm:inline">Back to Dashboard</span>
+            <span className="sm:hidden">Back</span>
           </Button>
         </Link>
       </div>
@@ -78,7 +79,7 @@ export default function GamesHubPage() {
             <Gamepad2 className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-white tracking-wide">Multiplayer Games</h1>
+            <h1 className="text-xl md:text-2xl font-bold text-white tracking-wide">Multiplayer Games</h1>
             <p className="text-gray-400 text-sm mt-1">Play cards and social games with other users in real time!</p>
           </div>
         </div>
@@ -116,7 +117,7 @@ export default function GamesHubPage() {
             <Gamepad2 className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-white tracking-wide">Single Player Games</h1>
+            <h1 className="text-xl md:text-2xl font-bold text-white tracking-wide">Single Player Games</h1>
             <p className="text-gray-400 text-sm mt-1">Play games while staying connected to your friends!</p>
           </div>
         </div>

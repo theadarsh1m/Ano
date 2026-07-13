@@ -95,18 +95,18 @@ export default function FeedPage() {
       <AppSidebar />
 
       <main className="flex-1 overflow-y-auto">
-        <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">
+        <div className="max-w-2xl mx-auto px-3 pt-14 pb-8 md:px-4 md:pt-8 space-y-6">
           {/* Header */}
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex items-center justify-between"
+            className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
           >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-pink-600 flex items-center justify-center">
                 <Rss className="w-5 h-5 text-white" />
               </div>
-              <h1 className="text-2xl font-bold text-white">Feed</h1>
+              <h1 className="text-xl md:text-2xl font-bold text-white">Feed</h1>
             </div>
             <FeedTabs activeTab={activeTab} onTabChange={setActiveTab} />
           </motion.div>

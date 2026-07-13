@@ -70,6 +70,20 @@ function DotsAndBoxesPageContent() {
 
   // Board drawing layout configuration variables
   const [hoveredLine, setHoveredLine] = useState<{ type: 'H' | 'V'; r: number; c: number } | null>(null);
+  const [boxSize, setBoxSize] = useState(55);
+
+  // Responsive board sizing
+  useEffect(() => {
+    const updateSize = () => {
+      const w = window.innerWidth;
+      if (w < 640) setBoxSize(35);
+      else if (w < 1024) setBoxSize(45);
+      else setBoxSize(55);
+    };
+    updateSize();
+    window.addEventListener('resize', updateSize);
+    return () => window.removeEventListener('resize', updateSize);
+  }, []);
 
   // Setup listeners on mount
   useEffect(() => {
@@ -82,6 +96,18 @@ function DotsAndBoxesPageContent() {
 
     return () => { cleanup(); };
   }, [userId, lobby?.id, gameState?.gameId, gameIdParam]);
+
+  // Leave lobby on unmount
+  useEffect(() => {
+    return () => {
+      const state = useDotsAndBoxesStore.getState();
+      const currentGameId = state.lobby?.id || state.gameState?.gameId;
+      const currentUserId = useUserStore.getState().id;
+      if (currentGameId && currentUserId) {
+        state.leaveLobby(currentGameId, currentUserId);
+      }
+    };
+  }, []);
 
   // Fetch friends/online users for invites
   useEffect(() => {
@@ -451,9 +477,9 @@ function DotsAndBoxesPageContent() {
 
     // Dynamic sizing configuration for the SVG board canvas
     const N = gameState.boardSize;
-    const BOX_SIZE = 55;
-    const LINE_WIDTH = 6;
-    const DOT_RADIUS = 5;
+    const BOX_SIZE = boxSize;
+    const LINE_WIDTH = boxSize < 45 ? 4 : 6;
+    const DOT_RADIUS = boxSize < 45 ? 4 : 5;
     const GAP = BOX_SIZE + LINE_WIDTH;
     const padding = DOT_RADIUS + 8;
     const boardWidthHeight = (N - 1) * GAP + padding * 2;
@@ -468,7 +494,7 @@ function DotsAndBoxesPageContent() {
     return (
       <div className="flex flex-col h-screen bg-black text-white select-none">
         {/* Top Bar */}
-        <div className="flex items-center justify-between p-3 bg-white/5 border-b border-white/10 flex-shrink-0">
+        <div className="flex items-center justify-between p-2 md:p-3 bg-white/5 border-b border-white/10 flex-shrink-0">
           <div className="flex items-center gap-3">
             <button onClick={() => router.push("/dashboard")} className="flex items-center gap-2 cursor-pointer group hover:opacity-80 transition-opacity">
               <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
@@ -516,13 +542,13 @@ function DotsAndBoxesPageContent() {
           )}
 
           {/* Main SVG Interactive Game Board */}
-          <div className="flex-1 flex items-center justify-center p-4 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-950/20 via-gray-900 to-black overflow-auto">
+          <div className="flex-1 flex items-center justify-center p-2 md:p-4 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-950/20 via-gray-900 to-black overflow-auto">
             <div className="relative">
               {/* SVG Canvas */}
               <svg
                 width={boardWidthHeight}
                 height={boardWidthHeight}
-                className="max-w-full max-h-[70vh] drop-shadow-[0_10px_25px_rgba(0,0,0,0.5)]"
+                className="max-w-full max-h-[65vh] md:max-h-[70vh] drop-shadow-[0_10px_25px_rgba(0,0,0,0.5)] touch-game"
               >
                 {/* 1. Draw Boxes background owners */}
                 {Array.from({ length: N - 1 }).map((_, br) => (
@@ -633,12 +659,14 @@ function DotsAndBoxesPageContent() {
                               x2={dot2.cx}
                               y2={dot2.cy}
                               stroke="transparent"
-                              strokeWidth={16}
+                              strokeWidth={24}
                               strokeLinecap="round"
                               className="cursor-pointer"
                               onMouseEnter={() => setHoveredLine({ type: 'H', r, c })}
                               onMouseLeave={() => setHoveredLine(null)}
                               onClick={() => handleDrawLine('H', r, c)}
+                              onTouchStart={(e) => { e.preventDefault(); setHoveredLine({ type: 'H', r, c }); }}
+                              onTouchEnd={(e) => { e.preventDefault(); handleDrawLine('H', r, c); setHoveredLine(null); }}
                             />
                           </g>
                         );
@@ -677,12 +705,14 @@ function DotsAndBoxesPageContent() {
                               x2={dot2.cx}
                               y2={dot2.cy}
                               stroke="transparent"
-                              strokeWidth={16}
+                              strokeWidth={24}
                               strokeLinecap="round"
                               className="cursor-pointer"
                               onMouseEnter={() => setHoveredLine({ type: 'V', r, c })}
                               onMouseLeave={() => setHoveredLine(null)}
                               onClick={() => handleDrawLine('V', r, c)}
+                              onTouchStart={(e) => { e.preventDefault(); setHoveredLine({ type: 'V', r, c }); }}
+                              onTouchEnd={(e) => { e.preventDefault(); handleDrawLine('V', r, c); setHoveredLine(null); }}
                             />
                           </g>
                         );
@@ -816,7 +846,7 @@ function DotsAndBoxesPageContent() {
         </div>
 
         {/* Bottom Bar */}
-        <div className="flex items-center justify-between p-3 bg-white/5 border-t border-white/10 flex-shrink-0">
+        <div className="flex items-center justify-between p-2 md:p-3 bg-white/5 border-t border-white/10 flex-shrink-0">
           <div className="flex items-center gap-2">
             {currentRoomId && (
               <button onClick={() => setShowChatSidebar(!showChatSidebar)} className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors">

@@ -15,6 +15,7 @@ export interface LobbyState {
   gameType: string;
   players: LobbyPlayer[];
   status: 'WAITING' | 'PLAYING' | 'FINISHED';
+  settings?: any;
 }
 
 export interface MemoryCard {
@@ -87,6 +88,7 @@ interface MemoryMatchStore {
   kickPlayer: (gameId: string, hostId: string, targetUserId: string) => void;
   leaveLobby: (gameId: string, userId: string) => void;
   invitePlayer: (gameId: string, senderId: string, senderName: string, targetUserId: string) => void;
+  updateLobbySettings: (gameId: string, hostId: string, settings: any) => void;
   startGame: (gameId: string, hostId: string) => void;
   flipCard: (gameId: string, userId: string, cardIndex: number) => void;
   clearState: () => void;
@@ -131,8 +133,11 @@ export const useMemoryMatchStore = create<MemoryMatchStore>((set, get) => ({
   },
 
   invitePlayer: (gameId, senderId, senderName, targetUserId) => {
-    const socket = socketService.getSocket();
-    socket.emit('lobby_invite', { gameId, senderId, senderName, targetUserId, gameType: 'MEMORY_MATCH' });
+    socketService.getSocket().emit('lobby_invite', { gameId, senderId, senderName, targetUserId, gameType: 'MEMORY_MATCH' });
+  },
+
+  updateLobbySettings: (gameId, hostId, settings) => {
+    socketService.getSocket().emit('lobby_settings_update', { gameId, hostId, settings });
   },
 
   startGame: (gameId, hostId) => {

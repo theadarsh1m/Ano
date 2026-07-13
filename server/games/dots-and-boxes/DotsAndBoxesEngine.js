@@ -123,6 +123,28 @@ class DotsAndBoxesEngine extends BaseGameEngine {
     }
   }
 
+  removePlayer(userId) {
+    if (!this.players.has(userId)) return false;
+    
+    const wasCurrentTurn = (this.currentTurnPlayerId === userId);
+    const playerIds = Array.from(this.players.keys());
+    const idx = playerIds.indexOf(userId);
+    
+    this.players.delete(userId);
+    
+    if (wasCurrentTurn && this.players.size > 0) {
+      let nextIdx = idx >= this.players.size ? 0 : idx;
+      this.currentTurnPlayerId = Array.from(this.players.keys())[nextIdx];
+      this.startTurnTimer();
+    }
+
+    if (this.players.size < 2 && this.status !== 'FINISHED') {
+       this.status = 'FINISHED';
+       this.clearTurnTimer();
+    }
+    return true;
+  }
+
   handlePlayerAction(playerId, action, data) {
     if (this.status === 'FINISHED') {
       return { success: false, error: 'Game already finished!' };
@@ -271,6 +293,9 @@ class DotsAndBoxesEngine extends BaseGameEngine {
     let winners = [];
 
     this.scores.forEach((score, playerId) => {
+      // Ignore players who have left the game
+      if (!this.players.has(playerId)) return;
+
       if (score > maxScore) {
         maxScore = score;
         winners = [playerId];
@@ -284,11 +309,15 @@ class DotsAndBoxesEngine extends BaseGameEngine {
       this.isDraw = false;
       const winnerPlayer = this.players.get(this.winnerId);
       this.historyLogs.push(`${winnerPlayer.nickname} wins with ${maxScore} boxes captured!`);
-    } else {
+    } else if (winners.length > 1) {
       this.winnerId = null;
       this.isDraw = true;
       const winnerNicknames = winners.map(id => this.players.get(id).nickname).join(', ');
       this.historyLogs.push(`It's a draw! ${winnerNicknames} tied with ${maxScore} boxes each.`);
+    } else {
+      this.winnerId = null;
+      this.isDraw = true;
+      this.historyLogs.push(`Game ended because all players left.`);
     }
 
     const durationSeconds = Math.floor((Date.now() - (this.startTime || Date.now())) / 1000);

@@ -39,7 +39,9 @@ export function RoomOverlayPopup() {
             initial={{ opacity: 0, y: 50, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 50, scale: 0.9 }}
-            className="fixed bottom-6 right-6 z-50 w-[350px] sm:w-[400px] h-[600px] max-h-[85vh] bg-gray-900 border border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+            className="fixed z-50 bg-gray-900 border border-white/10 shadow-2xl flex flex-col overflow-hidden
+              bottom-0 left-0 right-0 h-[80vh] rounded-t-2xl
+              sm:bottom-6 sm:right-6 sm:left-auto sm:w-[400px] sm:h-[600px] sm:max-h-[85vh] sm:rounded-2xl"
           >
             {/* Header */}
             <div className="flex items-center justify-between p-3 bg-white/5 border-b border-white/10">

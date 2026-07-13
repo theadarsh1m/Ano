@@ -66,6 +66,29 @@ class BluffEngine extends BaseGameEngine {
     }
   }
 
+  removePlayer(userId) {
+    if (!this.players.has(userId)) return false;
+    
+    const playerIds = Array.from(this.players.keys());
+    const idx = playerIds.indexOf(userId);
+    
+    this.players.delete(userId);
+    
+    if (this.currentTurnIdx > idx) {
+       this.currentTurnIdx--;
+    } else if (this.currentTurnIdx === idx) {
+       if (this.currentTurnIdx >= this.players.size) {
+           this.currentTurnIdx = 0;
+       }
+    }
+
+    if (this.players.size < 2 && this.status !== 'FINISHED') {
+       this.status = 'FINISHED';
+       this.winnerId = Array.from(this.players.values())[0]?.userId;
+    }
+    return true;
+  }
+
   playCardsAction(playerId, data) {
     const { cardIds, declaredRank } = data;
     const player = this.players.get(playerId);

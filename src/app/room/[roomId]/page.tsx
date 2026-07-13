@@ -99,12 +99,12 @@ export default function RoomPage() {
   const isPrivate = room.type === 'private';
 
   return (
-    <main className="flex-1 p-4 md:p-8 min-h-[calc(100vh-80px)] flex flex-col h-screen max-h-screen">
+    <main className="flex-1 p-2 md:p-4 lg:p-8 min-h-[calc(100vh-80px)] flex flex-col h-screen max-h-screen">
       {/* Header */}
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex justify-between items-center bg-black/40 backdrop-blur-md p-4 rounded-2xl border border-white/10 flex-shrink-0"
+        className="flex flex-wrap gap-3 justify-between items-center bg-black/40 backdrop-blur-md p-3 md:p-4 rounded-2xl border border-white/10 flex-shrink-0"
       >
         <div className="flex items-center gap-4">
           <Button
@@ -127,19 +127,19 @@ export default function RoomPage() {
 
           <div className="ml-2 border-l border-white/20 pl-4">
             <div className="flex items-center gap-3">
-              <h1 className="text-xl font-bold text-white">{room.name}</h1>
+              <h1 className="text-lg md:text-xl font-bold text-white">{room.name}</h1>
               <div className="bg-white/10 p-1.5 rounded-md">
                 {isPrivate ? <Lock className="w-4 h-4 text-purple-400" /> : <Unlock className="w-4 h-4 text-blue-400" />}
               </div>
               {isConnected ? (
                 <div className="flex items-center gap-1.5 ml-2 text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded-full border border-green-500/30">
                   <Wifi className="w-3 h-3" />
-                  <span>Connected</span>
+                  <span className="hidden sm:inline">Connected</span>
                 </div>
               ) : (
                 <div className="flex items-center gap-1.5 ml-2 text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded-full border border-red-500/30">
                   <WifiOff className="w-3 h-3" />
-                  <span>Disconnected</span>
+                  <span className="hidden sm:inline">Disconnected</span>
                 </div>
               )}
             </div>
@@ -173,7 +173,7 @@ export default function RoomPage() {
         initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ delay: 0.1 }}
-        className="flex-1 mt-6 flex flex-col md:flex-row gap-4 min-h-0"
+        className="flex-1 mt-3 md:mt-6 flex flex-col md:flex-row gap-3 md:gap-4 min-h-0"
       >
         {/* Voice Channels Sidebar & Games Launcher */}
         <div className="flex flex-col gap-4 md:w-64 flex-shrink-0">

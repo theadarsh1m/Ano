@@ -19,6 +19,22 @@ export function NotificationBell() {
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotificationStore();
   const userId = useUserStore((s) => s.id);
 
+  const [localUnread, setLocalUnread] = useState(0);
+
+  // Sync local unread, but allow clearing it visually
+  useEffect(() => {
+    if (unreadCount > localUnread) {
+      setLocalUnread(unreadCount);
+    }
+  }, [unreadCount]);
+
+  // Request browser notification permission
+  useEffect(() => {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
   // Close dropdown on click outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -109,11 +125,14 @@ export function NotificationBell() {
   return (
     <div className="relative" ref={dropdownRef}>
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          setIsOpen(!isOpen);
+          setLocalUnread(0);
+        }}
         className="relative p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
       >
         <Bell className="w-5 h-5" />
-        {unreadCount > 0 && (
+        {localUnread > 0 && (
           <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-[#1a1b1e]"></span>
         )}
       </button>
@@ -125,7 +144,7 @@ export function NotificationBell() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
             transition={{ duration: 0.2 }}
-            className="absolute left-0 mt-2 w-80 bg-[#121315] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50"
+            className="absolute right-0 md:left-0 md:right-auto mt-2 w-[280px] sm:w-80 max-w-[calc(100vw-32px)] bg-[#121315] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-[60]"
           >
             <div className="flex items-center justify-between p-3 border-b border-white/10 bg-black/20">
               <h3 className="font-semibold text-white">Notifications</h3>

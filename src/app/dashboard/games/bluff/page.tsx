@@ -83,6 +83,18 @@ function BluffGamePageContent() {
     };
   }, [userId, lobby?.id, gameState?.gameId, gameIdParam]);
 
+  // Leave lobby on unmount
+  useEffect(() => {
+    return () => {
+      const state = useBluffStore.getState();
+      const currentGameId = state.lobby?.id || state.gameState?.gameId;
+      const currentUserId = useUserStore.getState().id;
+      if (currentGameId && currentUserId) {
+        state.leaveLobby(currentGameId, currentUserId);
+      }
+    };
+  }, []);
+
   // Fetch friends, online users, and room members for invites
   useEffect(() => {
     if (!userId) return;
@@ -439,7 +451,7 @@ function BluffGamePageContent() {
         <div className="flex-1 flex flex-col overflow-hidden relative">
           
           {/* Top Panel toolbar */}
-          <div className="p-4 border-b border-white/10 flex justify-between items-center bg-black/40 backdrop-blur-md relative z-20">
+          <div className="p-3 md:p-4 border-b border-white/10 flex flex-wrap gap-2 justify-between items-center bg-black/40 backdrop-blur-md relative z-20">
             <div className="flex items-center gap-4">
               <button 
                 onClick={handleLeave}
@@ -485,7 +497,7 @@ function BluffGamePageContent() {
           </div>
 
           {/* Green Felt Table Body */}
-          <div className="flex-1 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-emerald-950 via-neutral-950 to-neutral-950 p-6 flex flex-col items-center justify-center relative overflow-hidden">
+          <div className="flex-1 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-emerald-950 via-neutral-950 to-neutral-950 p-3 md:p-6 flex flex-col items-center justify-center relative overflow-hidden">
             
             {/* Rules Modal */}
             <AnimatePresence>
@@ -614,7 +626,7 @@ function BluffGamePageContent() {
             </AnimatePresence>
 
             {/* Pile Card placement in the middle */}
-            <div className="flex flex-col items-center justify-center p-8 bg-black/20 border border-white/5 rounded-full w-64 h-64 shadow-inner relative z-10">
+            <div className="flex flex-col items-center justify-center p-4 md:p-8 bg-black/20 border border-white/5 rounded-full w-40 h-40 md:w-64 md:h-64 shadow-inner relative z-10">
               <span className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-2">Center Pile</span>
               
               {gameState.pileCount > 0 ? (
@@ -652,7 +664,7 @@ function BluffGamePageContent() {
             </div>
 
             {/* Play Logs Console (Overlay left bottom) */}
-            <div className="absolute bottom-6 left-6 w-72 max-h-48 overflow-y-auto bg-black/40 border border-white/5 rounded-xl p-3 backdrop-blur-sm text-[11px] font-mono text-gray-400 space-y-1">
+            <div className="absolute bottom-3 left-3 md:bottom-6 md:left-6 w-48 md:w-72 max-h-36 md:max-h-48 overflow-y-auto bg-black/40 border border-white/5 rounded-xl p-2 md:p-3 backdrop-blur-sm text-[10px] md:text-[11px] font-mono text-gray-400 space-y-1">
               <div className="text-[10px] text-gray-500 font-bold border-b border-white/5 pb-1 mb-1 uppercase">History Logs</div>
               {gameState.historyLogs.slice(-10).map((log, idx) => (
                 <div key={idx} className="leading-tight">{log}</div>
@@ -662,8 +674,8 @@ function BluffGamePageContent() {
 
           {/* Bottom Player Hand Controls */}
           {self && (
-            <div className="p-6 border-t border-white/10 bg-black/40 backdrop-blur-md relative z-10 flex-shrink-0 flex flex-col space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="p-3 md:p-6 border-t border-white/10 bg-black/40 backdrop-blur-md relative z-10 flex-shrink-0 flex flex-col space-y-3 md:space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 md:gap-4">
                 {/* Active turn alert */}
                 <div>
                   {isMyTurn ? (
@@ -719,7 +731,7 @@ function BluffGamePageContent() {
               </div>
 
               {/* Hand cards selection row */}
-              <div className="flex gap-3 overflow-x-auto py-2 pr-4 scrollbar-thin select-none max-w-full">
+              <div className="flex gap-2 md:gap-3 overflow-x-auto py-2 pr-4 scrollbar-hide select-none max-w-full">
                 {self.hand && sortCards(self.hand).map((c) => {
                   const isSelected = selectedCards.includes(c.id);
                   return (
@@ -727,20 +739,20 @@ function BluffGamePageContent() {
                       key={c.id}
                       onClick={() => isMyTurn && handleToggleCard(c.id)}
                       whileHover={{ y: isMyTurn ? -10 : 0 }}
-                      className={`w-20 h-32 border-2 rounded-xl flex flex-col justify-between p-2 cursor-pointer shadow-lg select-none relative ${
+                      className={`w-14 h-20 md:w-20 md:h-32 border-2 rounded-xl flex flex-col justify-between p-1.5 md:p-2 cursor-pointer shadow-lg select-none relative flex-shrink-0 ${
                         isSelected 
                           ? 'bg-blue-100 border-blue-500 text-blue-900 -translate-y-4' 
                           : 'bg-white border-neutral-300 text-black'
                       }`}
                     >
-                      <div className="text-left font-bold text-sm leading-none">{c.value}</div>
-                      <div className="text-2xl text-center self-center">
+                      <div className="text-left font-bold text-xs md:text-sm leading-none">{c.value}</div>
+                      <div className="text-lg md:text-2xl text-center self-center">
                         {c.suit === 'hearts' && '♥'}
                         {c.suit === 'diamonds' && '♦'}
                         {c.suit === 'clubs' && '♣'}
                         {c.suit === 'spades' && '♠'}
                       </div>
-                      <div className="text-right font-bold text-sm leading-none">{c.value}</div>
+                      <div className="text-right font-bold text-xs md:text-sm leading-none">{c.value}</div>
                     </motion.div>
                   );
                 })}
@@ -749,8 +761,8 @@ function BluffGamePageContent() {
           )}
         </div>
 
-        {/* Players panel / details right */}
-        <div className="w-72 border-l border-white/10 bg-neutral-900 flex flex-col justify-between overflow-hidden">
+        {/* Players panel / details right — hidden on mobile */}
+        <div className="w-72 border-l border-white/10 bg-neutral-900 flex-col justify-between overflow-hidden hidden lg:flex">
           <div className="p-4 border-b border-white/10 flex-shrink-0">
             <span className="font-bold flex items-center gap-2">
               <Users className="w-5 h-5 text-emerald-400" /> Active Players

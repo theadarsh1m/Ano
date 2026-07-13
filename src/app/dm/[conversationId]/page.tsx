@@ -171,7 +171,7 @@ export default function DMPage() {
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex items-center gap-3 bg-black/40 backdrop-blur-md px-4 py-3 border-b border-white/5 flex-shrink-0"
+          className="flex items-center gap-3 bg-black/40 backdrop-blur-md px-4 py-3 border-b border-white/5 flex-shrink-0 pl-14 md:pl-4"
         >
           <button
             onClick={() => router.push("/dashboard")}
