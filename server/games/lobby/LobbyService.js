@@ -5,6 +5,7 @@ const MAX_PLAYERS = {
   'MEMORY_MATCH': 8,
   'DOTS_AND_BOXES': 8,
   'YATZY': 8,
+  'COLOR_WARS': 8,
 };
 const DEFAULT_MAX_PLAYERS = 6;
 
@@ -22,8 +23,8 @@ class LobbyService {
       status: 'WAITING',
       settings: {
         maxPlayers: MAX_PLAYERS[gameType] || DEFAULT_MAX_PLAYERS,
-        boardSize: gameType === 'DOTS_AND_BOXES' ? 5 : undefined, // 5x5 dots for Dots & Boxes
-        turnTimer: gameType === 'DOTS_AND_BOXES' ? 30 : undefined, // 30s turn timer for Dots & Boxes
+        boardSize: gameType === 'COLOR_WARS' ? 7 : (gameType === 'DOTS_AND_BOXES' ? 5 : undefined), // Default 7x7 for Color Wars
+        turnTimer: (gameType === 'COLOR_WARS' || gameType === 'DOTS_AND_BOXES') ? 30 : undefined, // 30s turn timer
         pairCount: gameType === 'MEMORY_MATCH' ? 12 : undefined, // Default 12 pairs (4x6) for Memory Match
         bonusThreshold: gameType === 'YATZY' ? 63 : undefined, // Upper section bonus threshold for Yatzy
       }

@@ -53,6 +53,14 @@ export default function GamesHubPage() {
       icon: "🎲",
       color: "from-amber-500 to-red-600",
       href: "/dashboard/games/yatzy"
+    },
+    {
+      id: "color-wars",
+      title: "Color Wars",
+      description: "Place energy strategically, trigger explosive chain reactions, and capture the board to eliminate your opponents!",
+      icon: "💥",
+      color: "from-rose-500 to-red-600",
+      href: "/dashboard/games/color-wars"
     }
   ];
 

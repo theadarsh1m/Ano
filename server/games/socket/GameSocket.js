@@ -3,6 +3,7 @@ const BluffEngine = require('../bluff/BluffEngine');
 const MemoryMatchEngine = require('../memory-match/MemoryMatchEngine');
 const DotsAndBoxesEngine = require('../dots-and-boxes/DotsAndBoxesEngine');
 const YatzyEngine = require('../yatzy/YatzyEngine');
+const ColorWarsEngine = require('../color-wars/ColorWarsEngine');
 const userService = require('../../services/userService');
 
 const ENGINE_MAP = {
@@ -10,6 +11,7 @@ const ENGINE_MAP = {
   'MEMORY_MATCH': MemoryMatchEngine,
   'DOTS_AND_BOXES': DotsAndBoxesEngine,
   'YATZY': YatzyEngine,
+  'COLOR_WARS': ColorWarsEngine,
 };
 
 const GAME_DISPLAY_NAMES = {
@@ -17,6 +19,7 @@ const GAME_DISPLAY_NAMES = {
   'MEMORY_MATCH': 'Memory Match',
   'DOTS_AND_BOXES': 'Dots and Boxes',
   'YATZY': 'Yatzy',
+  'COLOR_WARS': 'Color Wars',
 };
 
 function registerGameSockets(io, socket, onlineUsers, activeGames) {

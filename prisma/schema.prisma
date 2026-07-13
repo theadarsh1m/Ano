@@ -8,50 +8,40 @@ datasource db {
 }
 
 model User {
-  id          String    @id
-  nickname    String
-  avatar      String?
-  bio         String?
-  email       String?   @unique
-  googleId    String?   @unique
-  isAnonymous Boolean   @default(true)
-  isOnline    Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  lastSeen    DateTime  @default(now())
-  nsfwMode    NsfwMode  @default(HIDE)
-  presenceStatus String?
-  messages    Message[]
-
-  // DM relations
-  conversationsAsA Conversation[]  @relation("ParticipantA")
-  conversationsAsB Conversation[]  @relation("ParticipantB")
-  sentDMs          DirectMessage[] @relation("DMSender")
-
-  // Notification relations
-  notificationsReceived Notification[] @relation("NotificationRecipient")
-  notificationsSent     Notification[] @relation("NotificationSender")
-
-  // Friendship relations
-  friendshipsAsUser   Friendship[] @relation("FriendshipUser")
-  friendshipsAsFriend Friendship[] @relation("FriendshipFriend")
-
-  // Game relations
-  gameStats           GameStat[]
-
-  // Feed relations
-  posts      Post[]      @relation("PostAuthor")
-  comments   Comment[]   @relation("CommentAuthor")
-  votes      Vote[]      @relation("UserVotes")
-  savedPosts SavedPost[] @relation("UserSavedPosts")
+  id                    String          @id
+  nickname              String
+  createdAt             DateTime        @default(now())
+  lastSeen              DateTime        @default(now())
+  avatar                String?
+  bio                   String?
+  email                 String?         @unique
+  googleId              String?         @unique
+  isAnonymous           Boolean         @default(true)
+  isOnline              Boolean         @default(false)
+  nsfwMode              NsfwMode        @default(HIDE)
+  presenceStatus        String?
+  comments              Comment[]       @relation("CommentAuthor")
+  conversationsAsA      Conversation[]  @relation("ParticipantA")
+  conversationsAsB      Conversation[]  @relation("ParticipantB")
+  sentDMs               DirectMessage[] @relation("DMSender")
+  friendshipsAsFriend   Friendship[]    @relation("FriendshipFriend")
+  friendshipsAsUser     Friendship[]    @relation("FriendshipUser")
+  gameStats             GameStat[]
+  messages              Message[]
+  notificationsReceived Notification[]  @relation("NotificationRecipient")
+  notificationsSent     Notification[]  @relation("NotificationSender")
+  posts                 Post[]          @relation("PostAuthor")
+  savedPosts            SavedPost[]     @relation("UserSavedPosts")
+  votes                 Vote[]          @relation("UserVotes")
 }
 
 model Room {
-  id          String   @id
-  name        String
-  description String?
-  type        String   @default("public")
-  inviteCode  String?  @unique
-  capacity    Int      @default(50)
+  id            String         @id
+  name          String
+  description   String?
+  type          String         @default("public")
+  inviteCode    String?        @unique
+  capacity      Int            @default(50)
   createdAt     DateTime       @default(now())
   createdBy     String?
   messages      Message[]
@@ -62,28 +52,27 @@ model VoiceChannel {
   id        String   @id @default(uuid())
   name      String
   roomId    String
-  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
   capacity  Int      @default(25)
   createdAt DateTime @default(now())
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
 }
 
 model Message {
-  id        String   @id
-  content   String
-  type      String   @default("text")
-  createdAt DateTime @default(now())
-  sender    User?    @relation(fields: [senderId], references: [id])
-  senderId  String?
-  room      Room     @relation(fields: [roomId], references: [id])
-  roomId    String
-  // Media fields (populated for image/file messages)
-  fileUrl          String?
+  id               String           @id
+  content          String
+  type             String           @default("text")
+  createdAt        DateTime         @default(now())
+  senderId         String?
+  roomId           String
   fileName         String?
   fileSize         Int?
-  fileType         String?  // MIME type e.g. "image/png", "application/pdf"
-  moderationStatus ModerationStatus @default(PENDING)
+  fileType         String?
+  fileUrl          String?
   isNSFW           Boolean          @default(false)
+  moderationStatus ModerationStatus @default(PENDING)
   nsfwConfidence   Float            @default(0)
+  room             Room             @relation(fields: [roomId], references: [id])
+  sender           User?            @relation(fields: [senderId], references: [id])
 }
 
 model Conversation {
@@ -92,7 +81,6 @@ model Conversation {
   participantBId String
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
-
   participantA   User            @relation("ParticipantA", fields: [participantAId], references: [id])
   participantB   User            @relation("ParticipantB", fields: [participantBId], references: [id])
   messages       DirectMessage[]
@@ -101,93 +89,85 @@ model Conversation {
 }
 
 model DirectMessage {
-  id             String       @id @default(uuid())
-  content        String
-  type           String       @default("text")
-  isRead         Boolean      @default(false)
-  createdAt      DateTime     @default(now())
-
-  senderId       String
-  sender         User         @relation("DMSender", fields: [senderId], references: [id])
-  conversationId String
-  conversation   Conversation @relation(fields: [conversationId], references: [id])
-
-  // Media fields
+  id               String           @id @default(uuid())
+  content          String
+  type             String           @default("text")
+  createdAt        DateTime         @default(now())
+  senderId         String
+  conversationId   String
   fileUrl          String?
   fileName         String?
   fileSize         Int?
   fileType         String?
-  moderationStatus ModerationStatus @default(PENDING)
+  isRead           Boolean          @default(false)
   isNSFW           Boolean          @default(false)
+  moderationStatus ModerationStatus @default(PENDING)
   nsfwConfidence   Float            @default(0)
+  conversation     Conversation     @relation(fields: [conversationId], references: [id])
+  sender           User             @relation("DMSender", fields: [senderId], references: [id])
 }
 
 model Notification {
   id          String   @id @default(uuid())
   recipientId String
-  recipient   User     @relation("NotificationRecipient", fields: [recipientId], references: [id])
   senderId    String?
-  sender      User?    @relation("NotificationSender", fields: [senderId], references: [id])
-  
-  type        String   // e.g. "friend_request", "friend_accepted", "room_invite", "mention", "system", "activity"
+  type        String
   title       String
   message     String
   isRead      Boolean  @default(false)
-  metadata    Json?    // Stores extra info like roomId, conversationId, etc.
+  metadata    Json?
   createdAt   DateTime @default(now())
+  recipient   User     @relation("NotificationRecipient", fields: [recipientId], references: [id])
+  sender      User?    @relation("NotificationSender", fields: [senderId], references: [id])
 }
 
 model Friendship {
   id        String   @id @default(uuid())
   userId    String
-  user      User     @relation("FriendshipUser", fields: [userId], references: [id])
   friendId  String
-  friend    User     @relation("FriendshipFriend", fields: [friendId], references: [id])
-  status    String   // "pending" or "accepted"
+  status    String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  friend    User     @relation("FriendshipFriend", fields: [friendId], references: [id])
+  user      User     @relation("FriendshipUser", fields: [userId], references: [id])
 
   @@unique([userId, friendId])
 }
 
 model GameStat {
-  id                  String   @id @default(uuid())
-  userId              String
-  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  gameType            String   // "snake", "2048", "minesweeper"
-  highScore           Int      @default(0)
-  totalPlayTimeSeconds Int     @default(0)
-  lastPlayed          DateTime @default(now())
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id                   String   @id @default(uuid())
+  userId               String
+  gameType             String
+  highScore            Int      @default(0)
+  totalPlayTimeSeconds Int      @default(0)
+  lastPlayed           DateTime @default(now())
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  extraStats           Json?
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, gameType])
 }
 
-// ========================
-// COMMUNITY FEED MODELS
-// ========================
-
 model Post {
-  id           String      @id @default(uuid())
-  content      String?     // Text content
-  imageUrl     String?     // Cloudinary image URL
-  isAnonymous  Boolean     @default(false)
-  score        Int         @default(0)  // Cached vote score
-  authorId     String
-  author       User        @relation("PostAuthor", fields: [authorId], references: [id])
-  tags         String[]    @default([])
-  commentCount Int         @default(0)
-  isLocked     Boolean          @default(false) // Lock comments
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
-  moderationStatus ModerationStatus @default(PENDING)
+  id               String           @id @default(uuid())
+  content          String?
+  imageUrl         String?
+  isAnonymous      Boolean          @default(false)
+  score            Int              @default(0)
+  authorId         String
+  tags             String[]         @default([])
+  commentCount     Int              @default(0)
+  isLocked         Boolean          @default(false)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
   isNSFW           Boolean          @default(false)
+  moderationStatus ModerationStatus @default(PENDING)
   nsfwConfidence   Float            @default(0)
-
-  votes    Vote[]
-  comments Comment[]
-  savedBy  SavedPost[]
+  comments         Comment[]
+  author           User             @relation("PostAuthor", fields: [authorId], references: [id])
+  savedBy          SavedPost[]
+  votes            Vote[]
 }
 
 model Comment {
@@ -195,24 +175,24 @@ model Comment {
   content     String
   isAnonymous Boolean   @default(false)
   authorId    String
-  author      User      @relation("CommentAuthor", fields: [authorId], references: [id])
   postId      String
-  post        Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
-  parentId    String?   // null = top-level, set = nested reply
-  parent      Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
-  replies     Comment[] @relation("CommentReplies")
+  parentId    String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  author      User      @relation("CommentAuthor", fields: [authorId], references: [id])
+  parent      Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  replies     Comment[] @relation("CommentReplies")
+  post        Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
 }
 
 model Vote {
   id        String   @id @default(uuid())
-  value     Int      // +1 upvote, -1 downvote
+  value     Int
   userId    String
-  user      User     @relation("UserVotes", fields: [userId], references: [id])
   postId    String
-  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation("UserVotes", fields: [userId], references: [id])
 
   @@unique([userId, postId])
 }
@@ -220,12 +200,64 @@ model Vote {
 model SavedPost {
   id        String   @id @default(uuid())
   userId    String
-  user      User     @relation("UserSavedPosts", fields: [userId], references: [id])
   postId    String
-  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation("UserSavedPosts", fields: [userId], references: [id])
 
   @@unique([userId, postId])
+}
+
+model ModerationCache {
+  id             String           @id @default(uuid())
+  publicId       String           @unique
+  isNSFW         Boolean
+  nsfwConfidence Float
+  status         ModerationStatus
+  createdAt      DateTime         @default(now())
+}
+
+model GameSession {
+  id        String       @id @default(uuid())
+  gameType  GameType
+  status    GameStatus   @default(WAITING)
+  gameState Json?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  moves     GameMove[]
+  players   GamePlayer[]
+  results   GameResult[]
+}
+
+model GamePlayer {
+  id            String      @id @default(uuid())
+  gameSessionId String
+  userId        String
+  nickname      String
+  role          PlayerRole  @default(PLAYER)
+  joinedAt      DateTime    @default(now())
+  gameSession   GameSession @relation(fields: [gameSessionId], references: [id], onDelete: Cascade)
+
+  @@unique([gameSessionId, userId])
+}
+
+model GameMove {
+  id            String      @id @default(uuid())
+  gameSessionId String
+  playerId      String
+  moveType      MoveType
+  moveData      Json
+  createdAt     DateTime    @default(now())
+  gameSession   GameSession @relation(fields: [gameSessionId], references: [id], onDelete: Cascade)
+}
+
+model GameResult {
+  id              String      @id @default(uuid())
+  gameSessionId   String
+  winnerId        String?
+  durationSeconds Int
+  createdAt       DateTime    @default(now())
+  gameSession     GameSession @relation(fields: [gameSessionId], references: [id], onDelete: Cascade)
 }
 
 enum NsfwMode {
@@ -243,23 +275,18 @@ enum ModerationStatus {
   FLAGGED
 }
 
-model ModerationCache {
-  id             String           @id @default(uuid())
-  publicId       String           @unique
-  isNSFW         Boolean
-  nsfwConfidence Float
-  status         ModerationStatus
-  createdAt      DateTime         @default(now())
-}
-
 enum GameType {
   BLUFF
-  MEMORY_MATCH
-  DOTS_AND_BOXES
   TIC_TAC_TOE
   CONNECT_4
   CHESS
   UNO
+  MEMORY_MATCH
+  DOTS_AND_BOXES
+  CAR_RACING
+  BRAINROT_STACK
+  YATZY
+  COLOR_WARS
 }
 
 enum GameStatus {
@@ -280,50 +307,10 @@ enum MoveType {
   PASS_TURN
   FLIP_CARD
   DRAW_LINE
+  RACE_INPUT
+  DROP_CHARACTER
+  ROLL_DICE
+  HOLD_DICE
+  SELECT_CATEGORY
+  SELECT_TILE
 }
-
-model GameSession {
-  id             String       @id @default(uuid())
-  gameType       GameType
-  status         GameStatus   @default(WAITING)
-  gameState      Json?        // Full serialized persistent state for server recovery
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-
-  players        GamePlayer[]
-  moves          GameMove[]
-  results        GameResult[]
-}
-
-model GamePlayer {
-  id             String       @id @default(uuid())
-  gameSessionId  String
-  gameSession    GameSession  @relation(fields: [gameSessionId], references: [id], onDelete: Cascade)
-  userId         String
-  nickname       String
-  role           PlayerRole   @default(PLAYER)
-  joinedAt       DateTime     @default(now())
-
-  @@unique([gameSessionId, userId])
-}
-
-model GameMove {
-  id             String       @id @default(uuid())
-  gameSessionId  String
-  gameSession    GameSession  @relation(fields: [gameSessionId], references: [id], onDelete: Cascade)
-  playerId       String       // The player userId
-  moveType       MoveType
-  moveData       Json         // Public log details (never expose private cards/details)
-  createdAt      DateTime     @default(now())
-}
-
-model GameResult {
-  id             String       @id @default(uuid())
-  gameSessionId  String
-  gameSession    GameSession  @relation(fields: [gameSessionId], references: [id], onDelete: Cascade)
-  winnerId       String?      // The winning userId
-  durationSeconds Int
-  createdAt      DateTime     @default(now())
-}
-
-
