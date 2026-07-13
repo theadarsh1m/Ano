@@ -4,6 +4,7 @@ const MAX_PLAYERS = {
   'BLUFF': 6,
   'MEMORY_MATCH': 8,
   'DOTS_AND_BOXES': 8,
+  'YATZY': 8,
 };
 const DEFAULT_MAX_PLAYERS = 6;
 
@@ -24,6 +25,7 @@ class LobbyService {
         boardSize: gameType === 'DOTS_AND_BOXES' ? 5 : undefined, // 5x5 dots for Dots & Boxes
         turnTimer: gameType === 'DOTS_AND_BOXES' ? 30 : undefined, // 30s turn timer for Dots & Boxes
         pairCount: gameType === 'MEMORY_MATCH' ? 12 : undefined, // Default 12 pairs (4x6) for Memory Match
+        bonusThreshold: gameType === 'YATZY' ? 63 : undefined, // Upper section bonus threshold for Yatzy
       }
     };
     this.lobbies.set(lobbyId, lobby);

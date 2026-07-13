@@ -210,6 +210,70 @@ function BluffGamePageContent() {
     );
   }
 
+  const rulesModal = (
+    <AnimatePresence>
+      {showRulesModal && (
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-fade-in"
+          onClick={() => setShowRulesModal(false)}
+        >
+          <motion.div 
+            initial={{ y: 50, scale: 0.95 }}
+            animate={{ y: 0, scale: 1 }}
+            exit={{ y: 50, scale: 0.95 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-neutral-900 border border-white/10 rounded-3xl p-6 max-w-lg w-full max-h-[85vh] overflow-y-auto text-left relative shadow-2xl custom-scrollbar"
+          >
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold flex items-center gap-2"><BookOpen className="w-6 h-6 text-emerald-400" /> Game Rules</h2>
+              <button onClick={() => setShowRulesModal(false)} className="text-gray-400 hover:text-white p-1 hover:bg-white/10 rounded-md transition-colors">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <div className="space-y-4 text-gray-300 text-sm leading-relaxed">
+              <p><strong className="text-white">Goal:</strong> Be the first to get rid of all your cards.</p>
+              
+              <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+                <strong className="text-emerald-400 block mb-1">On Your Turn:</strong>
+                <p>1. Place 1 or more cards face down into the center pile.</p>
+                <p>2. Declare a rank (e.g., "Two 4s"). You can claim <em>any</em> rank.</p>
+              </div>
+
+              <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+                <strong className="text-emerald-400 block mb-1">Responding to a Play:</strong>
+                <p>When the previous player plays, you (and only you) have two choices before taking your turn:</p>
+                <ul className="list-disc pl-5 mt-1 space-y-1">
+                  <li><strong>Accept Claim & Play:</strong> Assume they told the truth. Their cards remain hidden. You now make your own play.</li>
+                  <li><strong className="text-red-400">Challenge Bluff:</strong> Challenge their claim! Only the <em>immediately previous</em> cards are revealed.</li>
+                </ul>
+              </div>
+
+              <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+                <strong className="text-emerald-400 block mb-1">Challenge Results:</strong>
+                <ul className="list-disc pl-5 mt-1 space-y-1">
+                  <li><strong>If they LIED:</strong> The bluffer picks up the ENTIRE center pile.</li>
+                  <li><strong>If they told the TRUTH:</strong> YOU pick up the ENTIRE center pile.</li>
+                </ul>
+                <p className="mt-2 text-xs text-gray-400">After a challenge, the pile is cleared and the loser of the challenge starts the new round.</p>
+              </div>
+            </div>
+
+            <button 
+              onClick={() => setShowRulesModal(false)}
+              className="mt-6 w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold transition-all shadow-lg shadow-emerald-500/25"
+            >
+              Got it!
+            </button>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
   // Render Lobby screen
   if (lobby) {
     const isHost = lobby.hostId === userId;
@@ -230,12 +294,20 @@ function BluffGamePageContent() {
               <p className="text-gray-400 text-sm mt-1">Lobby ID: {lobby.id}</p>
             </div>
             
-            <button 
-              onClick={handleLeave}
-              className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-300 rounded-xl flex items-center gap-2 transition-colors text-sm font-semibold"
-            >
-              <LogOut className="w-4 h-4" /> Leave Lobby
-            </button>
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => setShowRulesModal(true)}
+                className="px-4 py-2 bg-white/5 border border-white/10 text-gray-300 hover:text-white rounded-xl flex items-center gap-2 transition-colors text-sm font-semibold animate-pulse"
+              >
+                <BookOpen className="w-4 h-4" /> Rules
+              </button>
+              <button 
+                onClick={handleLeave}
+                className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-300 rounded-xl flex items-center gap-2 transition-colors text-sm font-semibold"
+              >
+                <LogOut className="w-4 h-4" /> Leave Lobby
+              </button>
+            </div>
           </div>
 
           {/* Lobby grid */}
@@ -432,6 +504,7 @@ function BluffGamePageContent() {
             </div>
           </div>
         )}
+        {rulesModal}
       </div>
     );
   }
@@ -498,67 +571,7 @@ function BluffGamePageContent() {
 
           {/* Green Felt Table Body */}
           <div className="flex-1 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-emerald-950 via-neutral-950 to-neutral-950 p-3 md:p-6 flex flex-col items-center justify-center relative overflow-hidden">
-            
-            {/* Rules Modal */}
-            <AnimatePresence>
-              {showRulesModal && (
-                <motion.div 
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="absolute inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6"
-                >
-                  <motion.div 
-                    initial={{ y: 50, scale: 0.95 }}
-                    animate={{ y: 0, scale: 1 }}
-                    exit={{ y: 50, scale: 0.95 }}
-                    className="bg-neutral-900 border border-white/10 rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto text-left"
-                  >
-                    <div className="flex justify-between items-center mb-6">
-                      <h2 className="text-2xl font-bold flex items-center gap-2"><BookOpen className="w-6 h-6 text-emerald-400" /> Game Rules</h2>
-                      <button onClick={() => setShowRulesModal(false)} className="text-gray-400 hover:text-white">
-                        <X className="w-6 h-6" />
-                      </button>
-                    </div>
-                    
-                    <div className="space-y-4 text-gray-300 text-sm leading-relaxed">
-                      <p><strong className="text-white">Goal:</strong> Be the first to get rid of all your cards.</p>
-                      
-                      <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                        <strong className="text-emerald-400 block mb-1">On Your Turn:</strong>
-                        <p>1. Place 1 or more cards face down into the center pile.</p>
-                        <p>2. Declare a rank (e.g., "Two 4s"). You can claim <em>any</em> rank.</p>
-                      </div>
-
-                      <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                        <strong className="text-emerald-400 block mb-1">Responding to a Play:</strong>
-                        <p>When the previous player plays, you (and only you) have two choices before taking your turn:</p>
-                        <ul className="list-disc pl-5 mt-1 space-y-1">
-                          <li><strong>Accept Claim & Play:</strong> Assume they told the truth. Their cards remain hidden. You now make your own play.</li>
-                          <li><strong className="text-red-400">Challenge Bluff:</strong> Challenge their claim! Only the <em>immediately previous</em> cards are revealed.</li>
-                        </ul>
-                      </div>
-
-                      <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                        <strong className="text-emerald-400 block mb-1">Challenge Results:</strong>
-                        <ul className="list-disc pl-5 mt-1 space-y-1">
-                          <li><strong>If they LIED:</strong> The bluffer picks up the ENTIRE center pile.</li>
-                          <li><strong>If they told the TRUTH:</strong> YOU pick up the ENTIRE center pile.</li>
-                        </ul>
-                        <p className="mt-2 text-xs text-gray-400">After a challenge, the pile is cleared and the loser of the challenge starts the new round.</p>
-                      </div>
-                    </div>
-
-                    <button 
-                      onClick={() => setShowRulesModal(false)}
-                      className="mt-6 w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold transition-all"
-                    >
-                      Got it!
-                    </button>
-                  </motion.div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {rulesModal}
 
             {/* Reveal Animation Modal */}
             <AnimatePresence>
@@ -882,14 +895,13 @@ function BluffGamePageContent() {
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <div>
-            <h1 className="text-xl font-bold flex items-center gap-2">
-              <Gamepad2 className="w-6 h-6 text-emerald-400" />
-              Bluff Card Game
-            </h1>
-            <p className="text-xs text-gray-400 mt-0.5">Create a new session or join an existing lobby</p>
-          </div>
         </div>
+        <button 
+          onClick={() => setShowRulesModal(true)}
+          className="px-4 py-2 bg-white/5 border border-white/10 text-gray-300 hover:text-white rounded-xl flex items-center gap-2 transition-colors text-sm font-semibold animate-pulse"
+        >
+          <BookOpen className="w-4 h-4" /> Rules
+        </button>
       </div>
 
       <div className="flex-1 max-w-6xl mx-auto w-full grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
@@ -976,6 +988,7 @@ function BluffGamePageContent() {
           </div>
         </GlassCard>
       </div>
+      {rulesModal}
     </div>
   );
 }

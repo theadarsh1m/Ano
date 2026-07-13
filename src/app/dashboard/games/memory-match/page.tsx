@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Users, Play, UserPlus, LogOut, Loader2, Check, X,
-  Volume2, VolumeX, MessageSquare, Award, ArrowLeft, Send, RefreshCw, Globe, Brain, Trophy, Crown
+  Volume2, VolumeX, MessageSquare, Award, ArrowLeft, Send, RefreshCw, Globe, Brain, Trophy, Crown, BookOpen
 } from "lucide-react";
 import { useUserStore } from "@/store/useUserStore";
 import { useRoomConnectionStore } from "@/store/useRoomConnectionStore";
@@ -68,6 +68,7 @@ function MemoryMatchPageContent() {
   const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
   const [roomMembers, setRoomMembers] = useState<any[]>([]);
   const [invitedUsers, setInvitedUsers] = useState<Set<string>>(new Set());
+  const [showRulesModal, setShowRulesModal] = useState(false);
 
   // Setup listeners on mount
   useEffect(() => {
@@ -172,6 +173,65 @@ function MemoryMatchPageContent() {
     );
   }
 
+  const rulesModal = (
+    <AnimatePresence>
+      {showRulesModal && (
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-fade-in"
+          onClick={() => setShowRulesModal(false)}
+        >
+          <motion.div 
+            initial={{ y: 50, scale: 0.95 }}
+            animate={{ y: 0, scale: 1 }}
+            exit={{ y: 50, scale: 0.95 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-neutral-900 border border-white/10 rounded-3xl p-6 max-w-lg w-full max-h-[85vh] overflow-y-auto text-left relative shadow-2xl custom-scrollbar"
+          >
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold flex items-center gap-2"><BookOpen className="w-6 h-6 text-violet-400" /> Memory Match Rules</h2>
+              <button onClick={() => setShowRulesModal(false)} className="text-gray-400 hover:text-white p-1 hover:bg-white/10 rounded-md transition-colors">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <div className="space-y-4 text-gray-300 text-sm leading-relaxed">
+              <p><strong className="text-white">Goal:</strong> Find and match pairs of cards. The player with the most matches at the end wins.</p>
+              
+              <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+                <strong className="text-violet-400 block mb-1">On Your Turn:</strong>
+                <p>1. Flip over any card to reveal its symbol.</p>
+                <p>2. Flip a second card. Try to match the first symbol.</p>
+              </div>
+
+              <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+                <strong className="text-violet-400 block mb-1">Flipping Results:</strong>
+                <ul className="list-disc pl-5 mt-1 space-y-1">
+                  <li><strong>Successful Match:</strong> If both cards have the same symbol, they remain face up, you score a point, and you get to take another turn!</li>
+                  <li><strong>Mismatch:</strong> If the symbols do not match, both cards are flipped back face down after a short delay, and the turn passes to the next player.</li>
+                </ul>
+              </div>
+
+              <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+                <strong className="text-violet-400 block mb-1">Lobby Configurations:</strong>
+                <p>Hosts can customize the game difficulty in the Lobby settings by selecting the number of card pairs (from 6 pairs up to a giant 32-pair board).</p>
+              </div>
+            </div>
+
+            <button 
+              onClick={() => setShowRulesModal(false)}
+              className="mt-6 w-full py-3 bg-violet-600 hover:bg-violet-750 text-white rounded-xl font-bold transition-all shadow-lg shadow-violet-500/25"
+            >
+              Got it!
+            </button>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
   // ========================
   // PRE-LOBBY VIEW
   // ========================
@@ -200,12 +260,18 @@ function MemoryMatchPageContent() {
 
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="max-w-2xl w-full space-y-6">
-            <GlassCard className="p-8 text-center">
+            <GlassCard className="p-8 text-center relative">
+              <button 
+                onClick={() => setShowRulesModal(true)}
+                className="absolute top-4 right-4 p-2 bg-white/5 border border-white/10 text-gray-400 hover:text-white rounded-xl flex items-center gap-1 text-xs font-semibold hover:bg-white/10 transition-all"
+              >
+                <BookOpen className="w-4 h-4" /> Rules
+              </button>
               <div className="w-20 h-20 mx-auto bg-gradient-to-br from-violet-500 to-fuchsia-700 rounded-3xl flex items-center justify-center text-4xl mb-4 shadow-lg">
                 🧠
               </div>
               <h2 className="text-2xl font-bold mb-2">Memory Match</h2>
-              <p className="text-gray-400 mb-6">Flip cards, find matching pairs, and outscore your opponents!</p>
+              <p className="text-gray-400 mb-6 font-medium">Flip cards, find matching pairs, and outscore your opponents!</p>
               <button
                 onClick={handleCreateLobby}
                 className="px-8 py-3 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 rounded-full font-bold text-white shadow-lg hover:shadow-violet-500/30 transition-all hover:scale-105 active:scale-95"
@@ -239,6 +305,7 @@ function MemoryMatchPageContent() {
             )}
           </div>
         </div>
+        {rulesModal}
       </div>
     );
   }
@@ -264,6 +331,12 @@ function MemoryMatchPageContent() {
             </h1>
           </div>
           <div className="flex gap-2">
+            <button 
+              onClick={() => setShowRulesModal(true)}
+              className="px-4 py-2 bg-white/5 border border-white/10 text-gray-300 hover:text-white rounded-full text-sm font-bold flex items-center gap-2 transition-colors hover:bg-white/10"
+            >
+              <BookOpen className="w-4 h-4" /> Rules
+            </button>
             <button onClick={() => setShowInviteModal(true)} className="px-4 py-2 bg-violet-600 hover:bg-violet-500 rounded-full text-sm font-bold flex items-center gap-2 transition-colors">
               <UserPlus className="w-4 h-4" /> Invite
             </button>
@@ -438,6 +511,12 @@ function MemoryMatchPageContent() {
           </div>
 
           <div className="flex items-center gap-3 text-xs text-gray-400">
+            <button 
+              onClick={() => setShowRulesModal(true)}
+              className="px-3 py-1 bg-white/5 border border-white/10 text-gray-300 hover:text-white rounded-full font-bold text-xs flex items-center gap-1.5 transition-colors hover:bg-white/10"
+            >
+              <BookOpen className="w-3.5 h-3.5" /> Rules
+            </button>
             <span>Pairs: <span className="text-violet-400 font-bold">{gameState.matchedPairs}/{gameState.totalPairs}</span></span>
             {gameState.status === 'PLAYING' && (
               <span className={`px-3 py-1 rounded-full font-bold text-xs ${isMyTurn ? 'bg-violet-500/30 text-violet-300 animate-pulse' : 'bg-white/10 text-gray-400'}`}>
@@ -446,6 +525,7 @@ function MemoryMatchPageContent() {
             )}
           </div>
         </div>
+        {rulesModal}
 
         <div className="flex-1 flex overflow-hidden">
           {/* Room Chat Sidebar (Collapsible) */}

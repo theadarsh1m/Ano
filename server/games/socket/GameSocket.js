@@ -2,18 +2,21 @@ const LobbyService = require('../lobby/LobbyService');
 const BluffEngine = require('../bluff/BluffEngine');
 const MemoryMatchEngine = require('../memory-match/MemoryMatchEngine');
 const DotsAndBoxesEngine = require('../dots-and-boxes/DotsAndBoxesEngine');
+const YatzyEngine = require('../yatzy/YatzyEngine');
 const userService = require('../../services/userService');
 
 const ENGINE_MAP = {
   'BLUFF': BluffEngine,
   'MEMORY_MATCH': MemoryMatchEngine,
   'DOTS_AND_BOXES': DotsAndBoxesEngine,
+  'YATZY': YatzyEngine,
 };
 
 const GAME_DISPLAY_NAMES = {
   'BLUFF': 'Bluff',
   'MEMORY_MATCH': 'Memory Match',
   'DOTS_AND_BOXES': 'Dots and Boxes',
+  'YATZY': 'Yatzy',
 };
 
 function registerGameSockets(io, socket, onlineUsers, activeGames) {

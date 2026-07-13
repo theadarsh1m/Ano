@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Users, Play, UserPlus, LogOut, Loader2, Check, X,
-  Volume2, VolumeX, MessageSquare, Award, ArrowLeft, Send, RefreshCw, Globe, Trophy, Crown, Settings, Clock
+  Volume2, VolumeX, MessageSquare, Award, ArrowLeft, Send, RefreshCw, Globe, Trophy, Crown, Settings, Clock, BookOpen
 } from "lucide-react";
 import { useUserStore } from "@/store/useUserStore";
 import { useRoomConnectionStore } from "@/store/useRoomConnectionStore";
@@ -67,6 +67,7 @@ function DotsAndBoxesPageContent() {
   const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
   const [roomMembers, setRoomMembers] = useState<any[]>([]);
   const [invitedUsers, setInvitedUsers] = useState<Set<string>>(new Set());
+  const [showRulesModal, setShowRulesModal] = useState(false);
 
   // Board drawing layout configuration variables
   const [hoveredLine, setHoveredLine] = useState<{ type: 'H' | 'V'; r: number; c: number } | null>(null);
@@ -195,6 +196,65 @@ function DotsAndBoxesPageContent() {
     );
   }
 
+  const rulesModal = (
+    <AnimatePresence>
+      {showRulesModal && (
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-fade-in"
+          onClick={() => setShowRulesModal(false)}
+        >
+          <motion.div 
+            initial={{ y: 50, scale: 0.95 }}
+            animate={{ y: 0, scale: 1 }}
+            exit={{ y: 50, scale: 0.95 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-neutral-900 border border-white/10 rounded-3xl p-6 max-w-lg w-full max-h-[85vh] overflow-y-auto text-left relative shadow-2xl custom-scrollbar"
+          >
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold flex items-center gap-2"><BookOpen className="w-6 h-6 text-blue-400" /> Dots & Boxes Rules</h2>
+              <button onClick={() => setShowRulesModal(false)} className="text-gray-400 hover:text-white p-1 hover:bg-white/10 rounded-md transition-colors">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <div className="space-y-4 text-gray-300 text-sm leading-relaxed">
+              <p><strong className="text-white">Goal:</strong> Close more boxes (squares) than your opponents by drawing lines on the grid.</p>
+              
+              <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+                <strong className="text-blue-400 block mb-1">On Your Turn:</strong>
+                <p>Click on any uncolored dotted line (horizontal or vertical) to color it with your player color.</p>
+              </div>
+
+              <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+                <strong className="text-blue-400 block mb-1">Completing Boxes:</strong>
+                <ul className="list-disc pl-5 mt-1 space-y-1">
+                  <li><strong>Score points:</strong> If the line you drew completes a 1x1 square box, that box is captured in your color and you gain 1 point!</li>
+                  <li><strong>Double turn:</strong> When you complete a box, you instantly get to make another line draw. You can chain multiple box completions in a single turn.</li>
+                  <li><strong>Pass Turn:</strong> If your drawn line does not complete any box, the turn immediately passes to the next player.</li>
+                </ul>
+              </div>
+
+              <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+                <strong className="text-blue-400 block mb-1">Lobby Configurations:</strong>
+                <p>The host can change the grid size (number of dots in a row/column) and set a turn timeout limit to speed up gameplay.</p>
+              </div>
+            </div>
+
+            <button 
+              onClick={() => setShowRulesModal(false)}
+              className="mt-6 w-full py-3 bg-blue-600 hover:bg-blue-755 text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-500/25"
+            >
+              Got it!
+            </button>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
   // ========================
   // PRE-LOBBY VIEW
   // ========================
@@ -223,12 +283,18 @@ function DotsAndBoxesPageContent() {
 
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="max-w-2xl w-full space-y-6">
-            <GlassCard className="p-8 text-center">
+            <GlassCard className="p-8 text-center relative">
+              <button 
+                onClick={() => setShowRulesModal(true)}
+                className="absolute top-4 right-4 p-2 bg-white/5 border border-white/10 text-gray-400 hover:text-white rounded-xl flex items-center gap-1 text-xs font-semibold hover:bg-white/10 transition-all"
+              >
+                <BookOpen className="w-4 h-4" /> Rules
+              </button>
               <div className="w-20 h-20 mx-auto bg-gradient-to-br from-blue-500 to-indigo-700 rounded-3xl flex items-center justify-center text-4xl mb-4 shadow-lg">
                 ✏️
               </div>
               <h2 className="text-2xl font-bold mb-2">Dots and Boxes</h2>
-              <p className="text-gray-400 mb-6">Connect lines, complete squares, and control the grid in this classic multiplayer turn strategy game!</p>
+              <p className="text-gray-400 mb-6 font-medium">Connect lines, complete squares, and control the grid in this classic multiplayer turn strategy game!</p>
               <button
                 onClick={handleCreateLobby}
                 className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 rounded-full font-bold text-white shadow-lg hover:shadow-blue-500/30 transition-all hover:scale-105 active:scale-95"
@@ -262,6 +328,7 @@ function DotsAndBoxesPageContent() {
             )}
           </div>
         </div>
+        {rulesModal}
       </div>
     );
   }
@@ -288,6 +355,12 @@ function DotsAndBoxesPageContent() {
             </h1>
           </div>
           <div className="flex gap-2">
+            <button 
+              onClick={() => setShowRulesModal(true)}
+              className="px-4 py-2 bg-white/5 border border-white/10 text-gray-300 hover:text-white rounded-full text-sm font-bold flex items-center gap-2 transition-colors hover:bg-white/10 animate-pulse"
+            >
+              <BookOpen className="w-4 h-4" /> Rules
+            </button>
             <button onClick={() => setShowInviteModal(true)} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-full text-sm font-bold flex items-center gap-2 transition-colors">
               <UserPlus className="w-4 h-4" /> Invite
             </button>
@@ -510,6 +583,12 @@ function DotsAndBoxesPageContent() {
           </div>
 
           <div className="flex items-center gap-3 text-xs text-gray-400">
+            <button 
+              onClick={() => setShowRulesModal(true)}
+              className="px-3 py-1 bg-white/5 border border-white/10 text-gray-300 hover:text-white rounded-full font-bold text-xs flex items-center gap-1.5 transition-colors hover:bg-white/10"
+            >
+              <BookOpen className="w-3.5 h-3.5" /> Rules
+            </button>
             {gameState.status === 'PLAYING' && (
               <span className="flex items-center gap-1.5 font-bold">
                 <Clock className="w-3.5 h-3.5 text-blue-400" />
@@ -523,6 +602,7 @@ function DotsAndBoxesPageContent() {
             )}
           </div>
         </div>
+        {rulesModal}
 
         <div className="flex-1 flex overflow-hidden">
           {/* Room Chat Sidebar (Collapsible) */}

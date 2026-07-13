@@ -179,3 +179,17 @@
     background: rgba(255, 255, 255, 0.2);
   }
 }
+
+/* Yatzy Dice Rolling Animation */
+@keyframes dice-roll {
+  0% { transform: rotate(0deg) scale(1); }
+  20% { transform: rotate(72deg) scale(0.85); }
+  40% { transform: rotate(144deg) scale(1.1); }
+  60% { transform: rotate(216deg) scale(0.9); }
+  80% { transform: rotate(288deg) scale(1.05); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+
+.animate-dice-roll {
+  animation: dice-roll 0.5s ease-in-out;
+}
