@@ -42,9 +42,11 @@ const io = new Server(server, {
   }
 });
 
-// Inject Socket.IO into moderation service
+// Inject Socket.IO into moderation service and queue
 const moderationService = require('./services/moderationService');
+const moderationQueue = require('./services/moderationQueue');
 moderationService.setSocketIO(io);
+moderationQueue.setSocketIO(io);
 
 // Reusable Multiplayer Game Framework Imports
 const registerGameSockets = require('./games/socket/GameSocket');
@@ -601,31 +603,30 @@ io.on('connection', (socket) => {
 
   socket.on('send_message', async (message) => {
     try {
-      // Synchronously moderate image attachments
       const isImage = message.fileUrl && message.fileType && message.fileType.startsWith('image/');
-      let moderationData = {
-        moderationStatus: 'APPROVED',
+      const initialModeration = {
+        moderationStatus: isImage ? 'PENDING' : 'APPROVED',
         isNSFW: false,
         nsfwConfidence: 0,
       };
 
-      if (isImage) {
-        const scan = await moderationService.moderateImage(message.fileUrl);
-        moderationData = {
-          moderationStatus: scan.moderationStatus,
-          isNSFW: scan.isNSFW,
-          nsfwConfidence: scan.nsfwConfidence,
-        };
-      }
-
-      const moderatedMessage = {
+      const messageToSave = {
         ...message,
-        ...moderationData,
+        ...initialModeration,
       };
 
-      io.to(message.roomId).emit('receive_message', moderatedMessage);
+      io.to(message.roomId).emit('receive_message', messageToSave);
 
-      await messageService.saveMessage(moderatedMessage);
+      const savedMsg = await messageService.saveMessage(messageToSave);
+
+      if (isImage) {
+        moderationQueue.addJob({
+          type: 'MESSAGE',
+          id: savedMsg.id,
+          imageUrl: message.fileUrl,
+          roomId: message.roomId,
+        });
+      }
 
       // Parse mentions
       const mentionMatches = message.content.match(/@([a-zA-Z0-9_]+)/g);
@@ -730,26 +731,16 @@ io.on('connection', (socket) => {
   });
 
   socket.on('dm_send', async (message) => {
-    // Synchronously moderate image attachments
     const isImage = message.fileUrl && message.fileType && message.fileType.startsWith('image/');
-    let moderationData = {
-      moderationStatus: 'APPROVED',
+    const initialModeration = {
+      moderationStatus: isImage ? 'PENDING' : 'APPROVED',
       isNSFW: false,
       nsfwConfidence: 0,
     };
 
-    if (isImage) {
-      const scan = await moderationService.moderateImage(message.fileUrl);
-      moderationData = {
-        moderationStatus: scan.moderationStatus,
-        isNSFW: scan.isNSFW,
-        nsfwConfidence: scan.nsfwConfidence,
-      };
-    }
-
-    const moderatedMessage = {
+    const messageToSave = {
       ...message,
-      ...moderationData,
+      ...initialModeration,
     };
 
     // Check if the recipient is online and currently viewing the DM room
@@ -767,10 +758,10 @@ io.on('connection', (socket) => {
       }
     }
 
-    moderatedMessage.isRead = isRead;
+    messageToSave.isRead = isRead;
 
-    // Broadcast to the DM room
-    io.to(`dm_${message.conversationId}`).emit('dm_receive', moderatedMessage);
+    // Broadcast to the DM room instantly!
+    io.to(`dm_${message.conversationId}`).emit('dm_receive', messageToSave);
 
     // Also send to the other participant's sockets if they're not in the DM room and message is unread
     if (message.recipientId && !isRead) {
@@ -781,7 +772,7 @@ io.on('connection', (socket) => {
           if (recipientSocket && !recipientSocket.rooms.has(`dm_${message.conversationId}`)) {
             recipientSocket.emit('dm_notification', {
               conversationId: message.conversationId,
-              message: moderatedMessage,
+              message: messageToSave,
             });
           }
         }
@@ -790,7 +781,16 @@ io.on('connection', (socket) => {
 
     // Persist to database
     try {
-      await dmService.saveDirectMessage(moderatedMessage);
+      const savedMsg = await dmService.saveDirectMessage(messageToSave);
+
+      if (isImage) {
+        moderationQueue.addJob({
+          type: 'DM',
+          id: savedMsg.id,
+          imageUrl: message.fileUrl,
+          conversationId: message.conversationId,
+        });
+      }
 
       // Parse mentions in DMs
       const mentionMatches = message.content.match(/@([a-zA-Z0-9_]+)/g);

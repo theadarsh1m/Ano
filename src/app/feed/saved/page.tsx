@@ -15,6 +15,7 @@ import { ArrowLeft, Bookmark, Loader2 } from "lucide-react";
 export default function SavedPostsPage() {
   const router = useRouter();
   const userId = useUserStore((s) => s.id);
+  const nsfwMode = useUserStore((s) => s.nsfwMode);
   const { voteOnPost, unsavePost } = useFeedStore();
   const [isClient, setIsClient] = useState(false);
   const [posts, setPosts] = useState<FeedPost[]>([]);
@@ -106,15 +107,17 @@ export default function SavedPostsPage() {
               </div>
             )}
 
-            {posts.map((post) => (
-              <PostCard
-                key={post.id}
-                post={{ ...post, isSaved: true }}
-                onVote={(pid, val) => voteOnPost(userId, pid, val)}
-                onSave={() => {}}
-                onUnsave={handleUnsave}
-              />
-            ))}
+            {posts
+              .filter((post) => !(post.isNSFW && nsfwMode === "HIDE"))
+              .map((post) => (
+                <PostCard
+                  key={post.id}
+                  post={{ ...post, isSaved: true }}
+                  onVote={(pid, val) => voteOnPost(userId, pid, val)}
+                  onSave={() => {}}
+                  onUnsave={handleUnsave}
+                />
+              ))}
 
             <div ref={sentinelRef} className="h-4" />
 

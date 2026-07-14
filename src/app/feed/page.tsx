@@ -15,6 +15,7 @@ import { Plus, Loader2, Rss } from "lucide-react";
 export default function FeedPage() {
   const router = useRouter();
   const userId = useUserStore((s) => s.id);
+  const nsfwMode = useUserStore((s) => s.nsfwMode);
   const [isClient, setIsClient] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
 
@@ -151,17 +152,19 @@ export default function FeedPage() {
               </div>
             )}
 
-            {posts.map((post) => (
-              <PostCard
-                key={post.id}
-                post={post}
-                onVote={(pid, val) => voteOnPost(userId, pid, val)}
-                onSave={(pid) => savePost(userId, pid)}
-                onUnsave={(pid) => unsavePost(userId, pid)}
-                onDelete={(pid) => deletePost(pid, userId)}
-                isOwner={post.authorId === userId || post.isOwner}
-              />
-            ))}
+            {posts
+              .filter((post) => !(post.isNSFW && nsfwMode === "HIDE"))
+              .map((post) => (
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  onVote={(pid, val) => voteOnPost(userId, pid, val)}
+                  onSave={(pid) => savePost(userId, pid)}
+                  onUnsave={(pid) => unsavePost(userId, pid)}
+                  onDelete={(pid) => deletePost(pid, userId)}
+                  isOwner={post.authorId === userId || post.isOwner}
+                />
+              ))}
 
             {/* Infinite scroll sentinel */}
             <div ref={sentinelRef} className="h-4" />

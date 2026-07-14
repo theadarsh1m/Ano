@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { MessageCircle, Bookmark, BookmarkCheck, Share2, Trash2, MoreHorizontal, User, Check, Loader2 } from "lucide-react";
+import { MessageCircle, Bookmark, BookmarkCheck, Share2, Trash2, MoreHorizontal, User, Check, Loader2, AlertCircle } from "lucide-react";
 import { VoteButtons } from "./VoteButtons";
 import { FeedPost } from "@/store/useFeedStore";
 import { SafeMedia } from "../ui/SafeMedia";
@@ -99,12 +99,20 @@ export function PostCard({ post, onVote, onSave, onUnsave, onDelete, isOwner }: 
         {/* Image */}
         {post.imageUrl && (
           <div className="mb-3 rounded-lg overflow-hidden max-h-80">
-            {['PENDING', 'SCANNING'].includes(post.moderationStatus || '') ? (
-              <div className="w-full h-48 bg-white/5 border border-dashed border-white/20 rounded-lg flex flex-col items-center justify-center gap-2 select-none animate-pulse">
-                <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />
-                <span className="text-xs text-gray-400 font-medium">Scanning image for safety...</span>
-              </div>
-            ) : (
+            <div className="relative w-full h-full">
+              {/* Image Scanning Overlay Badge */}
+              {['PENDING', 'SCANNING'].includes(post.moderationStatus || '') && (
+                <div className="absolute top-2.5 left-2.5 bg-black/75 backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] font-black text-blue-400 border border-blue-500/20 flex items-center gap-1.5 z-10 shadow-lg select-none">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />
+                  <span>Scanning...</span>
+                </div>
+              )}
+              {post.moderationStatus === 'SCANNING_FAILED' && (
+                <div className="absolute top-2.5 left-2.5 bg-black/75 backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] font-black text-amber-500 border border-amber-500/20 flex items-center gap-1.5 z-10 shadow-lg select-none">
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Scanning failed (retrying)</span>
+                </div>
+              )}
               <SafeMedia
                 src={post.imageUrl}
                 isNSFW={!!post.isNSFW}
@@ -112,7 +120,7 @@ export function PostCard({ post, onVote, onSave, onUnsave, onDelete, isOwner }: 
                 alt="Post image"
                 className="w-full h-full object-cover"
               />
-            )}
+            </div>
           </div>
         )}
 

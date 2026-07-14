@@ -6,6 +6,7 @@ import { useUserStore } from "@/store/useUserStore";
 import { FileCard } from "@/components/room/FileCard";
 import { ImageLightbox } from "@/components/room/ImageLightbox";
 import { SafeMedia } from "@/components/ui/SafeMedia";
+import { Loader2, AlertCircle } from "lucide-react";
 
 interface DMChatAreaProps {
   conversationId: string;
@@ -32,14 +33,29 @@ export function DMChatArea({ conversationId }: DMChatAreaProps) {
       return (
         <div className="mt-1">
           {msg.content && <p className="break-words mb-2">{msg.content}</p>}
-          <SafeMedia
-            src={msg.fileUrl}
-            isNSFW={!!msg.isNSFW}
-            mediaId={`dm_${msg.id}`}
-            alt={msg.fileName || "Image"}
-            className="block rounded-lg overflow-hidden max-w-[300px] cursor-pointer hover:opacity-90 transition-opacity w-full h-auto"
-            onClick={() => setLightboxSrc(msg.fileUrl!)}
-          />
+          <div className="relative max-w-[300px]">
+            {/* Image Scanning Overlay Badge */}
+            {['PENDING', 'SCANNING'].includes(msg.moderationStatus || '') && (
+              <div className="absolute top-2 left-2 bg-black/75 backdrop-blur-md px-2 py-0.5 rounded-full text-[9px] font-bold text-blue-400 border border-blue-500/20 flex items-center gap-1 z-10 shadow-md select-none">
+                <Loader2 className="w-3 h-3 animate-spin text-blue-400" />
+                <span>Scanning...</span>
+              </div>
+            )}
+            {msg.moderationStatus === 'SCANNING_FAILED' && (
+              <div className="absolute top-2 left-2 bg-black/75 backdrop-blur-md px-2 py-0.5 rounded-full text-[9px] font-bold text-amber-500 border border-amber-500/20 flex items-center gap-1 z-10 shadow-md select-none">
+                <AlertCircle className="w-3 h-3 text-amber-500" />
+                <span>Scanning failed (retrying)</span>
+              </div>
+            )}
+            <SafeMedia
+              src={msg.fileUrl}
+              isNSFW={!!msg.isNSFW}
+              mediaId={`dm_${msg.id}`}
+              alt={msg.fileName || "Image"}
+              className="block rounded-lg overflow-hidden max-w-[300px] cursor-pointer hover:opacity-90 transition-opacity w-full h-auto"
+              onClick={() => setLightboxSrc(msg.fileUrl!)}
+            />
+          </div>
           {msg.fileName && (
             <p className="text-[10px] text-gray-500 mt-1">{msg.fileName}</p>
           )}

@@ -66,12 +66,10 @@ router.post('/', async (req, res) => {
       nsfwConfidence: 0,
     });
 
-    // Run moderation pipeline asynchronously in the background
+    // Run moderation pipeline asynchronously in the background queue
     if (imageUrl) {
-      const moderationService = require('../services/moderationService');
-      moderationService.moderatePost(post.id, imageUrl).catch((err) => {
-        console.error(`Failed to moderate post ${post.id} asynchronously:`, err);
-      });
+      const moderationQueue = require('../services/moderationQueue');
+      moderationQueue.addJob({ type: 'POST', id: post.id, imageUrl });
     }
 
     res.status(201).json(post);

@@ -273,6 +273,7 @@ enum ModerationStatus {
   SCANNING
   APPROVED
   FLAGGED
+  SCANNING_FAILED
 }
 
 enum GameType {

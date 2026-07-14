@@ -21,6 +21,7 @@ import {
   Loader2,
   MessageCircle,
   Check,
+  AlertCircle,
 } from "lucide-react";
 
 function timeAgo(dateStr: string): string {
@@ -204,12 +205,20 @@ export default function PostDetailPage() {
               {/* Image */}
               {post.imageUrl && (
                 <div className="mb-3 rounded-xl overflow-hidden">
-                  {['PENDING', 'SCANNING'].includes(post.moderationStatus || '') ? (
-                    <div className="w-full h-64 bg-white/5 border border-dashed border-white/20 rounded-xl flex flex-col items-center justify-center gap-2 select-none animate-pulse">
-                      <Loader2 className="w-6 h-6 text-blue-400 animate-spin" />
-                      <span className="text-sm text-gray-400 font-medium">Scanning image for safety...</span>
-                    </div>
-                  ) : (
+                  <div className="relative w-full h-full">
+                    {/* Image Scanning Overlay Badge */}
+                    {['PENDING', 'SCANNING'].includes(post.moderationStatus || '') && (
+                      <div className="absolute top-2.5 left-2.5 bg-black/75 backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] font-black text-blue-400 border border-blue-500/20 flex items-center gap-1.5 z-10 shadow-lg select-none">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />
+                        <span>Scanning...</span>
+                      </div>
+                    )}
+                    {post.moderationStatus === 'SCANNING_FAILED' && (
+                      <div className="absolute top-2.5 left-2.5 bg-black/75 backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] font-black text-amber-500 border border-amber-500/20 flex items-center gap-1.5 z-10 shadow-lg select-none">
+                        <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
+                        <span>Scanning failed (retrying)</span>
+                      </div>
+                    )}
                     <SafeMedia
                       src={post.imageUrl}
                       isNSFW={!!post.isNSFW}
@@ -217,7 +226,7 @@ export default function PostDetailPage() {
                       alt="Post image"
                       className="w-full max-h-[500px] object-contain bg-black/20"
                     />
-                  )}
+                  </div>
                 </div>
               )}
 
