@@ -288,6 +288,7 @@ enum GameType {
   BRAINROT_STACK
   YATZY
   COLOR_WARS
+  SCRIBBLE
 }
 
 enum GameStatus {
@@ -314,4 +315,6 @@ enum MoveType {
   HOLD_DICE
   SELECT_CATEGORY
   SELECT_TILE
+  SCRIBBLE_GUESS
+  SCRIBBLE_SELECT_WORD
 }

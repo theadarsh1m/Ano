@@ -61,6 +61,14 @@ export default function GamesHubPage() {
       icon: "💥",
       color: "from-rose-500 to-red-600",
       href: "/dashboard/games/color-wars"
+    },
+    {
+      id: "scribble",
+      title: "Scribble",
+      description: "Draw, guess, and win! The ultimate multiplayer drawing party game.",
+      icon: "🎨",
+      color: "from-sky-400 to-indigo-600",
+      href: "/dashboard/games/scribble"
     }
   ];
 

@@ -4,6 +4,7 @@ const MemoryMatchEngine = require('../memory-match/MemoryMatchEngine');
 const DotsAndBoxesEngine = require('../dots-and-boxes/DotsAndBoxesEngine');
 const YatzyEngine = require('../yatzy/YatzyEngine');
 const ColorWarsEngine = require('../color-wars/ColorWarsEngine');
+const ScribbleEngine = require('../scribble/ScribbleEngine');
 const userService = require('../../services/userService');
 
 const ENGINE_MAP = {
@@ -12,6 +13,7 @@ const ENGINE_MAP = {
   'DOTS_AND_BOXES': DotsAndBoxesEngine,
   'YATZY': YatzyEngine,
   'COLOR_WARS': ColorWarsEngine,
+  'SCRIBBLE': ScribbleEngine,
 };
 
 const GAME_DISPLAY_NAMES = {
@@ -20,6 +22,7 @@ const GAME_DISPLAY_NAMES = {
   'DOTS_AND_BOXES': 'Dots and Boxes',
   'YATZY': 'Yatzy',
   'COLOR_WARS': 'Color Wars',
+  'SCRIBBLE': 'Scribble',
 };
 
 function registerGameSockets(io, socket, onlineUsers, activeGames) {
@@ -187,7 +190,7 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
     }
     let engine = new EngineClass(gameId);
     if (lobby.settings) {
-      engine.settings = lobby.settings;
+      engine.settings = { ...engine.settings, ...lobby.settings };
     }
 
     lobby.players.forEach(p => {
@@ -243,6 +246,43 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
       return socket.emit('game_error', { message: 'Game session not found.' });
     }
 
+    if (action === 'play_again' && engine.status === 'FINISHED') {
+      const hostP = Array.from(engine.players.values()).find(p => p.role === 'HOST');
+      if (hostP && hostP.userId === userId) {
+        // Re-create lobby with same ID and current players
+        const LobbyService = require('../lobby/LobbyService');
+        LobbyService.lobbies.set(gameId, {
+          id: gameId,
+          gameType: engine.gameType,
+          hostId: userId,
+          hostName: hostP.nickname,
+          players: Array.from(engine.players.values()).map(p => ({
+            userId: p.userId,
+            nickname: p.nickname,
+            role: p.role,
+            isReady: p.role === 'HOST'
+          })),
+          settings: engine.settings,
+          status: 'WAITING',
+          createdAt: new Date(),
+          maxPlayers: engine.gameType === 'SCRIBBLE' ? 12 : 8,
+          isPrivate: engine.settings.isPrivate || false
+        });
+        
+        activeGames.delete(gameId);
+        io.to(gameId).emit('lobby_state', LobbyService.serializeLobby(LobbyService.lobbies.get(gameId)));
+        
+        const broadcastLobbies = () => {
+          const publicLobbies = LobbyService.getPublicLobbies();
+          io.emit('lobbies_list', publicLobbies.map(l => LobbyService.serializeLobby(l)));
+        };
+        broadcastLobbies();
+        return;
+      } else {
+        return socket.emit('game_error', { message: 'Only host can restart the game' });
+      }
+    }
+
     const res = engine.handlePlayerAction(userId, action, data);
     if (!res.success) {
       return socket.emit('game_error', { message: res.error });
@@ -264,7 +304,7 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
       broadcastGameStates(gameId, engine);
     };
 
-    if (engine.status === 'FINISHED') {
+    if (engine.status === 'FINISHED' && engine.gameType !== 'SCRIBBLE') {
       setTimeout(() => {
         engine.players.forEach(p => {
           updatePresence(p.userId, null).catch(console.error);
@@ -273,6 +313,37 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
       }, 5000);
     }
   });
+
+  // ========================
+  // SCRIBBLE SPECIFIC EVENTS
+  // ========================
+
+  socket.on('scribble_canvas_event', ({ gameId, userId, action, data }) => {
+    // We only broadcast to the room, we don't store strokes to avoid DB bloat
+    const engine = activeGames.get(gameId);
+    if (!engine || engine.gameType !== 'SCRIBBLE') return;
+    
+    // Only the drawer can draw
+    if (engine.currentDrawerId !== userId) return;
+
+    // Broadcast stroke/tool change to everyone else in the game
+    socket.to(gameId).emit('scribble_canvas_event', { action, data });
+  });
+
+  socket.on('scribble_save_canvas', async ({ gameId, userId, imageData }) => {
+    const engine = activeGames.get(gameId);
+    if (!engine || engine.gameType !== 'SCRIBBLE') return;
+    
+    if (engine.currentDrawerId !== userId) return;
+    
+    // NOTE: In a real environment, you'd upload imageData to Cloudinary here.
+    // For now, we will simulate the upload to prevent breaking if Cloudinary isn't configured.
+    console.log(`[Scribble] Received canvas image to save for game ${gameId}`);
+    // Example: const url = await cloudinary.uploader.upload(imageData);
+    // You could persist this url to the GameResult or a new database table.
+  });
+
+
 
   // Handle sudden disconnects (e.g. closing tab)
   socket.on('disconnect', () => {
