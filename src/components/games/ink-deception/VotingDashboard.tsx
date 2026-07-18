@@ -213,8 +213,8 @@ export const VotingDashboard: React.FC = () => {
                       isVotedForThis
                         ? "bg-emerald-500/15 border-emerald-400 shadow-[0_0_25px_rgba(16,185,129,0.25)] scale-[1.04]"
                         : isVoting && hasUserVoted
-                        ? "bg-[#111827]/40 border-slate-900 text-slate-500 opacity-40 scale-[0.96]"
-                        : "bg-[#111827]/85 border-slate-800 text-[#B7C0D8] hover:border-slate-600 hover:scale-[1.02]"
+                        ? "bg-white/5 border border-white/5 text-slate-500 opacity-40 scale-[0.96]"
+                        : "bg-white/5 border border-white/10 text-[#B7C0D8] hover:border-white/20 hover:scale-[1.02]"
                     }`}
                 >
                   {/* YOUR VOTE Badge */}
@@ -309,7 +309,7 @@ export const VotingDashboard: React.FC = () => {
 
       {/* Confirmed display */}
       {isVoting && hasUserVoted && (
-        <div className="text-center bg-[#111827]/60 border border-slate-850 px-6 py-3.5 rounded-2xl max-w-sm z-20 animate-pulse text-xs font-mono text-emerald-400">
+        <div className="text-center bg-white/5 border border-white/10 px-6 py-3.5 rounded-2xl max-w-sm z-20 animate-pulse text-xs font-mono text-emerald-400">
           ✓ Vote Submitted! Waiting for remaining painters to lock...
         </div>
       )}

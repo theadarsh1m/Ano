@@ -29,6 +29,14 @@ export const GuessOverlay: React.FC = () => {
     }
   }, [isGuessPhase]);
 
+  // Reset submitted state on close guesses (new log items during guess phase)
+  useEffect(() => {
+    if (isGuessPhase) {
+      setSubmitted(false);
+      setGuess("");
+    }
+  }, [gameState?.historyLogs?.length, isGuessPhase]);
+
   // Tick clock sound on countdown
   useEffect(() => {
     if (isGuessPhase && timeLeft <= 5 && timeLeft > 0) {
@@ -54,7 +62,7 @@ export const GuessOverlay: React.FC = () => {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 w-full h-full bg-[#03060c]/90 z-40 flex items-center justify-center p-4 backdrop-blur-md"
+        className="fixed inset-0 w-full h-full bg-black/80 z-40 flex items-end sm:items-center justify-center p-4 pb-20 sm:pb-4 backdrop-blur-md"
       >
         <div className="absolute w-[350px] h-[350px] rounded-full bg-rose-500/10 blur-[90px] pointer-events-none animate-pulse" />
 
@@ -62,7 +70,7 @@ export const GuessOverlay: React.FC = () => {
           initial={{ scale: 0.95, y: 15 }}
           animate={{ scale: 1, y: 0 }}
           exit={{ scale: 0.95, y: 15 }}
-          className="bg-[#111827] border-2 border-rose-500/30 rounded-[32px] p-8 max-w-md w-full shadow-2xl relative overflow-hidden"
+          className="bg-neutral-900 border border-white/10 rounded-[32px] p-8 max-w-md w-full shadow-2xl relative overflow-hidden"
         >
           {/* Cyber Neon alert line */}
           <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-rose-500 via-pink-500 to-rose-500" />
@@ -74,10 +82,10 @@ export const GuessOverlay: React.FC = () => {
                 <HelpCircle className="w-8 h-8" />
               </div>
 
-              <h2 className="text-2xl font-black tracking-widest text-[#FAF8F5] uppercase text-center">
+              <h2 className="text-2xl font-black tracking-widest text-white uppercase text-center">
                 YOU WERE CAUGHT!
               </h2>
-              <p className="text-xs text-[#FAF8F5]/60 font-mono tracking-wider mt-2 text-center">
+              <p className="text-xs text-slate-400 font-mono tracking-wider mt-2 text-center">
                 GUESS THE SECRET WORD TO STEAL THE VICTORY!
               </p>
               
@@ -98,7 +106,7 @@ export const GuessOverlay: React.FC = () => {
                   disabled={submitted}
                   onChange={(e) => setGuess(e.target.value)}
                   placeholder="TYPE SECRET WORD..."
-                  className="w-full bg-[#1b2334] border-2 border-slate-800 focus:border-rose-500 rounded-2xl py-4 px-6 text-[#FAF8F5] text-center font-bold tracking-widest outline-none transition-all placeholder:text-slate-600 disabled:opacity-50"
+                  className="w-full bg-white/5 border border-white/10 focus:border-rose-500 rounded-2xl py-4 px-6 text-white text-center font-bold tracking-widest outline-none transition-all placeholder:text-slate-600 disabled:opacity-50"
                   autoFocus
                 />
               </div>
@@ -119,14 +127,14 @@ export const GuessOverlay: React.FC = () => {
                 <Clock className="w-8 h-8" />
               </div>
 
-              <h2 className="text-2xl font-black tracking-widest text-[#FAF8F5] uppercase">
+              <h2 className="text-2xl font-black tracking-widest text-white uppercase">
                 IMPOSTOR CAUGHT!
               </h2>
               <p className="text-xs text-rose-400 font-mono tracking-widest mt-2">
                 THE FAKE ARTIST IS GUESSING THE SECRET WORD...
               </p>
 
-              <div className="text-xs text-slate-500 font-mono mt-3 bg-slate-900/50 px-3 py-1 rounded-full border border-slate-800">
+              <div className="text-xs text-slate-500 font-mono mt-3 bg-white/5 px-3 py-1 rounded-full border border-white/10">
                 Category: {category}
               </div>
 

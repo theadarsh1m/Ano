@@ -248,13 +248,13 @@ export const ReplayTimeline: React.FC = () => {
         <canvas ref={canvasRef} className="w-full h-full block" />
 
         {/* HUD Overlay */}
-        <div className="absolute top-4 right-4 bg-slate-900/80 text-amber-400 text-[10px] font-mono font-bold tracking-widest px-3 py-1.5 rounded-full border border-amber-400/20 backdrop-blur-sm z-10 flex items-center gap-1.5">
+        <div className="absolute top-4 right-4 bg-black/40 text-amber-400 text-[10px] font-mono font-bold tracking-widest px-3 py-1.5 rounded-full border border-white/10 backdrop-blur-sm z-10 flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5" /> REPLAY HUD
         </div>
       </div>
 
       {/* Control panel */}
-      <div className="bg-[#111827] border border-slate-800 p-4 rounded-2xl flex flex-col gap-4 shadow-xl">
+      <div className="bg-white/5 border border-white/10 p-4 rounded-2xl flex flex-col gap-4 shadow-xl">
         <div className="flex items-center justify-between gap-4">
           
           <div className="flex items-center gap-2">

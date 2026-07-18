@@ -1,6 +1,6 @@
 class SoundService {
   private ctx: AudioContext | null = null;
-  private isMuted: boolean = false;
+  private isMuted: boolean = true;
   private loFiInterval: any = null; // eslint-disable-line @typescript-eslint/no-explicit-any
   private currentLoFiNodes: AudioNode[] = [];
   private suspenseOsc: OscillatorNode | null = null;
@@ -343,114 +343,13 @@ class SoundService {
     });
   }
 
-  // Generative lo-fi background loop
+  // Generative lo-fi background loop - disabled per user request
   public startBackgroundMusic() {
-    if (this.isMuted) return;
-    this.resume();
-    if (!this.ctx) return;
-    if (this.loFiInterval) return;
-
-    console.log('[Ink & Deception] Starting lo-fi soundscape...');
-
-    // Ambient loop plays soft, breathing minor-ninth chords and occasional pentatonic note plucks
-    // Am9 -> Dm9 -> G9 -> Cmaj9
-    const chordPacks = [
-      [110.0, 220.0, 261.63, 329.63, 392.00, 493.88], // Am9 (A2, A3, C4, E4, G4, B4)
-      [146.83, 293.66, 349.23, 440.00, 523.25, 659.25], // Dm9
-      [98.00, 196.00, 246.94, 311.13, 392.00, 493.88], // G9
-      [130.81, 261.63, 329.63, 392.00, 523.25, 587.33]  // Cmaj9
-    ];
-
-    let chordIdx = 0;
-
-    const playChord = () => {
-      if (this.isMuted || !this.ctx) return;
-      const now = this.ctx.currentTime;
-      const chord = chordPacks[chordIdx];
-      chordIdx = (chordIdx + 1) % chordPacks.length;
-
-      // Clean up previous nodes
-      this.currentLoFiNodes = this.currentLoFiNodes.filter(node => {
-        try {
-          (node as any).disconnect();
-        } catch (_) {}
-        return false;
-      });
-
-      // Play soft triangle chord voices
-      chord.forEach((freq, voiceIdx) => {
-        const osc = this.ctx!.createOscillator();
-        const gain = this.ctx!.createGain();
-
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(freq, now);
-
-        // Very slow attack, long sustain, slow release for a Ghibli pad vibe
-        gain.gain.setValueAtTime(0, now);
-        gain.gain.linearRampToValueAtTime(0.015, now + 1.5); // soft volume
-        gain.gain.setValueAtTime(0.015, now + 5.0);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 7.5);
-
-        // Lowpass filter to keep it warm and muddy
-        const filter = this.ctx!.createBiquadFilter();
-        filter.type = 'lowpass';
-        filter.frequency.setValueAtTime(700, now);
-
-        osc.connect(filter);
-        filter.connect(gain);
-        gain.connect(this.ctx!.destination);
-
-        osc.start(now);
-        osc.stop(now + 7.8);
-        this.currentLoFiNodes.push(osc);
-      });
-
-      // Add a random koto pluck on top during the chord
-      setTimeout(() => {
-        if (this.isMuted || !this.ctx) return;
-        const nowPluck = this.ctx.currentTime;
-        const scale = [392.00, 440.00, 523.25, 587.33, 659.25, 783.99, 880.00];
-        const randomNote = scale[Math.floor(Math.random() * scale.length)];
-
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        const filter = this.ctx.createBiquadFilter();
-
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(randomNote, nowPluck);
-
-        filter.type = 'lowpass';
-        filter.frequency.setValueAtTime(1500, nowPluck);
-        filter.frequency.exponentialRampToValueAtTime(250, nowPluck + 0.4);
-
-        gain.gain.setValueAtTime(0.02, nowPluck);
-        gain.gain.exponentialRampToValueAtTime(0.0001, nowPluck + 0.5);
-
-        osc.connect(filter);
-        filter.connect(gain);
-        gain.connect(this.ctx.destination);
-
-        osc.start(nowPluck);
-        osc.stop(nowPluck + 0.6);
-      }, 2000 + Math.random() * 2000);
-    };
-
-    playChord();
-    this.loFiInterval = setInterval(playChord, 8000);
+    return;
   }
 
   public stopBackgroundMusic() {
-    if (this.loFiInterval) {
-      clearInterval(this.loFiInterval);
-      this.loFiInterval = null;
-    }
-    this.currentLoFiNodes.forEach(node => {
-      try {
-        (node as any).stop();
-        node.disconnect();
-      } catch (_) {}
-    });
-    this.currentLoFiNodes = [];
+    return;
   }
 
   public startVotingSuspense() {

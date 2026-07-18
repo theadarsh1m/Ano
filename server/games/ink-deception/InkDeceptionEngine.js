@@ -2,6 +2,22 @@
 const BaseGameEngine = require('../engine/BaseGameEngine');
 const WordService = require('./WordService');
 
+function levenshteinDistance(a, b) {
+  const matrix = [];
+  for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) == a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, Math.min(matrix[i][j - 1] + 1, matrix[i - 1][j] + 1));
+      }
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
 const INK_COLORS = [
   '#FF5DA8', // Cyber Pink
   '#6AA6FF', // Neon Blue
@@ -150,14 +166,15 @@ class InkDeceptionEngine extends BaseGameEngine {
     this.drawingQueue = [...playerIds].sort(() => 0.5 - Math.random());
     this.currentDrawerIndex = 0;
     this.currentTurnCount = 0;
-    this.totalTurns = this.drawingQueue.length * 2;
+    const turnsPerPlayer = parseInt(this.settings.turnsPerPlayer) || 2;
+    this.totalTurns = this.drawingQueue.length * turnsPerPlayer;
 
     this.historyLogs.push(`Game started. Category: ${this.selectedCategory}. Role reveal in progress.`);
 
     // 4. Transition to Role Reveal (reset seen set, start 15s fallback timer)
     this.roleSeenPlayers = new Set();
     this.turnState = 'ROLE_REVEAL';
-    this.timeLeft = 15;
+    this.timeLeft = 7;
 
     this.timerIntervalId = setInterval(() => {
       if (this.isPaused) return;
@@ -390,7 +407,16 @@ class InkDeceptionEngine extends BaseGameEngine {
     if (isCorrect) {
       this.endRound('FAKE_ARTIST');
     } else {
-      this.endRound('ARTISTS');
+      const dist = levenshteinDistance(normalizedGuess, correctWord);
+      const isClose = dist > 0 && dist <= 2;
+      
+      if (isClose) {
+        this.historyLogs.push(`🟡 "${guess}" is very close!`);
+        this._broadcast();
+        return { success: true, isClose: true };
+      } else {
+        this.endRound('ARTISTS');
+      }
     }
 
     return { success: true };

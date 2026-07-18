@@ -13,13 +13,13 @@ export const PlayerList: React.FC = () => {
   const sortedPlayers = [...gameState.players].sort((a, b) => b.score - a.score);
 
   return (
-    <div className="bg-white/5 border border-white/10 rounded-xl p-4 backdrop-blur-md">
-      <h3 className="text-white font-semibold mb-4 flex items-center justify-between">
+    <div className="bg-white/5 border border-white/10 rounded-xl p-3 md:p-4 backdrop-blur-md w-full">
+      <h3 className="text-white font-semibold mb-3 md:mb-4 flex items-center justify-between">
         <span>Players</span>
         <Trophy className="w-4 h-4 text-yellow-400" />
       </h3>
       
-      <div className="space-y-3">
+      <div className="flex flex-row lg:flex-col gap-2 overflow-x-auto lg:overflow-y-auto custom-scrollbar w-full">
         {sortedPlayers.map((player, idx) => {
           const isDrawing = player.userId === gameState.currentDrawerId;
           const hasGuessed = player.hasGuessed;
@@ -27,7 +27,7 @@ export const PlayerList: React.FC = () => {
           return (
             <div 
               key={player.userId}
-              className={`flex items-center justify-between p-2 rounded-lg transition-all ${
+              className={`flex items-center justify-between p-2 rounded-lg transition-all flex-shrink-0 min-w-[140px] lg:min-w-0 lg:w-full ${
                 isDrawing ? 'bg-sky-500/20 border-2 border-sky-500 shadow-[0_0_15px_rgba(14,165,233,0.4)] transform scale-[1.02]' : 
                 hasGuessed ? 'bg-emerald-500/20 border border-emerald-500/30' : 'bg-white/5 border border-white/5'
               } ${!player.isOnline ? 'opacity-40 grayscale' : ''}`}
@@ -45,7 +45,7 @@ export const PlayerList: React.FC = () => {
                 </div>
               </div>
               
-              <div className="flex items-center">
+              <div className="flex items-center ml-2">
                 {isDrawing && (
                   <span className="text-xl" title="Drawing">🎨</span>
                 )}

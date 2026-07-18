@@ -39,11 +39,21 @@ export const InkCanvas: React.FC<InkCanvasProps> = ({
   const lastTimeRef = useRef(0);
   const lastPointRef = useRef<Point | null>(null);
 
+  // High-DPI and Real-time Prediction Refs
+  const lastServerStrokesCountRef = useRef(0);
+  const committedStrokeRef = useRef<Point[] | null>(null);
+  const remoteStrokeRef = useRef<{ points: Point[]; color: string } | null>(null);
+  const lastPressureRef = useRef(0.5);
+
   // Helper to draw a complete stroke with dynamic thickness
   const drawStroke = useCallback((points: Point[], color: string) => {
     const canvas = canvasRef.current;
     const ctx = ctxRef.current;
     if (!canvas || !ctx || points.length < 2) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const width = canvas.width / dpr;
+    const height = canvas.height / dpr;
 
     ctx.save();
     ctx.lineCap = "round";
@@ -55,10 +65,10 @@ export const InkCanvas: React.FC<InkCanvasProps> = ({
       const p1 = points[i - 1];
       const p2 = points[i];
 
-      const x1 = p1.x * canvas.width;
-      const y1 = p1.y * canvas.height;
-      const x2 = p2.x * canvas.width;
-      const y2 = p2.y * canvas.height;
+      const x1 = p1.x * width;
+      const y1 = p1.y * height;
+      const x2 = p2.x * width;
+      const y2 = p2.y * height;
 
       // Determine width based on pressure/velocity simulation
       const pressure = p2.p ?? 0.5;
@@ -72,8 +82,8 @@ export const InkCanvas: React.FC<InkCanvasProps> = ({
       // Quadratic curve smooth
       if (i < points.length - 1) {
         const p3 = points[i + 1];
-        const xc = (x2 + p3.x * canvas.width) / 2;
-        const yc = (y2 + p3.y * canvas.height) / 2;
+        const xc = (x2 + p3.x * width) / 2;
+        const yc = (y2 + p3.y * height) / 2;
         ctx.quadraticCurveTo(x2, y2, xc, yc);
       } else {
         ctx.lineTo(x2, y2);
@@ -89,24 +99,28 @@ export const InkCanvas: React.FC<InkCanvasProps> = ({
     const ctx = ctxRef.current;
     if (!canvas || !ctx) return;
 
+    const dpr = window.devicePixelRatio || 1;
+    const width = canvas.width / dpr;
+    const height = canvas.height / dpr;
+
     // Draw Japanese Minimalist cream parchment paper color
     ctx.fillStyle = "#FAF8F5";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, width, height);
 
     // Draw grid lines (subtle Japanese shoji screen lines)
     ctx.strokeStyle = "rgba(139, 92, 26, 0.04)";
     ctx.lineWidth = 1;
     const step = 40;
-    for (let x = 0; x < canvas.width; x += step) {
+    for (let x = 0; x < width; x += step) {
       ctx.beginPath();
       ctx.moveTo(x, 0);
-      ctx.lineTo(x, canvas.height);
+      ctx.lineTo(x, height);
       ctx.stroke();
     }
-    for (let y = 0; y < canvas.height; y += step) {
+    for (let y = 0; y < height; y += step) {
       ctx.beginPath();
       ctx.moveTo(0, y);
-      ctx.lineTo(canvas.width, y);
+      ctx.lineTo(width, y);
       ctx.stroke();
     }
 
@@ -116,7 +130,22 @@ export const InkCanvas: React.FC<InkCanvasProps> = ({
         drawStroke(stroke.points, stroke.inkColor);
       });
     }
-  }, [gameState, drawStroke]);
+
+    // Draw active local stroke if drawing
+    if (isDrawing && currentStrokeRef.current.length > 0) {
+      drawStroke(currentStrokeRef.current, inkColor);
+    }
+
+    // Draw predicted/committed local stroke that has not arrived from server yet (flicker prediction)
+    if (committedStrokeRef.current) {
+      drawStroke(committedStrokeRef.current, inkColor);
+    }
+
+    // Draw active remote stroke if present
+    if (remoteStrokeRef.current && remoteStrokeRef.current.points.length > 0) {
+      drawStroke(remoteStrokeRef.current.points, remoteStrokeRef.current.color);
+    }
+  }, [gameState, drawStroke, isDrawing, inkColor]);
 
   // Initialize Canvas
   useEffect(() => {
@@ -125,6 +154,8 @@ export const InkCanvas: React.FC<InkCanvasProps> = ({
     if (!canvas || !container) return;
 
     const resizeCanvas = () => {
+      const dpr = window.devicePixelRatio || 1;
+
       // Save current pixels
       const tempCanvas = document.createElement("canvas");
       tempCanvas.width = canvas.width;
@@ -135,11 +166,14 @@ export const InkCanvas: React.FC<InkCanvasProps> = ({
       }
 
       // Update resolution
-      canvas.width = container.clientWidth;
-      canvas.height = container.clientHeight;
+      canvas.width = container.clientWidth * dpr;
+      canvas.height = container.clientHeight * dpr;
+      canvas.style.width = `${container.clientWidth}px`;
+      canvas.style.height = `${container.clientHeight}px`;
 
       const ctx = canvas.getContext("2d");
       if (ctx) {
+        ctx.scale(dpr, dpr);
         ctxRef.current = ctx;
       }
       
@@ -152,10 +186,19 @@ export const InkCanvas: React.FC<InkCanvasProps> = ({
     return () => window.removeEventListener("resize", resizeCanvas);
   }, [redrawCanvas]);
 
-  // Redraw when strokes list updates
+  // Redraw when strokes list updates and handle committed stroke clear
   useEffect(() => {
+    if (gameState && gameState.strokes) {
+      if (gameState.strokes.length > lastServerStrokesCountRef.current) {
+        committedStrokeRef.current = null;
+        lastServerStrokesCountRef.current = gameState.strokes.length;
+      }
+    } else {
+      lastServerStrokesCountRef.current = 0;
+      committedStrokeRef.current = null;
+    }
     redrawCanvas();
-  }, [redrawCanvas]);
+  }, [gameState, redrawCanvas]);
 
   // Reset drawing block when active turn changes
   useEffect(() => {
@@ -170,20 +213,20 @@ export const InkCanvas: React.FC<InkCanvasProps> = ({
   useEffect(() => {
     const socket = socketService.getSocket();
 
-    let remoteStrokePoints: Point[] = [];
-    let lastColor = "#000";
-
     const onRemoteCanvasEvent = ({ action, data }: { action: string; data: { point: Point; color: string } }) => {
       if (action === "stroke_start") {
-        remoteStrokePoints = [data.point];
-        lastColor = data.color;
+        remoteStrokeRef.current = { points: [data.point], color: data.color };
+        redrawCanvas();
       } else if (action === "stroke_draw") {
-        remoteStrokePoints.push(data.point);
-        // Draw coordinate chunk locally
-        drawStroke(remoteStrokePoints.slice(-2), lastColor);
+        if (remoteStrokeRef.current) {
+          const newPoints = [...remoteStrokeRef.current.points, data.point];
+          remoteStrokeRef.current.points = newPoints;
+          // Draw coordinate chunk locally
+          drawStroke(newPoints.slice(-2), remoteStrokeRef.current.color);
+        }
       } else if (action === "stroke_end") {
-        remoteStrokePoints = [];
-        // The useEffect will handle the high-quality redraw automatically once gameState.strokes is updated.
+        remoteStrokeRef.current = null;
+        redrawCanvas();
       }
     };
 
@@ -192,15 +235,15 @@ export const InkCanvas: React.FC<InkCanvasProps> = ({
     return () => {
       socket.off("ink_deception_canvas_event", onRemoteCanvasEvent);
     };
-  }, [drawStroke]);
+  }, [drawStroke, redrawCanvas]);
 
   const getCoordinates = (e: React.PointerEvent<HTMLCanvasElement>): Point | null => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
 
-    const x = (e.clientX - rect.left) / canvas.width;
-    const y = (e.clientY - rect.top) / canvas.height;
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = (e.clientY - rect.top) / rect.height;
     
     // Simulate pressure from pointer pressure, falling back to speed velocity
     let pressure = 0.5;
@@ -212,8 +255,8 @@ export const InkCanvas: React.FC<InkCanvasProps> = ({
       if (lastPointRef.current && lastTimeRef.current > 0) {
         const dt = now - lastTimeRef.current;
         if (dt > 0) {
-          const dx = (x - lastPointRef.current.x) * canvas.width;
-          const dy = (y - lastPointRef.current.y) * canvas.height;
+          const dx = (x - lastPointRef.current.x) * rect.width;
+          const dy = (y - lastPointRef.current.y) * rect.height;
           const dist = Math.sqrt(dx * dx + dy * dy);
           const vel = dist / dt;
           // Faster speed = less pressure = thinner brush
@@ -223,7 +266,12 @@ export const InkCanvas: React.FC<InkCanvasProps> = ({
       lastTimeRef.current = now;
     }
 
-    return { x, y, p: pressure };
+    // Apply exponential moving average filter for pressure smoothing
+    const lastPressure = lastPressureRef.current;
+    const smoothPressure = lastPressure + (pressure - lastPressure) * 0.35;
+    lastPressureRef.current = smoothPressure;
+
+    return { x, y, p: smoothPressure };
   };
 
   const startDrawing = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -239,6 +287,7 @@ export const InkCanvas: React.FC<InkCanvasProps> = ({
     currentStrokeRef.current = [coords];
     lastPointRef.current = coords;
     lastTimeRef.current = Date.now();
+    lastPressureRef.current = coords.p ?? 0.5;
 
     // Broadcast stroke start to others
     const socket = socketService.getSocket();
@@ -300,6 +349,7 @@ export const InkCanvas: React.FC<InkCanvasProps> = ({
 
     // Trigger stroke completion callback
     if (currentStrokeRef.current.length > 1) {
+      committedStrokeRef.current = currentStrokeRef.current;
       onStrokeComplete(currentStrokeRef.current);
     }
     

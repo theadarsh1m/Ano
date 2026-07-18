@@ -2,11 +2,11 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { 
   Gamepad2, Users, Play, UserPlus, LogOut, Loader2,
   ArrowLeft, Clock, Save, Image as ImageIcon, Check, X,
-  Eye, EyeOff
+  Eye, EyeOff, MessageSquare, BookOpen
 } from "lucide-react";
 import { useUserStore } from "@/store/useUserStore";
 import { useRoomConnectionStore } from "@/store/useRoomConnectionStore";
@@ -58,6 +58,7 @@ function ScribbleGameContent() {
   const [canRedo, setCanRedo] = useState(false);
   const [hideWord, setHideWord] = useState(false);
   const [inviteCopied, setInviteCopied] = useState(false);
+  const [showRulesModal, setShowRulesModal] = useState(false);
 
   // Settings state (only host can change)
   const [rounds, setRounds] = useState(3);
@@ -159,6 +160,68 @@ function ScribbleGameContent() {
     }
   };
 
+  const rulesModal = (
+    <AnimatePresence>
+      {showRulesModal && (
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-6"
+          onClick={() => setShowRulesModal(false)}
+        >
+          <motion.div 
+            initial={{ y: 50, scale: 0.95 }}
+            animate={{ y: 0, scale: 1 }}
+            exit={{ y: 50, scale: 0.95 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-neutral-900 border border-white/10 rounded-3xl p-6 max-w-lg w-full max-h-[85vh] overflow-y-auto text-left relative shadow-2xl custom-scrollbar text-white"
+          >
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold flex items-center gap-2">
+                <BookOpen className="w-6 h-6 text-sky-400" /> Scribble Rules
+              </h2>
+              <button onClick={() => setShowRulesModal(false)} className="text-gray-400 hover:text-white p-1 hover:bg-white/10 rounded-md transition-colors cursor-pointer">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <div className="space-y-4 text-gray-300 text-sm leading-relaxed">
+              <p><strong className="text-white">Goal:</strong> Earn points by drawing secret words or guessing what others are drawing as fast as you can!</p>
+              
+              <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+                <strong className="text-sky-400 block mb-1">Guesser Role:</strong>
+                <p>• When another player draws, type your guess in the chat box.</p>
+                <p>• The faster you guess the word, the more points you get.</p>
+                <p>• Typing a close guess will trigger a hint for you, but won't reveal it to others.</p>
+              </div>
+
+              <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+                <strong className="text-sky-400 block mb-1">Drawer Role:</strong>
+                <p>• When it's your turn to draw, select one of the three secret words presented.</p>
+                <p>• Draw the word on the canvas using colors and tool options to help others guess.</p>
+                <p>• <strong>Rule:</strong> Do NOT write letters or words on the canvas. Earn points when other players successfully guess your drawing!</p>
+              </div>
+
+              <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+                <strong className="text-sky-400 block mb-1">Match End:</strong>
+                <p>• The game goes on for the configured number of rounds.</p>
+                <p>• The player with the highest total score at the end wins the match!</p>
+              </div>
+            </div>
+
+            <button 
+              onClick={() => setShowRulesModal(false)}
+              className="mt-6 w-full py-3 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white rounded-xl font-bold transition-all shadow-lg cursor-pointer"
+            >
+              Got it!
+            </button>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
   // Clear canvas when round ends / changes
   useEffect(() => {
     if (gameState?.turnState === 'WAITING_FOR_WORD') {
@@ -184,34 +247,50 @@ function ScribbleGameContent() {
     const isReady = lobby.players.find(p => p.userId === userId)?.isReady || isHost;
     
     return (
-      <div className="flex flex-col h-full space-y-6 max-w-4xl mx-auto w-full p-4 md:p-8 pb-20">
-        <div className="flex justify-between items-center bg-white/5 border border-white/10 p-4 rounded-2xl backdrop-blur-md">
-          <div className="flex items-center gap-3">
-             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-sky-400 to-indigo-600 flex items-center justify-center shadow-lg">
-                <span className="text-2xl">🎨</span>
-             </div>
-             <div>
-               <h1 className="text-2xl font-bold text-white">Scribble Lobby</h1>
-               <p className="text-sm text-sky-300 font-mono">Join Code: {lobby.id}</p>
-             </div>
+      <div className="flex flex-col h-screen bg-black text-white">
+        {/* Global Header Navbar */}
+        <div className="flex items-center justify-between p-4 bg-white/5 border-b border-white/10 flex-shrink-0">
+          <div className="flex items-center gap-4">
+            <button onClick={handleLeave} className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer">
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <button onClick={() => router.push("/dashboard")} className="flex items-center gap-3 cursor-pointer group hover:opacity-80 transition-opacity">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
+                <MessageSquare className="w-4 h-4 text-white" />
+              </div>
+              <span className="text-lg font-bold text-white">Ano</span>
+            </button>
+            <div className="ml-2 border-l border-white/20 pl-4 hidden md:block">
+              <h1 className="text-xl font-bold text-white flex items-center gap-2">
+                🎨 Scribble Lobby
+              </h1>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex gap-2">
+            <button 
+              onClick={() => setShowRulesModal(true)}
+              className="px-3 sm:px-4 py-2 bg-white/5 border border-white/10 text-gray-300 hover:text-white rounded-full text-sm font-bold flex items-center gap-2 transition-colors hover:bg-white/10 cursor-pointer"
+            >
+              <BookOpen className="w-4 h-4" /> <span className="hidden sm:inline">Rules</span>
+            </button>
             <button 
               onClick={() => {
                 navigator.clipboard.writeText(`${window.location.origin}/dashboard/games/scribble?gameId=${lobby.id}`);
                 setInviteCopied(true);
                 setTimeout(() => setInviteCopied(false), 2000);
               }}
-              className="px-4 py-2 bg-sky-500/20 hover:bg-sky-500/40 text-sky-400 rounded-lg transition-colors flex items-center gap-2"
+              className="px-3 sm:px-4 py-2 bg-sky-500/20 hover:bg-sky-500/35 text-sky-400 rounded-full text-sm font-bold flex items-center gap-2 transition-colors cursor-pointer"
             >
               {inviteCopied ? <Check className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
-              {inviteCopied ? "Copied!" : "Invite"}
+              <span className="hidden sm:inline">{inviteCopied ? "Copied!" : "Invite Link"}</span>
             </button>
-            <button onClick={handleLeave} className="px-4 py-2 bg-red-500/20 hover:bg-red-500/40 text-red-400 rounded-lg transition-colors flex items-center gap-2">
-              <LogOut className="w-4 h-4" /> Leave
+            <button onClick={handleLeave} className="px-3 sm:px-4 py-2 bg-rose-500/20 hover:bg-rose-500/35 text-rose-400 rounded-full text-sm font-bold flex items-center gap-2 transition-colors cursor-pointer">
+              <LogOut className="w-4 h-4" /> <span className="hidden sm:inline">Leave</span>
             </button>
           </div>
         </div>
+
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-20 max-w-4xl mx-auto w-full">
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <GlassCard className="p-6">
@@ -339,7 +418,10 @@ function ScribbleGameContent() {
                </div>
              </div>
            </GlassCard>
+         </div>
         </div>
+        {/* Rules Modal */}
+        {rulesModal}
       </div>
     );
   }
@@ -366,7 +448,7 @@ function ScribbleGameContent() {
     }
 
     return (
-      <div className="flex flex-col h-full w-full p-2 md:p-4 pb-20 max-w-[1600px] mx-auto gap-4">
+      <div className="flex flex-col h-auto lg:h-screen w-full p-2 md:p-4 pb-4 lg:pb-6 max-w-[1600px] mx-auto gap-4 overflow-y-auto lg:overflow-hidden relative">
         {/* Top Header */}
         <div className="flex flex-col md:flex-row justify-between items-center bg-white/5 border border-white/10 rounded-2xl p-3 backdrop-blur-md gap-4">
           <div className="flex items-center gap-4">
@@ -411,18 +493,18 @@ function ScribbleGameContent() {
         </div>
 
         {/* Main Game Area */}
-        <div className="flex flex-col lg:flex-row gap-4 h-[calc(100vh-200px)] min-h-[600px]">
+        <div className="flex flex-col lg:flex-row gap-4 h-auto lg:h-[calc(100vh-200px)] min-h-0 lg:min-h-[600px]">
           
           {/* Left: Player List */}
-          <div className="w-full lg:w-64 flex flex-col gap-4">
+          <div className="w-full lg:w-64 flex flex-col gap-4 flex-shrink-0">
             <PlayerList />
           </div>
 
           {/* Center: Canvas & Tools */}
-          <div className="flex-1 flex flex-col gap-4 relative">
+          <div className="flex-1 flex flex-col gap-4 relative min-w-0">
              <WordSelectionModal />
              
-             <div className="flex-1 border-4 border-white/10 rounded-2xl overflow-hidden relative shadow-2xl">
+             <div className="h-[320px] lg:h-auto lg:flex-1 border-4 border-white/10 rounded-2xl overflow-hidden relative shadow-2xl flex-shrink-0">
                 <ScribbleCanvas 
                   isDrawer={isDrawer}
                   gameId={gameState.gameId}
@@ -480,71 +562,91 @@ function ScribbleGameContent() {
 
   // NO LOBBY, NO GAME - Default entry screen
   return (
-    <div className="flex flex-col h-full space-y-6 max-w-4xl mx-auto w-full p-4 md:p-8 pb-20 items-center justify-center">
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="text-center mb-8"
-      >
-        <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-sky-400 to-indigo-600 flex items-center justify-center shadow-2xl shadow-sky-500/20 mx-auto mb-6">
-           <span className="text-5xl">🎨</span>
-        </div>
-        <h1 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-indigo-500 tracking-tight mb-4">
-          Scribble
-        </h1>
-        <p className="text-gray-400 max-w-md mx-auto text-lg">
-          Draw, guess, and laugh with friends in this fast-paced multiplayer party game!
-        </p>
-      </motion.div>
-
-      <GlassCard className="p-8 w-full max-w-md text-center border-sky-500/20 shadow-xl shadow-sky-500/10">
-        <button
-          onClick={handleCreateLobby}
-          className="w-full py-4 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-sky-500/25 flex items-center justify-center gap-3 text-lg"
-        >
-          <UserPlus className="w-6 h-6" /> Create Private Lobby
-        </button>
-        
-        <div className="my-6 flex items-center gap-4 text-gray-500">
-          <div className="h-px bg-white/10 flex-1"></div>
-          <span className="text-sm font-medium">OR</span>
-          <div className="h-px bg-white/10 flex-1"></div>
-        </div>
-
-        <button
-          onClick={() => router.push('/dashboard/games')}
-          className="w-full py-4 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl font-bold transition-all flex items-center justify-center gap-3 text-lg"
-        >
-          <ArrowLeft className="w-6 h-6" /> Back to Games
-        </button>
-      </GlassCard>
-
-      {/* Public Lobbies */}
-      {availableLobbies.length > 0 && (
-        <div className="w-full max-w-4xl mt-12">
-          <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2 justify-center">
-            <Users className="w-5 h-5 text-sky-400" /> Public Lobbies
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {availableLobbies.map(l => (
-              <GlassCard key={l.id} className="p-4 flex items-center justify-between border-sky-500/20 hover:border-sky-500/50 transition-colors">
-                <div>
-                  <h3 className="font-bold text-white text-lg">{l.hostName}'s Game</h3>
-                  <div className="flex items-center gap-4 text-sm text-gray-400 mt-1">
-                    <span className="flex items-center gap-1"><Users className="w-4 h-4" /> {l.playerCount}/{l.maxPlayers}</span>
-                  </div>
-                </div>
-                <button
-                  onClick={() => joinLobby(l.id, userId, nickname || "Player")}
-                  className="px-6 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-semibold transition-colors"
-                >
-                  Join
-                </button>
-              </GlassCard>
-            ))}
+    <div className="flex flex-col h-screen bg-black text-white">
+      {/* Global Header Navbar */}
+      <div className="flex items-center justify-between p-4 bg-white/5 border-b border-white/10 flex-shrink-0">
+        <div className="flex items-center gap-4">
+          <button onClick={() => router.push("/dashboard/games")} className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <button onClick={() => router.push("/dashboard")} className="flex items-center gap-3 cursor-pointer group hover:opacity-80 transition-opacity">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
+              <MessageSquare className="w-4 h-4 text-white" />
+            </div>
+            <span className="text-lg font-bold text-white">Ano</span>
+          </button>
+          <div className="ml-2 border-l border-white/20 pl-4">
+            <h1 className="text-xl font-bold text-white flex items-center gap-2">
+              🎨 Scribble
+            </h1>
           </div>
         </div>
-      )}
+        <div>
+          <button 
+            onClick={() => setShowRulesModal(true)}
+            className="px-4 py-2 bg-white/5 border border-white/10 text-gray-300 hover:text-white rounded-full text-sm font-bold flex items-center gap-2 transition-colors hover:bg-white/10 cursor-pointer"
+          >
+            <BookOpen className="w-4 h-4" /> Rules
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-20 max-w-4xl mx-auto w-full flex flex-col items-center justify-start md:justify-center gap-6">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center mb-8"
+        >
+          <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-sky-400 to-indigo-600 flex items-center justify-center shadow-2xl shadow-sky-500/20 mx-auto mb-6">
+             <span className="text-5xl">🎨</span>
+          </div>
+          <h1 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-indigo-500 tracking-tight mb-4">
+            Scribble
+          </h1>
+          <p className="text-gray-400 max-w-md mx-auto text-lg">
+            Draw, guess, and laugh with friends in this fast-paced multiplayer party game!
+          </p>
+        </motion.div>
+
+        <GlassCard className="p-8 w-full max-w-md text-center border-sky-500/20 shadow-xl shadow-sky-500/10">
+          <button
+            onClick={handleCreateLobby}
+            className="w-full py-4 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-sky-500/25 flex items-center justify-center gap-3 text-lg cursor-pointer"
+          >
+            <UserPlus className="w-6 h-6" /> Create Private Lobby
+          </button>
+        </GlassCard>
+
+        {/* Public Lobbies */}
+        {availableLobbies.length > 0 && (
+          <div className="w-full max-w-4xl mt-12">
+            <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2 justify-center">
+              <Users className="w-5 h-5 text-sky-400" /> Public Lobbies
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {availableLobbies.map(l => (
+                <GlassCard key={l.id} className="p-4 flex items-center justify-between border-sky-500/20 hover:border-sky-500/50 transition-colors">
+                  <div>
+                    <h3 className="font-bold text-white text-lg">{l.hostName}'s Game</h3>
+                    <div className="flex items-center gap-4 text-sm text-gray-400 mt-1">
+                      <span className="flex items-center gap-1"><Users className="w-4 h-4" /> {l.playerCount}/{l.maxPlayers}</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => joinLobby(l.id, userId, nickname || "Player")}
+                    className="px-6 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-semibold transition-colors cursor-pointer"
+                  >
+                    Join
+                  </button>
+                </GlassCard>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Rules Modal */}
+      {rulesModal}
     </div>
   );
 }

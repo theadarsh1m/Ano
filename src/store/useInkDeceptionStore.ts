@@ -126,6 +126,7 @@ interface InkDeceptionStore {
   leaveLobby: (gameId: string, userId: string) => void;
   updateSettings: (gameId: string, hostId: string, settings: Record<string, unknown>) => void;
   startGame: (gameId: string, hostId: string) => void;
+  invitePlayer: (gameId: string, senderId: string, senderName: string, targetUserId: string) => void;
   
   // Game Actions
   submitQMWord: (gameId: string, userId: string, category: string, word: string) => void;
@@ -183,6 +184,11 @@ export const useInkDeceptionStore = create<InkDeceptionStore>((set, get) => ({
   startGame: (gameId, hostId) => {
     const socket = socketService.getSocket();
     socket.emit('game_start', { gameId, hostId });
+  },
+
+  invitePlayer: (gameId, senderId, senderName, targetUserId) => {
+    const socket = socketService.getSocket();
+    socket.emit('lobby_invite', { gameId, senderId, senderName, targetUserId, gameType: 'INK_DECEPTION' });
   },
 
   submitQMWord: (gameId, userId, category, word) => {

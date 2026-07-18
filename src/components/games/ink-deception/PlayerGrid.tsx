@@ -12,12 +12,12 @@ export const PlayerGrid: React.FC = () => {
   const turnState = gameState?.turnState;
 
   return (
-    <div className="flex flex-col gap-3 h-full overflow-y-auto pr-1 custom-scrollbar">
+    <div className="flex flex-col gap-2 md:gap-3 w-full">
       <h3 className="text-xs font-mono font-bold tracking-[0.2em] text-[#B7C0D8]/40 uppercase mb-1">
         Players ({players.length})
       </h3>
 
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-row lg:flex-col gap-2 overflow-x-auto lg:overflow-y-auto custom-scrollbar w-full pb-1 lg:pb-0">
         {players.map((p) => {
           const isActive = turnState === "DRAWING" && activeDrawerId === p.userId;
           const isFA = p.role === "FAKE_ARTIST" && (
@@ -31,12 +31,12 @@ export const PlayerGrid: React.FC = () => {
               key={p.userId}
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
-              className={`p-3 rounded-2xl border flex items-center justify-between transition-all duration-300 relative ${
+              className={`p-2.5 lg:p-3 rounded-2xl border flex items-center justify-between transition-all duration-300 relative flex-shrink-0 min-w-[140px] lg:min-w-0 lg:w-full ${
                 isActive
                   ? "bg-[#6AA6FF]/10 border-[#6AA6FF] shadow-[0_0_15px_rgba(106,166,255,0.15)]"
                   : p.isOnline 
-                  ? "bg-[#111827]/70 border-slate-800/80 hover:border-slate-700/80" 
-                  : "bg-slate-900/30 border-slate-800/40 text-slate-500 opacity-50 grayscale"
+                  ? "bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20" 
+                  : "bg-white/5 border-white/5 text-slate-500 opacity-50 grayscale"
               }`}
             >
               {/* Active Drawer breathing neon pulse */}
@@ -47,7 +47,7 @@ export const PlayerGrid: React.FC = () => {
               <div className="flex items-center gap-3">
                 {/* Avatar with dynamic border color matching their assigned ink color */}
                 <div
-                  className="w-9 h-9 rounded-full border-2 flex items-center justify-center bg-slate-900/90 flex-shrink-0 relative"
+                  className="w-9 h-9 rounded-full border-2 flex items-center justify-center bg-black/40 flex-shrink-0 relative"
                   style={{ borderColor: p.isOnline ? p.inkColor : "#475569" }}
                 >
                   <span className="text-xs font-bold uppercase" style={{ color: p.isOnline ? p.inkColor : "#64748b" }}>
@@ -64,7 +64,7 @@ export const PlayerGrid: React.FC = () => {
 
                 <div className="flex flex-col min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <span className="font-bold text-sm text-[#FAF8F5] truncate max-w-[100px]">
+                    <span className="font-bold text-sm text-white truncate max-w-[100px]">
                       {p.nickname}
                     </span>
 

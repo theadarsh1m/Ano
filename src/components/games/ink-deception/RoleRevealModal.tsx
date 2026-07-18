@@ -10,9 +10,8 @@ export const RoleRevealModal: React.FC = () => {
   const { gameState, notifyRoleSeen } = useInkDeceptionStore();
   const { id: userId } = useUserStore();
 
-  const [isFlipped, setIsFlipped] = useState(false);
+  const [isFlipped, setIsFlipped] = useState(true);
   const [roleSeen, setRoleSeen] = useState(false);
-  const flipScheduledRef = useRef(false);
   const prevRoundRef = useRef<number | null>(null);
 
   // Refs to always have the latest values inside setTimeout callbacks (avoid stale closures)
@@ -33,7 +32,7 @@ export const RoleRevealModal: React.FC = () => {
     roleSeenRef.current = roleSeen;
   }, [gameState?.gameId, userId, roleSeen]);
 
-  // Fire role_seen via store action (uses same socket as the rest of the game)
+  // Fire role_seen via store action
   const doNotifyRoleSeen = () => {
     if (roleSeenRef.current) return;
     const gId = gameIdRef.current;
@@ -44,51 +43,38 @@ export const RoleRevealModal: React.FC = () => {
     notifyRoleSeen(gId, uId);
   };
 
-  // Reset + schedule auto-flip whenever modal opens for a new round
+  // Auto-notify server 1s after modal opens so that the game transitions smoothly
   useEffect(() => {
     if (!showModal) {
-      flipScheduledRef.current = false;
-      setIsFlipped(false);
       setRoleSeen(false);
       roleSeenRef.current = false;
       return;
     }
 
     const currentRound = gameState?.currentRound ?? 0;
-
-    if (flipScheduledRef.current && prevRoundRef.current === currentRound) {
-      return;
-    }
-
-    // New reveal — reset and schedule auto-flip
-    flipScheduledRef.current = true;
     prevRoundRef.current = currentRound;
-    setIsFlipped(false);
     setRoleSeen(false);
     roleSeenRef.current = false;
 
-    const flipTimer = setTimeout(() => {
-      setIsFlipped(true);
-      soundService.playCardFlip();
-      setTimeout(() => soundService.playReveal(), 150);
-      // Auto-notify server 1s after card flips (gives player a moment to read)
-      setTimeout(() => doNotifyRoleSeen(), 1000);
-    }, 1500);
+    // Play card flip sound automatically on open
+    soundService.playCardFlip();
+    const flipSoundTimer = setTimeout(() => {
+      soundService.playReveal();
+    }, 150);
 
-    return () => clearTimeout(flipTimer);
+    // Auto notify server seen state
+    const notifyTimer = setTimeout(() => {
+      doNotifyRoleSeen();
+    }, 1000);
+
+    return () => {
+      clearTimeout(flipSoundTimer);
+      clearTimeout(notifyTimer);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showModal, gameState?.currentRound]);
 
   if (!showModal || !myPlayer) return null;
-
-  const handleTap = () => {
-    if (!isFlipped) {
-      setIsFlipped(true);
-      soundService.playCardFlip();
-      setTimeout(() => soundService.playReveal(), 150);
-      setTimeout(() => doNotifyRoleSeen(), 600);
-    }
-  };
 
   return (
     <AnimatePresence>
@@ -120,60 +106,23 @@ export const RoleRevealModal: React.FC = () => {
             Your Role Has Been Assigned
           </motion.p>
 
-          {/* Flipping card */}
+          {/* Card View */}
           <motion.div
             initial={{ scale: 0.9, y: 30 }}
             animate={{ scale: 1, y: 0 }}
             transition={{ type: "spring", stiffness: 100, damping: 15 }}
-            className="w-[300px] h-[420px] cursor-pointer perspective"
-            onClick={handleTap}
+            className="w-[300px] h-[420px] perspective"
           >
             <motion.div
-              animate={{ rotateY: isFlipped ? 180 : 0 }}
-              transition={{ duration: 0.65, ease: [0.43, 0.13, 0.23, 0.96] }}
-              className="w-full h-full relative preserve-3d"
+              className="w-full h-full relative"
             >
-              {/* ── BACK FACE ── */}
-              <div className="absolute inset-0 w-full h-full rounded-[28px] bg-[#0d1421] border-2 border-[#6AA6FF]/20 shadow-2xl flex flex-col items-center justify-center p-6 backface-hidden">
-                <div className="w-24 h-24 rounded-full border-4 border-double border-[#6AA6FF]/25 flex items-center justify-center bg-slate-900/60 mb-8">
-                  <span className="text-4xl text-[#6AA6FF] font-mono">墨</span>
-                </div>
-                <h3 className="text-[10px] font-mono tracking-[0.25em] text-[#B7C0D8]/50 uppercase mb-2">
-                  Ink & Deception
-                </h3>
-                <h2 className="text-xl font-black tracking-[0.1em] text-white mb-10">
-                  REVEAL ROLE
-                </h2>
-
-                {/* Animated tap prompt */}
-                <motion.p
-                  animate={{ opacity: [0.4, 1, 0.4] }}
-                  transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
-                  className="text-xs text-[#6AA6FF] font-mono tracking-widest"
-                >
-                  TAP TO FLIP
-                </motion.p>
-
-                {/* Auto-flip progress bar */}
-                <motion.div
-                  className="absolute bottom-6 left-8 right-8 h-0.5 bg-[#6AA6FF]/10 rounded-full overflow-hidden"
-                >
-                  <motion.div
-                    className="h-full bg-[#6AA6FF]/50 rounded-full"
-                    initial={{ width: "0%" }}
-                    animate={{ width: isFlipped ? "100%" : "100%" }}
-                    transition={{ duration: 1.5, ease: "linear" }}
-                  />
-                </motion.div>
-              </div>
-
-              {/* ── FRONT FACE ── */}
-              <div className="absolute inset-0 w-full h-full rounded-[28px] bg-[#FAF8F5] text-slate-900 border-4 border-slate-900 shadow-2xl flex flex-col justify-between p-5 rotate-y-180 backface-hidden overflow-hidden">
+              {/* Card Face */}
+              <div className="absolute inset-0 w-full h-full rounded-[28px] bg-[#FAF8F5] text-slate-900 border-4 border-slate-900 shadow-2xl flex flex-col justify-between p-5 overflow-hidden">
 
                 {/* Header strip */}
                 <div className="flex justify-between items-center border-b border-slate-900/10 pb-3 flex-shrink-0">
                   <span className="text-[10px] font-mono font-bold tracking-widest text-slate-500 uppercase truncate max-w-[70%]">
-                    {category}
+                    Category: {category}
                   </span>
                   <span className="text-sm">💮</span>
                 </div>
@@ -272,53 +221,21 @@ export const RoleRevealModal: React.FC = () => {
                   )}
                 </div>
 
-                {/* Footer / Ready button */}
+                {/* Footer status text */}
                 <div className="border-t border-slate-900/10 pt-3 flex-shrink-0">
-                  {isFlipped ? (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); doNotifyRoleSeen(); soundService.playClick(); }}
-                      disabled={roleSeen}
-                      className={`w-full py-2.5 rounded-xl font-mono text-[11px] font-black tracking-widest uppercase transition-all ${
-                        roleSeen
-                          ? 'bg-slate-200 text-slate-400 cursor-default'
-                          : 'bg-slate-900 text-white hover:bg-slate-700 active:scale-95 cursor-pointer shadow-md'
-                      }`}
-                    >
-                      {roleSeen ? '✓ READY' : "I'M READY →"}
-                    </button>
-                  ) : (
-                    <span className="text-[9px] font-mono text-slate-400 tracking-wider uppercase block text-center">
-                      INK &amp; DECEPTION · MEMORISE YOUR ROLE
-                    </span>
-                  )}
+                  <span className="text-[9px] font-mono text-slate-500 tracking-widest uppercase block text-center animate-pulse">
+                    Game starting in {gameState?.timeLeft}s...
+                  </span>
                 </div>
               </div>
             </motion.div>
           </motion.div>
 
-          {/* Below-card status */}
-          <AnimatePresence>
-            {isFlipped && (
-              <motion.div
-                key="hint"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ delay: 0.5 }}
-                className="mt-5 text-center"
-              >
-                {roleSeen ? (
-                  <p className="text-[10px] font-mono text-emerald-400/70 tracking-widest uppercase">
-                    ✓ Waiting for other players...
-                  </p>
-                ) : (
-                  <p className="text-[10px] font-mono text-[#B7C0D8]/40 tracking-widest uppercase">
-                    Tap <span className="text-white/60">I&apos;M READY</span> when memorised
-                  </p>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <div className="mt-5 text-center">
+            <p className="text-[10px] font-mono text-[#6AA6FF]/60 tracking-widest uppercase animate-pulse">
+              Memorise your role card
+            </p>
+          </div>
         </div>
       </motion.div>
     </AnimatePresence>
