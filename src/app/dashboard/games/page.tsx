@@ -69,6 +69,14 @@ export default function GamesHubPage() {
       icon: "🎨",
       color: "from-sky-400 to-indigo-600",
       href: "/dashboard/games/scribble"
+    },
+    {
+      id: "ink-deception",
+      title: "Ink & Deception",
+      description: "One Drawing. One Impostor. Trust No Stroke. Expose the Fake Artist or blend in and guess the secret word!",
+      icon: "🖌️",
+      color: "from-slate-900 via-indigo-950 to-pink-950 border-[#FF5DA8]/20",
+      href: "/dashboard/games/ink-deception"
     }
   ];
 
