@@ -76,6 +76,12 @@ A classic turn-based memory card matching game.
 *   **Matching**: Players flip 2 cards. If they match, the player scores a point and takes another turn.
 *   **Victory**: The player with the most matches when all cards are cleared wins.
 
+### 🖌️ Ink & Deception
+A turn-based multiplayer social deduction drawing game.
+*   **Role Setup**: One player is secretly selected as the Impostor (Fake Artist). Only Artists receive the secret word.
+*   **Drawing**: Each player draws exactly twice, but only one continuous stroke per turn.
+*   **Accusation**: Players vote for the suspect. If the Impostor is caught, they get one final chance to guess the secret word to win.
+
 ---
 
 ## 🛠️ File Structure
@@ -89,6 +95,7 @@ A classic turn-based memory card matching game.
 │   │   ├── dots-and-boxes/
 │   │   ├── memory-match/
 │   │   ├── bluff/
+│   │   ├── ink-deception/  # authoritative Ink & Deception state machine
 │   │   ├── socket/         # Socket.IO event registrations
 │   │   ├── lobby/          # Room lobby structures
 │   │   └── services/       # Game state database persistence

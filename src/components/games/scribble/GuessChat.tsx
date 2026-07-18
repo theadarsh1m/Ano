@@ -29,7 +29,7 @@ export const GuessChat: React.FC<GuessChatProps> = ({ gameId, isDrawer }) => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-white/5 border border-white/10 rounded-xl overflow-hidden backdrop-blur-md flex-1">
+    <div className="flex flex-col h-[280px] lg:h-full bg-white/5 border border-white/10 rounded-xl overflow-hidden backdrop-blur-md flex-1">
       <div className="bg-black/20 p-3 border-b border-white/10">
         <h3 className="text-white font-semibold flex items-center gap-2">
           Guess Chat

@@ -2,7 +2,7 @@
 
 class SoundEngine {
   private ctx: AudioContext | null = null;
-  public isMuted: boolean = false;
+  public isMuted: boolean = true;
 
   private getContext() {
     if (this.isMuted) return null;

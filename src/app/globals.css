@@ -246,3 +246,28 @@
 .animate-fly-right {
   animation: fly-right 0.35s ease-in-out forwards;
 }
+
+/* Card Flip & 3D Utilities */
+.perspective {
+  perspective: 1200px;
+}
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+.backface-hidden {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.rotate-y-180 {
+  transform: rotateY(180deg);
+}
+
+/* SVG Dotted Connective Lines Animation */
+@keyframes dash {
+  to {
+    stroke-dashoffset: -40;
+  }
+}
+.animate-dash {
+  animation: dash 1.5s linear infinite;
+}

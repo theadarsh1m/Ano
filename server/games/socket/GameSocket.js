@@ -5,6 +5,7 @@ const DotsAndBoxesEngine = require('../dots-and-boxes/DotsAndBoxesEngine');
 const YatzyEngine = require('../yatzy/YatzyEngine');
 const ColorWarsEngine = require('../color-wars/ColorWarsEngine');
 const ScribbleEngine = require('../scribble/ScribbleEngine');
+const InkDeceptionEngine = require('../ink-deception/InkDeceptionEngine');
 const userService = require('../../services/userService');
 
 const ENGINE_MAP = {
@@ -14,6 +15,7 @@ const ENGINE_MAP = {
   'YATZY': YatzyEngine,
   'COLOR_WARS': ColorWarsEngine,
   'SCRIBBLE': ScribbleEngine,
+  'INK_DECEPTION': InkDeceptionEngine,
 };
 
 const GAME_DISPLAY_NAMES = {
@@ -23,6 +25,7 @@ const GAME_DISPLAY_NAMES = {
   'YATZY': 'Yatzy',
   'COLOR_WARS': 'Color Wars',
   'SCRIBBLE': 'Scribble',
+  'INK_DECEPTION': 'Ink & Deception',
 };
 
 function registerGameSockets(io, socket, onlineUsers, activeGames) {
@@ -217,10 +220,13 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
   });
 
   const broadcastGameStates = (gameId, engine) => {
+    console.log(`[${new Date().toISOString()}] [GameSocket] broadcastGameStates for gameType="${engine.gameType}" gameId="${gameId}". Player count: ${engine.players.size}`);
     engine.players.forEach((p, id) => {
       const sockets = onlineUsers.get(id);
+      console.log(`[${new Date().toISOString()}] [GameSocket] Player "${p.nickname}" (${id}) online sockets:`, sockets ? Array.from(sockets) : 'none');
       if (sockets) {
         sockets.forEach(sId => {
+          console.log(`[${new Date().toISOString()}] [GameSocket] Emitting game_state for "${p.nickname}" to socket ${sId}`);
           io.to(sId).emit('game_state', engine.serializeState(id));
         });
       }
@@ -256,12 +262,15 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
           gameType: engine.gameType,
           hostId: userId,
           hostName: hostP.nickname,
-          players: Array.from(engine.players.values()).map(p => ({
-            userId: p.userId,
-            nickname: p.nickname,
-            role: p.role,
-            isReady: p.role === 'HOST'
-          })),
+          players: new Map(Array.from(engine.players.values()).map(p => [
+            p.userId,
+            {
+              userId: p.userId,
+              nickname: p.nickname,
+              role: p.role,
+              isReady: p.role === 'HOST'
+            }
+          ])),
           settings: engine.settings,
           status: 'WAITING',
           createdAt: new Date(),
@@ -270,12 +279,8 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
         });
         
         activeGames.delete(gameId);
-        io.to(gameId).emit('lobby_state', LobbyService.serializeLobby(LobbyService.lobbies.get(gameId)));
+        io.to(gameId).emit('lobby_state', serializeLobby(LobbyService.lobbies.get(gameId)));
         
-        const broadcastLobbies = () => {
-          const publicLobbies = LobbyService.getPublicLobbies();
-          io.emit('lobbies_list', publicLobbies.map(l => LobbyService.serializeLobby(l)));
-        };
         broadcastLobbies();
         return;
       } else {
@@ -336,11 +341,35 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
     
     if (engine.currentDrawerId !== userId) return;
     
-    // NOTE: In a real environment, you'd upload imageData to Cloudinary here.
-    // For now, we will simulate the upload to prevent breaking if Cloudinary isn't configured.
     console.log(`[Scribble] Received canvas image to save for game ${gameId}`);
-    // Example: const url = await cloudinary.uploader.upload(imageData);
-    // You could persist this url to the GameResult or a new database table.
+  });
+
+  // ========================
+  // INK & DECEPTION CANVAS EVENTS
+  // ========================
+  socket.on('ink_deception_canvas_event', ({ gameId, userId, action, data }) => {
+    const engine = activeGames.get(gameId);
+    if (!engine || engine.gameType !== 'INK_DECEPTION') return;
+    
+    // Server validation: only active drawer can broadcast drawing coordinates
+    if (engine.turnState === 'DRAWING') {
+      const activeDrawerId = engine.drawingQueue[engine.currentDrawerIndex];
+      if (activeDrawerId !== userId) return;
+    } else {
+      return;
+    }
+
+    socket.to(gameId).emit('ink_deception_canvas_event', { action, data });
+  });
+
+  socket.on('ink_deception_save_canvas', async ({ gameId, userId, imageData }) => {
+    const engine = activeGames.get(gameId);
+    if (!engine || engine.gameType !== 'INK_DECEPTION') return;
+    
+    const activeDrawerId = engine.drawingQueue[engine.currentDrawerIndex];
+    if (activeDrawerId !== userId) return;
+    
+    console.log(`[Ink & Deception] Received canvas image to save for game ${gameId}`);
   });
 
 
@@ -377,10 +406,15 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
       // 2. Clean up active games
       for (const [gameId, engine] of activeGames.entries()) {
         if (engine.players.has(disconnectedUserId)) {
-          const removed = engine.removePlayer(disconnectedUserId);
-          if (removed) {
+          if (engine.gameType === 'INK_DECEPTION') {
+            engine.handlePlayerDisconnect(disconnectedUserId);
             broadcastGameStates(gameId, engine);
-            if (engine.players.size === 0) activeGames.delete(gameId);
+          } else {
+            const removed = engine.removePlayer(disconnectedUserId);
+            if (removed) {
+              broadcastGameStates(gameId, engine);
+              if (engine.players.size === 0) activeGames.delete(gameId);
+            }
           }
         }
       }
@@ -395,7 +429,11 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
 
     const player = engine.players.get(userId);
     if (player) {
-      player.isOnline = true;
+      if (engine.gameType === 'INK_DECEPTION') {
+        engine.handlePlayerReconnect(userId);
+      } else {
+        player.isOnline = true;
+      }
       socket.join(gameId);
       socket.emit('game_state', engine.serializeState(userId));
       io.to(gameId).emit('player_reconnected', { userId, nickname: player.nickname });
