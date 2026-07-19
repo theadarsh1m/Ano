@@ -6,6 +6,7 @@ const YatzyEngine = require('../yatzy/YatzyEngine');
 const ColorWarsEngine = require('../color-wars/ColorWarsEngine');
 const ScribbleEngine = require('../scribble/ScribbleEngine');
 const InkDeceptionEngine = require('../ink-deception/InkDeceptionEngine');
+const ChamberClashEngine = require('../chamber-clash/ChamberClashEngine');
 const userService = require('../../services/userService');
 
 const ENGINE_MAP = {
@@ -16,6 +17,7 @@ const ENGINE_MAP = {
   'COLOR_WARS': ColorWarsEngine,
   'SCRIBBLE': ScribbleEngine,
   'INK_DECEPTION': InkDeceptionEngine,
+  'CHAMBER_CLASH': ChamberClashEngine,
 };
 
 const GAME_DISPLAY_NAMES = {
@@ -26,6 +28,7 @@ const GAME_DISPLAY_NAMES = {
   'COLOR_WARS': 'Color Wars',
   'SCRIBBLE': 'Scribble',
   'INK_DECEPTION': 'Ink & Deception',
+  'CHAMBER_CLASH': 'Chamber Clash',
 };
 
 function registerGameSockets(io, socket, onlineUsers, activeGames) {
@@ -125,7 +128,7 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
     
     // Also remove from active game if playing
     const engine = activeGames.get(gameId);
-    if (engine) {
+    if (engine && engine.status !== 'FINISHED') {
       const removed = engine.removePlayer(userId);
       if (removed) {
         broadcastGameStates(gameId, engine);
@@ -192,6 +195,21 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
       return socket.emit('game_error', { message: 'Unsupported game type.' });
     }
     let engine = new EngineClass(gameId);
+    engine.onEvent = (type, data) => {
+      io.to(gameId).emit(type, data);
+      // Auto-sync game state on critical events to prevent desyncs (e.g. on timeouts or skip turns)
+      const SYNC_EVENTS = ['round_started', 'turn_started', 'player_damaged', 'player_healed', 'player_eliminated', 'game_started', 'round_finished', 'status_added', 'status_removed', 'extra_turn_granted'];
+      if (SYNC_EVENTS.includes(type)) {
+        broadcastGameStates(gameId, engine);
+      }
+    };
+    engine.onPrivateEvent = (targetUserId, type, data) => {
+      const targetSockets = onlineUsers.get(targetUserId);
+      if (targetSockets) {
+        targetSockets.forEach(sId => io.to(sId).emit(type, data));
+      }
+    };
+
     if (lobby.settings) {
       engine.settings = { ...engine.settings, ...lobby.settings };
     }
@@ -301,8 +319,23 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
     if (res.broadcastEvent) {
       io.to(gameId).emit(res.broadcastEvent.type, res.broadcastEvent.data);
     }
+    if (res.broadcastEvents && Array.isArray(res.broadcastEvents)) {
+      res.broadcastEvents.forEach(evt => {
+        io.to(gameId).emit(evt.type, evt.data);
+      });
+    }
+    if (res.privateEvents && Array.isArray(res.privateEvents)) {
+      res.privateEvents.forEach(evt => {
+        const sockets = onlineUsers.get(evt.userId);
+        if (sockets) {
+          sockets.forEach(sId => io.to(sId).emit(evt.type, evt.data));
+        }
+      });
+    }
 
-    broadcastGameStates(gameId, engine);
+    if (res.forceStateSync !== false) {
+      broadcastGameStates(gameId, engine);
+    }
 
     // Wire up delayed broadcast callback (used by MemoryMatch for mismatch flip-back)
     engine._broadcastCallback = () => {
@@ -410,10 +443,12 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
             engine.handlePlayerDisconnect(disconnectedUserId);
             broadcastGameStates(gameId, engine);
           } else {
-            const removed = engine.removePlayer(disconnectedUserId);
-            if (removed) {
-              broadcastGameStates(gameId, engine);
-              if (engine.players.size === 0) activeGames.delete(gameId);
+            if (engine.status !== 'FINISHED') {
+              const removed = engine.removePlayer(disconnectedUserId);
+              if (removed) {
+                broadcastGameStates(gameId, engine);
+                if (engine.players.size === 0) activeGames.delete(gameId);
+              }
             }
           }
         }

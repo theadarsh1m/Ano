@@ -290,6 +290,7 @@ enum GameType {
   COLOR_WARS
   SCRIBBLE
   INK_DECEPTION
+  CHAMBER_CLASH
 }
 
 enum GameStatus {

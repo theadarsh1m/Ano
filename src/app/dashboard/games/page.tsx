@@ -77,6 +77,14 @@ export default function GamesHubPage() {
       icon: "🖌️",
       color: "from-slate-900 via-indigo-950 to-pink-950 border-[#FF5DA8]/20",
       href: "/dashboard/games/ink-deception"
+    },
+    {
+      id: "chamber-clash",
+      title: "Chamber Clash",
+      description: "Manage risk, use items, and survive the chamber in this tense 2-8 player strategy game!",
+      icon: "🔫",
+      color: "from-slate-800 to-zinc-900 border-red-500/20",
+      href: "/dashboard/games/chamber-clash"
     }
   ];
 

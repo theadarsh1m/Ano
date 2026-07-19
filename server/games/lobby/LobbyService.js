@@ -25,7 +25,7 @@ class LobbyService {
       settings: {
         maxPlayers: MAX_PLAYERS[gameType] || DEFAULT_MAX_PLAYERS,
         boardSize: gameType === 'COLOR_WARS' ? 7 : (gameType === 'DOTS_AND_BOXES' ? 5 : undefined), // Default 7x7 for Color Wars
-        turnTimer: (gameType === 'COLOR_WARS' || gameType === 'DOTS_AND_BOXES') ? 30 : undefined, // 30s turn timer
+        turnTimer: (gameType === 'COLOR_WARS' || gameType === 'DOTS_AND_BOXES' || gameType === 'CHAMBER_CLASH') ? 30 : undefined, // 30s turn timer
         pairCount: gameType === 'MEMORY_MATCH' ? 12 : undefined, // Default 12 pairs (4x6) for Memory Match
         bonusThreshold: gameType === 'YATZY' ? 63 : undefined, // Upper section bonus threshold for Yatzy
       }

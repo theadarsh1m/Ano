@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Zap } from "lucide-react";
+import { sounds } from "@/lib/sounds";
 
 interface TurnIndicatorProps {
   isMyTurn: boolean;
@@ -10,6 +11,7 @@ interface TurnIndicatorProps {
 
 const playChime = () => {
   try {
+    if (sounds.isMuted) return;
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioContext) return;
     const ctx = new AudioContext();

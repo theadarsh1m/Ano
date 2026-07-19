@@ -1,0 +1,250 @@
+import { create } from 'zustand';
+import { socketService } from '@/lib/socket';
+import { useUserStore } from '@/store/useUserStore';
+
+export interface ChamberClashPlayer {
+  userId: string;
+  nickname: string;
+  isAlive: boolean;
+  hp: number;
+  inventory: string[];
+  statusEffects: any[];
+}
+
+export interface ChamberClashState {
+  gameId: string;
+  gameType: string;
+  status: string;
+  players: ChamberClashPlayer[];
+  currentTurnPlayerId: string;
+  roundNumber: number;
+  liveShells: number;
+  blankShells: number;
+  settings: any;
+  winnerId: string | null;
+}
+
+export interface ActionLogEntry {
+  id: string;
+  text: string;
+  icon: string;
+  color: string;
+}
+
+interface ChamberClashStore {
+  lobby: any | null;
+  gameState: ChamberClashState | null;
+  pendingGameState: ChamberClashState | null;
+  eventQueue: any[];
+  isAnimating: boolean;
+  availableLobbies: any[];
+  error: string | null;
+  actionLog: ActionLogEntry[];
+  revealedShell: string | null;
+  
+  // Lobby Actions
+  fetchLobbies: () => void;
+  createLobby: (userId: string, nickname: string) => void;
+  joinLobby: (gameId: string, userId: string, nickname: string) => void;
+  leaveLobby: (gameId: string, userId: string) => void;
+  toggleReady: (gameId: string, userId: string, isReady: boolean) => void;
+  startGame: (gameId: string, hostId: string) => void;
+  
+  // Game Actions
+  shootTarget: (gameId: string, userId: string, targetId: string) => void;
+  useItem: (gameId: string, userId: string, itemId: string, targetId?: string) => void;
+
+  // Internal/Setup
+  setupListeners: (gameId: string, userId: string) => () => void;
+  clearState: () => void;
+  
+  // Animation Queue Management
+  dequeueEvent: () => void;
+  setAnimating: (animating: boolean) => void;
+  addLogEntry: (text: string, icon: string, color: string) => void;
+  setRevealedShell: (shell: string | null) => void;
+}
+
+export const useChamberClashStore = create<ChamberClashStore>((set, get) => ({
+  lobby: null,
+  gameState: null,
+  pendingGameState: null,
+  eventQueue: [],
+  isAnimating: false,
+  availableLobbies: [],
+  error: null,
+  actionLog: [],
+  revealedShell: null,
+
+  fetchLobbies: () => {
+    const socket = socketService.getSocket();
+    if (socket) socket.emit('lobbies_list');
+  },
+  
+  createLobby: (userId, nickname) => {
+    const socket = socketService.getSocket();
+    if (socket) socket.emit('lobby_create', { gameType: 'CHAMBER_CLASH', userId, nickname });
+  },
+  
+  joinLobby: (gameId, userId, nickname) => {
+    const socket = socketService.getSocket();
+    if (socket) socket.emit('lobby_join', { gameId, userId, nickname });
+  },
+  
+  leaveLobby: (gameId, userId) => {
+    const socket = socketService.getSocket();
+    if (socket) socket.emit('lobby_leave', { gameId, userId });
+    get().clearState();
+  },
+  
+  toggleReady: (gameId, userId, isReady) => {
+    const socket = socketService.getSocket();
+    if (socket) socket.emit('lobby_ready', { gameId, userId, isReady });
+  },
+  
+  startGame: (gameId, hostId) => {
+    const socket = socketService.getSocket();
+    if (socket) socket.emit('game_start', { gameId, hostId });
+  },
+
+  shootTarget: (gameId, userId, targetId) => {
+    const socket = socketService.getSocket();
+    if (socket) socket.emit('game_action', { gameId, userId, action: 'shoot_target', data: { targetId } });
+  },
+
+  useItem: (gameId, userId, itemId, targetId) => {
+    const socket = socketService.getSocket();
+    if (socket) socket.emit('game_action', { gameId, userId, action: 'use_item', data: { itemId, targetId } });
+  },
+
+  setupListeners: (gameId, userId) => {
+    const socket = socketService.getSocket();
+    if (!socket) return () => {};
+
+    const onLobbyState = (state: any) => set({ lobby: state, error: null });
+    const onLobbiesList = (lobbies: any[]) => {
+      // Filter lobbies for CHAMBER_CLASH since server broadcasts all public lobbies
+      const filtered = lobbies.filter(l => l.gameType === 'CHAMBER_CLASH');
+      set({ availableLobbies: filtered });
+    };
+    
+    const onGameState = (state: ChamberClashState) => {
+      if (state.gameType && state.gameType !== 'CHAMBER_CLASH') return;
+      set((prev) => {
+        if (prev.gameState && (prev.isAnimating || prev.eventQueue.length > 0)) {
+          return { pendingGameState: state, lobby: null, error: null };
+        }
+        return { gameState: state, pendingGameState: null, lobby: null, error: null };
+      });
+    };
+
+    const onGameEvent = (event: any) => {
+      set((state) => ({
+        eventQueue: [...state.eventQueue, { type: event.event, data: event, id: Date.now() + Math.random() }]
+      }));
+    };
+    
+    const onError = (err: any) => {
+      set({ error: err.message || err });
+      setTimeout(() => set({ error: null }), 3000);
+    };
+
+    const handleConnect = () => {
+      const currentLobby = get().lobby;
+      const currentGameState = get().gameState;
+      const currentNickname = useUserStore.getState().nickname || 'Player';
+      if (currentLobby) {
+        socket.emit('lobby_join', {
+          gameId: currentLobby.id,
+          userId,
+          nickname: currentNickname
+        });
+      } else if (currentGameState) {
+        socket.emit('game_reconnect', {
+          gameId: currentGameState.gameId,
+          userId
+        });
+      }
+    };
+
+    const EVENTS = [
+      'round_started',
+      'turn_started',
+      'shot_fired',
+      'player_damaged',
+      'shield_broken',
+      'player_healed',
+      'player_eliminated',
+      'item_used',
+      'status_added',
+      'status_removed',
+      'items_distributed',
+      'extra_turn_granted',
+      'shell_ejected'
+    ];
+
+    const onMagnifier = (data: any) => {
+      set({ revealedShell: data.shell });
+      setTimeout(() => set({ revealedShell: null }), 3500);
+    };
+
+    socket.on('connect', handleConnect);
+    socket.on('lobby_state', onLobbyState);
+    socket.on('lobbies_list_response', onLobbiesList);
+    socket.on('lobbies_updated', onLobbiesList);
+    socket.on('game_state', onGameState);
+    socket.on('game_error', onError);
+    socket.on('item_effect_magnifier', onMagnifier);
+
+    EVENTS.forEach(evtName => {
+      socket.on(evtName, (data) => {
+        set((state) => ({
+          eventQueue: [...state.eventQueue, { type: evtName, data, id: Date.now() + Math.random() }]
+        }));
+      });
+    });
+
+    // Initial fetch for open lobbies only if not joining/in a game
+    if (!gameId) {
+      get().fetchLobbies();
+    }
+
+    return () => {
+      socket.off('connect', handleConnect);
+      socket.off('lobby_state', onLobbyState);
+      socket.off('lobbies_list_response', onLobbiesList);
+      socket.off('lobbies_updated', onLobbiesList);
+      socket.off('game_state', onGameState);
+      socket.off('game_error', onError);
+      socket.off('item_effect_magnifier', onMagnifier);
+      EVENTS.forEach(evtName => {
+        socket.off(evtName);
+      });
+    };
+  },
+
+  setAnimating: (animating) => set({ isAnimating: animating }),
+
+  dequeueEvent: () => {
+    set((state) => {
+      const newQueue = [...state.eventQueue];
+      newQueue.shift();
+      if (newQueue.length === 0 && state.pendingGameState) {
+        return { eventQueue: newQueue, gameState: state.pendingGameState, pendingGameState: null };
+      }
+      return { eventQueue: newQueue };
+    });
+  },
+
+  addLogEntry: (text, icon, color) => {
+    set((state) => {
+      const newLog = [...state.actionLog, { id: Date.now().toString() + Math.random(), text, icon, color }];
+      if (newLog.length > 30) newLog.shift();
+      return { actionLog: newLog };
+    });
+  },
+
+  setRevealedShell: (shell) => set({ revealedShell: shell }),
+
+  clearState: () => set({ lobby: null, gameState: null, pendingGameState: null, error: null, eventQueue: [], isAnimating: false, actionLog: [], revealedShell: null }),
+}));

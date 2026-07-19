@@ -1,0 +1,29 @@
+Created At: 2026-07-19T11:10:58Z
+Completed At: 2026-07-19T11:10:58Z
+File Path: `file:///d:/Adarsh%20learning/My%20projects/ano/src/store/useChamberClashStore.ts`
+Total Lines: 189
+Total Bytes: 5935
+Showing lines 40 to 60
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+40:   fetchLobbies: () => void;
+41:   createLobby: (userId: string, nickname: string) => void;
+42:   joinLobby: (gameId: string, userId: string, nickname: string) => void;
+43:   leaveLobby: (gameId: string, userId: string) => void;
+44:   toggleReady: (gameId: string, userId: string, isReady: boolean) => void;
+45:   startGame: (gameId: string, hostId: string) => void;
+46:   
+47:   // Game Actions
+48:   shootTarget: (gameId: string, userId: string, targetId: string) => void;
+49:   useItem: (gameId: string, userId: string, itemId: string, targetId?: string) => void;
+50: 
+51:   // Internal/Setup
+52:   setupListeners: (gameId: string, userId: string) => () => void;
+53:   clearState: () => void;
+54:   
+55:   // Animation Queue Management
+56:   dequeueEvent: () => void;
+57:   setAnimating: (animating: boolean) => void;
+58: }
+59: 
+60: export const useChamberClashStore = create<ChamberClashStore>((set, get) => ({
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

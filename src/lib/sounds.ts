@@ -6,9 +6,10 @@ class SoundEngine {
 
   private getContext() {
     if (this.isMuted) return null;
+    // Silence background tabs to prevent phantom audio during multiplayer testing
+    if (typeof document !== 'undefined' && document.hidden) return null;
+    
     if (!this.ctx) {
-      // Need user interaction to initialize AudioContext, 
-      // but usually the first click in a game is enough.
       this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
     }
     if (this.ctx.state === 'suspended') {
@@ -27,7 +28,6 @@ class SoundEngine {
     osc.type = type;
     osc.frequency.setValueAtTime(frequency, ctx.currentTime);
     
-    // Envelope
     gainNode.gain.setValueAtTime(0, ctx.currentTime);
     gainNode.gain.linearRampToValueAtTime(vol, ctx.currentTime + 0.05);
     gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
@@ -54,7 +54,6 @@ class SoundEngine {
     const noise = ctx.createBufferSource();
     noise.buffer = buffer;
 
-    // Filter to make it sound like an explosion or hit
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
     filter.frequency.value = 1000;
@@ -107,6 +106,158 @@ class SoundEngine {
   playExplosion() {
     this.playNoise(0.8, 0.8);
     this.playTone(100, 'sawtooth', 0.8, 0.5);
+  }
+
+  // ================================================
+  // Chamber Clash Dedicated Sounds
+  // ================================================
+
+  /** Metallic click for a shell being loaded into the chamber */
+  playShellLoad() {
+    this.playTone(2200, 'square', 0.04, 0.12);
+    setTimeout(() => this.playTone(1800, 'square', 0.05, 0.1), 60);
+  }
+
+  /** Pump-action rack sound */
+  playPump() {
+    // Click 1 (rack back)
+    this.playNoise(0.08, 0.25);
+    this.playTone(600, 'sawtooth', 0.08, 0.15);
+    // Click 2 (rack forward)
+    setTimeout(() => {
+      this.playNoise(0.08, 0.22);
+      this.playTone(500, 'sawtooth', 0.08, 0.12);
+    }, 120);
+  }
+
+  /** Gun cock (lighter) */
+  playGunCock() {
+    this.playTone(800, 'square', 0.1, 0.1);
+    setTimeout(() => this.playTone(900, 'square', 0.1, 0.1), 50);
+  }
+
+  /** Live shotgun blast */
+  playGunShootLive() {
+    // A thick noise burst for the explosion
+    this.playNoise(0.7, 0.95);
+    // A very deep bass rumble
+    this.playTone(50, 'sawtooth', 0.6, 0.95);
+    this.playTone(90, 'sawtooth', 0.4, 0.7);
+    this.playTone(180, 'square', 0.2, 0.4);
+  }
+
+  /** Blank: click + small puff */
+  playGunShootBlank() {
+    // A crisp metallic click (hammer strike)
+    this.playTone(1500, 'triangle', 0.03, 0.2);
+    this.playTone(800, 'square', 0.05, 0.15);
+    // A very tiny puff of air
+    this.playNoise(0.04, 0.05);
+  }
+
+  /** Bottle open + gulp */
+  playDrink() {
+    // Pop
+    this.playTone(1500, 'sine', 0.03, 0.15);
+    // Gulp
+    setTimeout(() => {
+      this.playTone(300, 'sine', 0.08, 0.12);
+      this.playTone(350, 'sine', 0.06, 0.08);
+    }, 120);
+    // Bottle set down
+    setTimeout(() => {
+      this.playTone(200, 'triangle', 0.06, 0.08);
+    }, 300);
+  }
+
+  /** Rising energy hum for shield activation */
+  playShieldActivate() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(200, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.4);
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.5);
+  }
+
+  /** Metallic clank for handcuffs locking */
+  playHandcuffsLock() {
+    this.playTone(800, 'square', 0.06, 0.2);
+    setTimeout(() => this.playTone(600, 'square', 0.08, 0.18), 80);
+    setTimeout(() => this.playTone(400, 'triangle', 0.1, 0.1), 180);
+  }
+
+  /** Grinding saw sound */
+  playHandsaw() {
+    this.playNoise(0.3, 0.15);
+    this.playTone(900, 'sawtooth', 0.25, 0.12);
+    setTimeout(() => this.playTone(1100, 'sawtooth', 0.2, 0.1), 150);
+  }
+
+  /** Shell casing bouncing on table */
+  playShellEject() {
+    this.playTone(3000, 'sine', 0.03, 0.1);
+    setTimeout(() => this.playTone(2500, 'sine', 0.03, 0.07), 80);
+    setTimeout(() => this.playTone(2000, 'sine', 0.03, 0.04), 150);
+  }
+
+  /** Subtle chime for turn start */
+  playTurnChime() {
+    this.playTone(880, 'sine', 0.12, 0.06);
+    setTimeout(() => this.playTone(1100, 'sine', 0.15, 0.05), 100);
+  }
+
+  /** Drum roll for round start */
+  playRoundDrum() {
+    for (let i = 0; i < 6; i++) {
+      setTimeout(() => {
+        this.playNoise(0.06, 0.12 + i * 0.02);
+        this.playTone(100, 'triangle', 0.08, 0.08 + i * 0.01);
+      }, i * 80);
+    }
+  }
+
+  /** Low-frequency double heartbeat */
+  playHeartbeat() {
+    this.playTone(60, 'sawtooth', 0.12, 0.25);
+    setTimeout(() => this.playTone(55, 'sawtooth', 0.12, 0.25), 180);
+  }
+
+  /** Dark descending tone for player elimination */
+  playElimination() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(400, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.8);
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.9);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.9);
+  }
+
+  /** Generic item use sound */
+  playItemUse() {
+    this.playTone(600, 'sine', 0.1, 0.2);
+    setTimeout(() => this.playTone(800, 'sine', 0.2, 0.2), 100);
+  }
+
+  /** Magnifier inspection sound */
+  playInspect() {
+    this.playTone(1000, 'sine', 0.08, 0.08);
+    setTimeout(() => this.playTone(1200, 'sine', 0.1, 0.06), 100);
+    setTimeout(() => this.playTone(1400, 'sine', 0.12, 0.04), 220);
   }
 
   toggleMute() {
