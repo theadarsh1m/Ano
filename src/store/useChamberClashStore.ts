@@ -41,6 +41,7 @@ interface ChamberClashStore {
   error: string | null;
   actionLog: ActionLogEntry[];
   revealedShell: string | null;
+  burnerPhoneReveal: { position: number; shell: string } | null;
   
   // Lobby Actions
   fetchLobbies: () => void;
@@ -52,7 +53,7 @@ interface ChamberClashStore {
   
   // Game Actions
   shootTarget: (gameId: string, userId: string, targetId: string) => void;
-  useItem: (gameId: string, userId: string, itemId: string, targetId?: string) => void;
+  useItem: (gameId: string, userId: string, itemId: string, targetId?: string, stolenItemId?: string) => void;
 
   // Internal/Setup
   setupListeners: (gameId: string, userId: string) => () => void;
@@ -63,6 +64,7 @@ interface ChamberClashStore {
   setAnimating: (animating: boolean) => void;
   addLogEntry: (text: string, icon: string, color: string) => void;
   setRevealedShell: (shell: string | null) => void;
+  setBurnerPhoneReveal: (reveal: { position: number; shell: string } | null) => void;
 }
 
 export const useChamberClashStore = create<ChamberClashStore>((set, get) => ({
@@ -75,6 +77,7 @@ export const useChamberClashStore = create<ChamberClashStore>((set, get) => ({
   error: null,
   actionLog: [],
   revealedShell: null,
+  burnerPhoneReveal: null,
 
   fetchLobbies: () => {
     const socket = socketService.getSocket();
@@ -112,9 +115,9 @@ export const useChamberClashStore = create<ChamberClashStore>((set, get) => ({
     if (socket) socket.emit('game_action', { gameId, userId, action: 'shoot_target', data: { targetId } });
   },
 
-  useItem: (gameId, userId, itemId, targetId) => {
+  useItem: (gameId, userId, itemId, targetId, stolenItemId) => {
     const socket = socketService.getSocket();
-    if (socket) socket.emit('game_action', { gameId, userId, action: 'use_item', data: { itemId, targetId } });
+    if (socket) socket.emit('game_action', { gameId, userId, action: 'use_item', data: { itemId, targetId, stolenItemId } });
   },
 
   setupListeners: (gameId, userId) => {
@@ -172,7 +175,6 @@ export const useChamberClashStore = create<ChamberClashStore>((set, get) => ({
       'turn_started',
       'shot_fired',
       'player_damaged',
-      'shield_broken',
       'player_healed',
       'player_eliminated',
       'item_used',
@@ -180,12 +182,19 @@ export const useChamberClashStore = create<ChamberClashStore>((set, get) => ({
       'status_removed',
       'items_distributed',
       'extra_turn_granted',
-      'shell_ejected'
+      'shell_ejected',
+      'shell_inverted',
+      'item_stolen'
     ];
 
     const onMagnifier = (data: any) => {
       set({ revealedShell: data.shell });
       setTimeout(() => set({ revealedShell: null }), 3500);
+    };
+
+    const onBurnerPhone = (data: any) => {
+      set({ burnerPhoneReveal: { position: data.position, shell: data.shell } });
+      setTimeout(() => set({ burnerPhoneReveal: null }), 4000);
     };
 
     socket.on('connect', handleConnect);
@@ -195,6 +204,7 @@ export const useChamberClashStore = create<ChamberClashStore>((set, get) => ({
     socket.on('game_state', onGameState);
     socket.on('game_error', onError);
     socket.on('item_effect_magnifier', onMagnifier);
+    socket.on('item_effect_burner_phone', onBurnerPhone);
 
     EVENTS.forEach(evtName => {
       socket.on(evtName, (data) => {
@@ -217,6 +227,7 @@ export const useChamberClashStore = create<ChamberClashStore>((set, get) => ({
       socket.off('game_state', onGameState);
       socket.off('game_error', onError);
       socket.off('item_effect_magnifier', onMagnifier);
+      socket.off('item_effect_burner_phone', onBurnerPhone);
       EVENTS.forEach(evtName => {
         socket.off(evtName);
       });
@@ -246,5 +257,7 @@ export const useChamberClashStore = create<ChamberClashStore>((set, get) => ({
 
   setRevealedShell: (shell) => set({ revealedShell: shell }),
 
-  clearState: () => set({ lobby: null, gameState: null, pendingGameState: null, error: null, eventQueue: [], isAnimating: false, actionLog: [], revealedShell: null }),
+  setBurnerPhoneReveal: (reveal) => set({ burnerPhoneReveal: reveal }),
+
+  clearState: () => set({ lobby: null, gameState: null, pendingGameState: null, error: null, eventQueue: [], isAnimating: false, actionLog: [], revealedShell: null, burnerPhoneReveal: null }),
 }));

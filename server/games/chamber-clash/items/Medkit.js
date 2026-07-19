@@ -2,7 +2,7 @@ const BaseItem = {
   id: 'medkit',
   name: 'Medkit',
   description: 'Restores 1 HP. Cannot exceed max HP.',
-  icon: '🩹',
+  icon: '💊',
   rarity: 'uncommon',
   cooldown: 0,
   stackable: true,

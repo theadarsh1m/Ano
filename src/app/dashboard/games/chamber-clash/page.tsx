@@ -14,12 +14,14 @@ import { sounds } from "@/lib/sounds";
 
 // ─── Item Metadata ───
 const ITEM_META: Record<string, { name: string; icon: string; desc: string; color: string; sound: () => void }> = {
-  magnifier: { name: "Magnifier", icon: "🔍", desc: "Peek at the current shell", color: "text-blue-400", sound: () => sounds.playInspect() },
-  medkit:    { name: "Medkit",    icon: "🩹", desc: "Heal 1 HP",               color: "text-green-400", sound: () => sounds.playEat() },
-  handcuffs: { name: "Handcuffs", icon: "⛓️", desc: "Skip target's next turn", color: "text-zinc-400", sound: () => sounds.playHandcuffsLock() },
-  shield:    { name: "Shield",    icon: "🛡️", desc: "Block next damage",       color: "text-cyan-400", sound: () => sounds.playShieldActivate() },
-  handsaw:   { name: "Handsaw",   icon: "🪚", desc: "Double next shot damage", color: "text-orange-400", sound: () => sounds.playHandsaw() },
-  beer:      { name: "Beer",      icon: "🍺", desc: "Eject current shell",     color: "text-amber-400", sound: () => sounds.playDrink() },
+  magnifier:    { name: "Magnifier",    icon: "🔍", desc: "Peek at the current shell", color: "text-blue-400", sound: () => sounds.playInspect() },
+  medkit:       { name: "Medkit",       icon: "💊", desc: "Heal 1 HP",               color: "text-green-400", sound: () => sounds.playEat() },
+  handcuffs:    { name: "Handcuffs",    icon: "⛓️", desc: "Skip target's next turn", color: "text-zinc-400", sound: () => sounds.playHandcuffsLock() },
+  inverter:     { name: "Inverter",     icon: "🔄", desc: "Converts current shell",  color: "text-cyan-400", sound: () => sounds.playInverter() },
+  burner_phone: { name: "Burner Phone", icon: "📞", desc: "Reveal upcoming shell",    color: "text-amber-400", sound: () => sounds.playBurnerPhone() },
+  adrenaline:   { name: "Adrenaline",   icon: "💉", desc: "Steal and immediately use an opponent's item.", color: "text-amber-500", sound: () => sounds.playAdrenaline() },
+  handsaw:      { name: "Handsaw",      icon: "🪚", desc: "Double next shot damage", color: "text-orange-400", sound: () => sounds.playHandsaw() },
+  beer:         { name: "Beer",         icon: "🍺", desc: "Eject current shell",     color: "text-amber-400", sound: () => sounds.playDrink() },
 };
 
 // ─── Helper: get nickname from players list ───
@@ -38,7 +40,7 @@ function ChamberClashGameContent() {
 
   const {
     lobby, gameState, eventQueue, isAnimating, availableLobbies, error,
-    actionLog, revealedShell,
+    actionLog, revealedShell, burnerPhoneReveal,
     createLobby, joinLobby, leaveLobby, toggleReady, startGame,
     shootTarget, useItem,
     setupListeners, dequeueEvent, setAnimating, addLogEntry, clearState
@@ -46,6 +48,9 @@ function ChamberClashGameContent() {
 
   // ─── Local UI State ───
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
+  const [stealModeActive, setStealModeActive] = useState(false);
+  const [stealingFromPlayerId, setStealingFromPlayerId] = useState<string | null>(null);
+  const [stealingAnimation, setStealingAnimation] = useState<{ icon: string; from: { left: string; top: string }; to: { left: string; top: string } } | null>(null);
   const [visualTurnPlayerId, setVisualTurnPlayerId] = useState<string | null>(null);
   const [gunAngle, setGunAngle] = useState(0);
   const [gunState, setGunState] = useState<'idle' | 'pointing' | 'pump' | 'firing'>('idle');
@@ -119,7 +124,7 @@ function ChamberClashGameContent() {
   // ─── Heartbeat for low HP ───
   const me = useMemo(() => gameState?.players.find((p) => p.userId === userId), [gameState?.players, userId]);
   useEffect(() => {
-    if (!gameState || !me || me.hp > 2 || me.hp <= 0) return;
+    if (!gameState || !me || me.hp > 1 || me.hp <= 0) return;
     const iv = setInterval(() => sounds.playHeartbeat(), 1200);
     return () => clearInterval(iv);
   }, [gameState, me?.hp]);
@@ -306,21 +311,27 @@ function ChamberClashGameContent() {
         break;
       }
 
-      // ──── SHIELD BROKEN ────
-      case 'shield_broken': {
-        duration = 1500;
-        sounds.playCrash();
+      // ──── SHELL INVERTED ────
+      case 'shell_inverted': {
+        duration = 1800;
+        setGunState('pointing');
+        sounds.playInverter();
+        setGunAngle(prev => prev + 360);
         
-        // Patch local state
-        useChamberClashStore.setState(state => {
-          if (!state.gameState) return state;
-          const newPlayers = state.gameState.players.map(p => 
-            p.userId === evt.data.playerId ? { ...p, statusEffects: p.statusEffects.filter((e:any) => e.type !== 'SHIELDED') } : p
-          );
-          return { gameState: { ...state.gameState, players: newPlayers } };
-        });
+        setMuzzleFlash(true);
+        setTimeout(() => setMuzzleFlash(false), 300);
 
-        addLogEntry(`${getPlayerName(players, evt.data.playerId)}'s shield shattered!`, "💥", "text-cyan-400");
+        if (evt.data.remainingLive !== undefined) {
+          setTimeout(() => {
+            setShellCounterLive(evt.data.remainingLive);
+            setShellCounterBlank(evt.data.remainingBlank);
+          }, 1000);
+        }
+
+        setTimeout(() => setGunState('idle'), duration - 300);
+        
+        const player = getPlayerName(players, evt.data.playerId);
+        addLogEntry(`${player} inverted the chambered shell (${evt.data.newShell === 'LIVE' ? '🔴 LIVE' : '⚪ BLANK'})`, "🔄", "text-cyan-400");
         break;
       }
 
@@ -456,6 +467,39 @@ function ChamberClashGameContent() {
           return { gameState: { ...state.gameState, players: newPlayers } };
         });
 
+        break;
+      }
+
+      // ──── ITEM STOLEN ────
+      case 'item_stolen': {
+        duration = 1800;
+        const stealerId = evt.data.stealerId;
+        const victimId = evt.data.victimId;
+        const itemId = evt.data.itemId;
+
+        const stealerIdx = orderedPlayers.findIndex(p => p.userId === stealerId);
+        const victimIdx = orderedPlayers.findIndex(p => p.userId === victimId);
+        
+        if (stealerIdx !== -1 && victimIdx !== -1) {
+          const fromPos = getPlayerPos(victimIdx, orderedPlayers.length);
+          const toPos = getPlayerPos(stealerIdx, orderedPlayers.length);
+          
+          setStealingAnimation({
+            icon: ITEM_META[itemId]?.icon || "📦",
+            from: { left: fromPos.left, top: fromPos.top },
+            to: { left: toPos.left, top: toPos.top }
+          });
+        }
+        
+        sounds.playAdrenaline();
+        
+        const stealerName = getPlayerName(players, stealerId);
+        const victimName = getPlayerName(players, victimId);
+        const itemName = ITEM_META[itemId]?.name || itemId;
+        const itemIcon = ITEM_META[itemId]?.icon || "📦";
+
+        addLogEntry(`${stealerName} used Adrenaline`, "💉", "text-amber-500");
+        addLogEntry(`${stealerName} stole ${itemName} from ${victimName}`, itemIcon, "text-amber-400");
         break;
       }
 
@@ -731,6 +775,85 @@ function ChamberClashGameContent() {
           )}
         </AnimatePresence>
 
+        {/* ── Burner Phone Reveal ── */}
+        <AnimatePresence>
+          {burnerPhoneReveal && (
+            <motion.div initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }}
+              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-none">
+              <div className="bg-[#0b0c10] border-2 border-amber-500/40 rounded-3xl p-6 text-center shadow-[0_0_50px_rgba(245,158,11,0.25)] min-w-[240px]">
+                <div className="text-4xl mb-3">📞</div>
+                <div className="text-2xl font-black tracking-wide flex flex-col gap-2">
+                  <div className="text-zinc-300 text-lg uppercase font-bold tracking-widest">Shell <span className="text-amber-400 text-xl font-black">#{burnerPhoneReveal.position}</span></div>
+                  <div className="text-zinc-500 text-xs font-semibold uppercase tracking-widest leading-none">is</div>
+                  <div className={`text-3xl font-black uppercase tracking-wider ${
+                    burnerPhoneReveal.shell === 'LIVE' ? 'text-red-500 animate-pulse' : 'text-zinc-400'
+                  }`}>
+                    {burnerPhoneReveal.shell === 'LIVE' ? '🔴 LIVE' : '⚪ BLANK'}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ── Stealing Target Inventory Modal ── */}
+        <AnimatePresence>
+          {stealingFromPlayerId && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => {
+                setStealingFromPlayerId(null);
+                setStealModeActive(false);
+              }}
+              className="absolute inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+              <motion.div initial={{ scale: 0.95, y: 15 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 10 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-[#0f1115] border border-amber-500/20 rounded-3xl p-6 max-w-sm w-full shadow-[0_0_50px_rgba(0,0,0,0.8)] relative flex flex-col gap-4">
+                
+                {/* Close button */}
+                <button onClick={() => {
+                  setStealingFromPlayerId(null);
+                  setStealModeActive(false);
+                }} className="absolute top-4 right-4 p-1.5 hover:bg-white/10 rounded-lg text-zinc-500 hover:text-zinc-200 transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+
+                <div className="flex items-center gap-3 border-b border-white/[0.06] pb-3">
+                  <span className="text-xl">💉</span>
+                  <div className="text-left">
+                    <h2 className="text-sm font-black uppercase tracking-wider text-amber-400">Steal from {getPlayerName(gameState.players, stealingFromPlayerId)}</h2>
+                    <p className="text-[9px] text-zinc-500 uppercase tracking-widest font-bold">Select one item to inject and steal</p>
+                  </div>
+                </div>
+
+                <div className="space-y-2 mt-2 max-h-[40vh] overflow-y-auto pr-1">
+                  {gameState.players.find(p => p.userId === stealingFromPlayerId)?.inventory.map((itemId, idx) => (
+                    <button key={idx}
+                      onClick={() => {
+                        useItem(gameState.gameId, userId, 'adrenaline', stealingFromPlayerId, itemId);
+                        setStealingFromPlayerId(null);
+                        setStealModeActive(false);
+                      }}
+                      className="w-full p-2.5 bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.04] hover:border-amber-500/30 rounded-xl flex items-center justify-between text-left transition-all hover:scale-[1.01]">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xl">{ITEM_META[itemId]?.icon || "📦"}</span>
+                        <div>
+                          <div className="font-bold text-xs text-zinc-200">{ITEM_META[itemId]?.name || itemId}</div>
+                          <div className="text-[9px] text-zinc-500 leading-normal">{ITEM_META[itemId]?.desc}</div>
+                        </div>
+                      </div>
+                      <span className="text-amber-500 text-[10px] font-black uppercase tracking-wider pl-2 flex-shrink-0">Steal ➔</span>
+                    </button>
+                  ))}
+                  {(!gameState.players.find(p => p.userId === stealingFromPlayerId)?.inventory || 
+                    gameState.players.find(p => p.userId === stealingFromPlayerId)?.inventory.length === 0) && (
+                    <div className="text-center text-xs text-zinc-600 font-bold uppercase tracking-widest py-8">Empty inventory</div>
+                  )}
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* ── Action Log Sidebar (Overlay) ── */}
         <AnimatePresence>
           {showActionLog && (
@@ -781,6 +904,25 @@ function ChamberClashGameContent() {
                 border: '5px solid #22252b',
                 boxShadow: '0 30px 60px rgba(0,0,0,0.8), inset 0 3px 15px rgba(255,255,255,0.03)'
               }}>
+
+              {/* ── Flying Item Steal Animation ── */}
+              <AnimatePresence>
+                {stealingAnimation && (
+                  <motion.div
+                    initial={{ left: stealingAnimation.from.left, top: stealingAnimation.from.top, scale: 0.5, opacity: 0 }}
+                    animate={{ 
+                      left: [stealingAnimation.from.left, "50%", stealingAnimation.to.left], 
+                      top: [stealingAnimation.from.top, "50%", stealingAnimation.to.top], 
+                      scale: [0.5, 1.8, 1],
+                      opacity: [0, 1, 1, 0]
+                    }}
+                    transition={{ duration: 1.5, ease: "easeInOut" }}
+                    className="absolute z-50 text-4xl pointer-events-none -translate-x-1/2 -translate-y-1/2 select-none"
+                  >
+                    {stealingAnimation.icon}
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {/* ── Table Spotlight ── */}
               <div className="absolute inset-0 rounded-[50%] pointer-events-none" style={{
@@ -845,11 +987,18 @@ function ChamberClashGameContent() {
                 const isSkipped = skippedPlayerId === p.userId;
                 const itemAnim = activeItemAnim?.targetId === p.userId ? activeItemAnim.itemId : null;
                 const isMe = p.userId === userId;
-                const canSelect = isMyTurn && p.isAlive && !isMe;
+                const canSteal = stealModeActive && p.isAlive && !isMe && p.inventory?.length > 0;
+                const canSelect = !stealModeActive && isMyTurn && p.isAlive && !isMe;
 
                 return (
                   <motion.div key={p.userId}
-                    onClick={() => canSelect && setSelectedTargetId(p.userId === selectedTargetId ? null : p.userId)}
+                    onClick={() => {
+                      if (stealModeActive) {
+                        if (canSteal) setStealingFromPlayerId(p.userId);
+                      } else {
+                        if (canSelect) setSelectedTargetId(p.userId === selectedTargetId ? null : p.userId);
+                      }
+                    }}
                     style={{ 
                       position: 'absolute', 
                       left: pos.left, top: pos.top, 
@@ -858,20 +1007,20 @@ function ChamberClashGameContent() {
                     }}
                     animate={{ scale: isDamaged ? [1, 0.92, 1.05, 1] : isHealed ? [1, 1.06, 1] : isElim ? [1, 0.9] : 1 }}
                     transition={{ duration: 0.4 }}
-                    className={`w-[110px] sm:w-[130px] p-2 sm:p-2.5 rounded-2xl border-2 flex flex-col items-center gap-1 sm:gap-1.5 z-10 transition-colors duration-300 ${
+                    className={`w-[110px] sm:w-[130px] p-2 sm:p-2.5 rounded-2xl border-2 flex flex-col items-center gap-1 sm:gap-1.5 z-10 transition-all duration-300 ${
                       !p.isAlive ? 'opacity-30 border-zinc-900/50 bg-black/90 grayscale cursor-default' :
-                      isTurn ? 'border-red-500/60 bg-red-950/15 shadow-[0_0_25px_rgba(239,68,68,0.2)] cursor-default' :
-                      isTarget ? 'border-yellow-500/50 bg-yellow-950/10 shadow-[0_0_20px_rgba(234,179,8,0.15)] cursor-pointer' :
-                      canSelect ? 'border-white/[0.06] bg-[#111318]/90 hover:border-white/15 hover:bg-[#151720]/90 cursor-pointer' :
-                      'border-white/[0.04] bg-[#111318]/90 cursor-default'
+                      stealModeActive ? (
+                        canSteal 
+                          ? 'border-amber-500/40 bg-amber-950/10 cursor-pointer shadow-[0_0_15px_rgba(245,158,11,0.2)] hover:border-amber-500/80 hover:scale-[1.03]'
+                          : 'opacity-40 border-white/[0.02] bg-[#111318]/90 cursor-default'
+                      ) : (
+                        isTurn ? 'border-red-500/60 bg-red-950/15 shadow-[0_0_25px_rgba(239,68,68,0.2)] cursor-default' :
+                        isTarget ? 'border-yellow-500/50 bg-yellow-950/10 shadow-[0_0_20px_rgba(234,179,8,0.15)] cursor-pointer' :
+                        canSelect ? 'border-white/[0.06] bg-[#111318]/90 hover:border-white/15 hover:bg-[#151720]/90 cursor-pointer' :
+                        'border-white/[0.04] bg-[#111318]/90 cursor-default'
+                      )
                     }`}>
 
-                    {/* Shield effect */}
-                    {p.isAlive && p.statusEffects?.some((e: any) => e.type === 'SHIELDED') && (
-                      <div className="absolute inset-0 rounded-2xl border-2 border-cyan-400/40 pointer-events-none" style={{
-                        boxShadow: 'inset 0 0 12px rgba(34,211,238,0.15)', animation: 'cc-vignette-pulse 2s infinite'
-                      }} />
-                    )}
 
                     {/* Handcuff overlay */}
                     {p.isAlive && (p.statusEffects?.some((e: any) => e.type === 'SKIP_TURN') || isSkipped) && (
@@ -931,15 +1080,21 @@ function ChamberClashGameContent() {
                       <div className="flex gap-1">
                         {p.statusEffects.map((e: any, i: number) => (
                           <span key={i} className="text-[8px] sm:text-[10px]" title={e.type}>
-                            {e.type === 'SHIELDED' ? '🛡️' : e.type === 'SKIP_TURN' ? '⛓️' : e.type === 'DOUBLE_DAMAGE' ? '🪚' : '⚡'}
+                            {e.type === 'SKIP_TURN' ? '⛓️' : e.type === 'DOUBLE_DAMAGE' ? '🪚' : '⚡'}
                           </span>
                         ))}
                       </div>
                     )}
 
-                    {/* Item count */}
+                    {/* Item inventory emojis */}
                     {p.isAlive && p.inventory?.length > 0 && (
-                      <div className="text-[8px] sm:text-[9px] text-zinc-500 font-bold">{p.inventory.length} item{p.inventory.length !== 1 ? 's' : ''}</div>
+                      <div className="flex flex-wrap justify-center gap-0.5 mt-0.5 max-w-[96px]">
+                        {p.inventory.map((itemId: string, idx: number) => (
+                          <span key={idx} className="text-[10px] sm:text-xs" title={ITEM_META[itemId]?.name || itemId}>
+                            {ITEM_META[itemId]?.icon || "📦"}
+                          </span>
+                        ))}
+                      </div>
                     )}
                   </motion.div>
                 );
@@ -952,52 +1107,73 @@ function ChamberClashGameContent() {
         <div className="relative z-30 bg-black/70 border-t border-white/[0.04] backdrop-blur-md px-4 py-3">
           <div className="max-w-4xl mx-auto">
             {isMyTurn ? (
-              <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 w-full">
-                {/* Shoot buttons */}
-                <div className="flex gap-2 w-full sm:w-auto">
-                  <button disabled={!selectedTargetId}
-                    onClick={() => selectedTargetId && shootTarget(gameState.gameId, userId, selectedTargetId)}
-                    className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all ${
-                      selectedTargetId
-                        ? 'bg-red-600 hover:bg-red-500 text-white shadow-[0_0_20px_rgba(239,68,68,0.4)] hover:scale-[1.02]'
-                        : 'bg-zinc-900 border border-white/[0.05] text-zinc-600 cursor-not-allowed'
-                    }`}>
-                    {selectedTargetId ? `Shoot ${getPlayerName(gameState.players, selectedTargetId)}` : 'Select Target'}
-                  </button>
-                  <button onClick={() => { shootTarget(gameState.gameId, userId, userId); }}
-                    className="flex-1 sm:flex-none px-5 py-2.5 bg-zinc-900 border border-white/[0.08] hover:border-white/15 text-zinc-300 hover:bg-zinc-800 rounded-xl font-bold text-xs uppercase tracking-wider transition-all">
-                    Shoot Self
+              stealModeActive ? (
+                <div className="flex items-center justify-between w-full bg-amber-950/20 border border-amber-500/30 rounded-xl p-3 shadow-[0_0_20px_rgba(245,158,11,0.05)]">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl animate-pulse">💉</span>
+                    <div className="text-left">
+                      <div className="text-xs font-bold text-amber-400 uppercase tracking-widest leading-normal">Adrenaline Active</div>
+                      <p className="text-[10px] text-zinc-400">Select any living opponent with items to steal from.</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setStealModeActive(false)} className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors">
+                    Cancel
                   </button>
                 </div>
+              ) : (
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 w-full">
+                  {/* Shoot buttons */}
+                  <div className="flex gap-2 w-full sm:w-auto">
+                    <button disabled={!selectedTargetId}
+                      onClick={() => selectedTargetId && shootTarget(gameState.gameId, userId, selectedTargetId)}
+                      className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all ${
+                        selectedTargetId
+                          ? 'bg-red-600 hover:bg-red-500 text-white shadow-[0_0_20px_rgba(239,68,68,0.4)] hover:scale-[1.02]'
+                          : 'bg-zinc-900 border border-white/[0.05] text-zinc-600 cursor-not-allowed'
+                      }`}>
+                      {selectedTargetId ? `Shoot ${getPlayerName(gameState.players, selectedTargetId)}` : 'Select Target'}
+                    </button>
+                    <button onClick={() => { shootTarget(gameState.gameId, userId, userId); }}
+                      className="flex-1 sm:flex-none px-5 py-2.5 bg-zinc-900 border border-white/[0.08] hover:border-white/15 text-zinc-300 hover:bg-zinc-800 rounded-xl font-bold text-xs uppercase tracking-wider transition-all">
+                      Shoot Self
+                    </button>
+                  </div>
 
-                {/* Divider */}
-                <div className="hidden sm:block w-px h-8 bg-white/[0.06]" />
+                  {/* Divider */}
+                  <div className="hidden sm:block w-px h-8 bg-white/[0.06]" />
 
-                {/* Item inventory */}
-                <div className="flex gap-2 overflow-x-auto w-full sm:flex-1 py-1">
-                  {me?.inventory.map((itemId, i) => {
-                    const meta = ITEM_META[itemId] || { name: itemId, icon: "📦", desc: "", color: "text-zinc-400", sound: () => {} };
-                    const needsTarget = itemId === 'handcuffs';
-                    const canUseOnTarget = needsTarget ? !!selectedTargetId : true;
-                    return (
-                      <button key={i} disabled={!canUseOnTarget}
-                        onClick={() => useItem(gameState.gameId, userId, itemId, needsTarget ? (selectedTargetId || undefined) : userId)}
-                        className={`min-w-[70px] h-[70px] rounded-xl border flex flex-col items-center justify-center gap-0.5 transition-all ${
-                          canUseOnTarget
-                            ? 'bg-zinc-950/80 border-white/[0.06] hover:border-red-500/30 hover:bg-[#141518] cursor-pointer hover:shadow-[0_0_12px_rgba(239,68,68,0.1)]'
-                            : 'bg-zinc-950/40 border-white/[0.03] opacity-40 cursor-not-allowed'
-                        }`}
-                        title={meta.desc}>
-                        <span className="text-lg">{meta.icon}</span>
-                        <span className={`text-[8px] font-bold ${meta.color}`}>{meta.name}</span>
-                      </button>
-                    );
-                  })}
-                  {(!me?.inventory || me.inventory.length === 0) && (
-                    <div className="text-[10px] text-zinc-700 font-bold uppercase tracking-widest flex items-center">No items</div>
-                  )}
+                  {/* Item inventory */}
+                  <div className="flex gap-2 overflow-x-auto w-full sm:flex-1 py-1">
+                    {me?.inventory.map((itemId, i) => {
+                      const meta = ITEM_META[itemId] || { name: itemId, icon: "📦", desc: "", color: "text-zinc-400", sound: () => {} };
+                      const needsTarget = itemId === 'handcuffs';
+                      const canUseOnTarget = needsTarget ? !!selectedTargetId : true;
+                      return (
+                        <button key={i} disabled={!canUseOnTarget}
+                          onClick={() => {
+                            if (itemId === 'adrenaline') {
+                              setStealModeActive(true);
+                            } else {
+                              useItem(gameState.gameId, userId, itemId, needsTarget ? (selectedTargetId || undefined) : userId);
+                            }
+                          }}
+                          className={`min-w-[70px] h-[70px] rounded-xl border flex flex-col items-center justify-center gap-0.5 transition-all ${
+                            canUseOnTarget
+                              ? 'bg-zinc-950/80 border-white/[0.06] hover:border-red-500/30 hover:bg-[#141518] cursor-pointer hover:shadow-[0_0_12px_rgba(239,68,68,0.1)]'
+                              : 'bg-zinc-950/40 border-white/[0.03] opacity-40 cursor-not-allowed'
+                          }`}
+                          title={meta.desc}>
+                          <span className="text-lg">{meta.icon}</span>
+                          <span className={`text-[8px] font-bold ${meta.color}`}>{meta.name}</span>
+                        </button>
+                      );
+                    })}
+                    {(!me?.inventory || me.inventory.length === 0) && (
+                      <div className="text-[10px] text-zinc-700 font-bold uppercase tracking-widest flex items-center">No items</div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )
             ) : (
               <div className="text-center py-1">
                 <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">
@@ -1188,17 +1364,24 @@ function ChamberClashGameContent() {
                         </div>
                       </div>
                       <div className="bg-white/[0.02] border border-white/[0.04] p-2 rounded-xl flex gap-2">
-                        <span className="text-base">🩹</span>
+                        <span className="text-base">💊</span>
                         <div>
                           <strong className="text-green-400 block">Medkit</strong>
-                          Heals you for 1 HP.
+                          Heals you for 1 HP. Cannot exceed max HP.
                         </div>
                       </div>
                       <div className="bg-white/[0.02] border border-white/[0.04] p-2 rounded-xl flex gap-2">
-                        <span className="text-base">🛡️</span>
+                        <span className="text-base">🔄</span>
                         <div>
-                          <strong className="text-cyan-400 block">Shield</strong>
-                          Blocks the next incoming damage you would take.
+                          <strong className="text-cyan-400 block">Inverter</strong>
+                          Converts the current shell: LIVE ➔ BLANK or BLANK ➔ LIVE.
+                        </div>
+                      </div>
+                      <div className="bg-white/[0.02] border border-white/[0.04] p-2 rounded-xl flex gap-2">
+                        <span className="text-base">📞</span>
+                        <div>
+                          <strong className="text-amber-400 block">Burner Phone</strong>
+                          Reveal information about one upcoming shell privately.
                         </div>
                       </div>
                       <div className="bg-white/[0.02] border border-white/[0.04] p-2 rounded-xl flex gap-2">
@@ -1220,6 +1403,13 @@ function ChamberClashGameContent() {
                         <div>
                           <strong className="text-amber-400 block">Beer</strong>
                           Ejects the current shell without firing it, revealing it to all players.
+                        </div>
+                      </div>
+                      <div className="bg-white/[0.02] border border-white/[0.04] p-2 rounded-xl flex gap-2">
+                        <span className="text-base">💉</span>
+                        <div>
+                          <strong className="text-amber-500 block">Adrenaline</strong>
+                          Steal one item from an opponent&apos;s inventory and use it immediately.
                         </div>
                       </div>
                     </div>

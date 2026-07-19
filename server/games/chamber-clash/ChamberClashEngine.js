@@ -12,7 +12,7 @@ class ChamberClashEngine extends BaseGameEngine {
       startingHp: 5,
       turnTimer: 30,
       chamberSize: 6,
-      maxInventory: 8,
+      maxInventory: 5,
       isPrivate: false
     };
 
@@ -101,6 +101,11 @@ class ChamberClashEngine extends BaseGameEngine {
     this.chamber = RandomService.generateChamber(this.settings.chamberSize);
     const liveCount = this.chamber.filter(s => s === 'LIVE').length;
     const blankCount = this.chamber.length - liveCount;
+
+    // Clear all player status effects at the beginning of each round
+    this.players.forEach(p => {
+      p.statusEffects = [];
+    });
     
     this.emitPublicEvent('round_started', {
       roundNumber: this.roundNumber,
@@ -228,7 +233,7 @@ class ChamberClashEngine extends BaseGameEngine {
     if (action === 'shoot_target') {
       result = this.actionShoot(playerId, data.targetId);
     } else if (action === 'use_item') {
-      result = this.actionUseItem(playerId, data.itemId, data.targetId);
+      result = this.actionUseItem(playerId, data.itemId, data.targetId, data);
     }
     
     if (result.success) {
@@ -276,18 +281,12 @@ class ChamberClashEngine extends BaseGameEngine {
     let advance = true;
 
     if (shell === 'LIVE') {
-      const shieldIndex = target.statusEffects.findIndex(e => e.type === 'SHIELDED');
-      if (shieldIndex !== -1) {
-        target.statusEffects.splice(shieldIndex, 1);
-        this.emitPublicEvent('shield_broken', { playerId: targetId });
-      } else {
-        target.hp -= damageAmount;
-        this.emitPublicEvent('player_damaged', { playerId: targetId, damage: damageAmount, newHp: target.hp });
-        
-        if (target.hp <= 0) {
-          target.isAlive = false;
-          this.emitPublicEvent('player_eliminated', { playerId: targetId });
-        }
+      target.hp -= damageAmount;
+      this.emitPublicEvent('player_damaged', { playerId: targetId, damage: damageAmount, newHp: target.hp });
+      
+      if (target.hp <= 0) {
+        target.isAlive = false;
+        this.emitPublicEvent('player_eliminated', { playerId: targetId });
       }
     } else {
       // Blank: self-shot grants extra turn
@@ -306,7 +305,7 @@ class ChamberClashEngine extends BaseGameEngine {
     return { success: true };
   }
 
-  actionUseItem(playerId, itemId, targetId) {
+  actionUseItem(playerId, itemId, targetId, data) {
     const player = this.players.get(playerId);
     const itemIndex = player.inventory.findIndex(id => id === itemId);
     
@@ -331,7 +330,7 @@ class ChamberClashEngine extends BaseGameEngine {
       targetId
     });
 
-    const effectResult = itemDef.serverEffect(this, playerId, targetId);
+    const effectResult = itemDef.serverEffect(this, playerId, targetId, data);
     
     return { success: true, effectResult };
   }

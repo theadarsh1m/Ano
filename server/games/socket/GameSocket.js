@@ -81,6 +81,7 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
     const lobby = await LobbyService.createLobby(gameId, userId, nickname, gameType);
 
     socket.join(gameId);
+    socket.emit('lobby_state', serializeLobby(lobby));
     io.to(gameId).emit('lobby_state', serializeLobby(lobby));
     await updatePresence(userId, `In ${GAME_DISPLAY_NAMES[gameType] || gameType} Lobby`);
     broadcastLobbies();
@@ -94,6 +95,7 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
     }
 
     socket.join(gameId);
+    socket.emit('lobby_state', serializeLobby(lobby));
     io.to(gameId).emit('lobby_state', serializeLobby(lobby));
     await updatePresence(userId, `In ${GAME_DISPLAY_NAMES[lobby.gameType] || lobby.gameType} Lobby`);
     broadcastLobbies();
@@ -198,7 +200,7 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
     engine.onEvent = (type, data) => {
       io.to(gameId).emit(type, data);
       // Auto-sync game state on critical events to prevent desyncs (e.g. on timeouts or skip turns)
-      const SYNC_EVENTS = ['round_started', 'turn_started', 'player_damaged', 'player_healed', 'player_eliminated', 'game_started', 'round_finished', 'status_added', 'status_removed', 'extra_turn_granted'];
+      const SYNC_EVENTS = ['round_started', 'turn_started', 'player_damaged', 'player_healed', 'player_eliminated', 'game_started', 'round_finished', 'status_added', 'status_removed', 'extra_turn_granted', 'shell_inverted', 'shell_ejected', 'item_stolen'];
       if (SYNC_EVENTS.includes(type)) {
         broadcastGameStates(gameId, engine);
       }
