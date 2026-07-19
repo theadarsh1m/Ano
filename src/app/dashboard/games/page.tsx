@@ -46,14 +46,7 @@ export default function GamesHubPage() {
       color: "from-blue-500 to-indigo-700",
       href: "/dashboard/games/dots-and-boxes"
     },
-    {
-      id: "yatzy",
-      title: "Yatzy",
-      description: "Roll the dice, fill your score sheet, and outscore your opponents in this classic dice game!",
-      icon: "🎲",
-      color: "from-amber-500 to-red-600",
-      href: "/dashboard/games/yatzy"
-    },
+
     {
       id: "color-wars",
       title: "Chain Reaction",
