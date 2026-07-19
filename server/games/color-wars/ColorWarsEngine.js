@@ -84,7 +84,7 @@ class ColorWarsEngine extends BaseGameEngine {
     this.winnerId = null;
     this.isDraw = false;
     this.startTime = Date.now();
-    this.historyLogs = [`Color Wars started. Board is empty. player ${this.players.get(this.currentTurnPlayerId)?.nickname || '1'} starts.`];
+    this.historyLogs = [`Chain Reaction started. Board is empty. player ${this.players.get(this.currentTurnPlayerId)?.nickname || '1'} starts.`];
 
     // 4. Start turn timer
     this.startTurnTimer();
@@ -309,7 +309,7 @@ class ColorWarsEngine extends BaseGameEngine {
       this.clearTurnTimer();
       const winnerPlayer = this.players.get(this.winnerId);
       if (winnerPlayer) {
-        this.historyLogs.push(`🏆 Victory! ${winnerPlayer.nickname} wins the Color Wars!`);
+        this.historyLogs.push(`🏆 Victory! ${winnerPlayer.nickname} wins the Chain Reaction!`);
       }
       
       const durationSeconds = Math.floor((Date.now() - (this.startTime || Date.now())) / 1000);

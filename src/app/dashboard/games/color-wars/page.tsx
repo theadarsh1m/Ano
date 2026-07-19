@@ -14,6 +14,8 @@ import { useColorWarsStore, ColorWarsCell, ColorWarsPlayerState, LobbyPlayer, Pu
 import { GlassCard } from "@/components/layout/GlassCard";
 import { ChatArea } from "@/components/room/ChatArea";
 import { MessageInput } from "@/components/room/MessageInput";
+import { TurnIndicator } from "@/components/games/TurnIndicator";
+import { useExitWarning } from "@/hooks/useExitWarning";
 
 // Map server color names to Tailwind design assets and hex codes
 interface ColorAsset {
@@ -121,6 +123,8 @@ function ColorWarsPageContent() {
   const [localGrid, setLocalGrid] = useState<ColorWarsCell[][] | null>(null);
   const [explodingCells, setExplodingCells] = useState<{ r: number; c: number }[]>([]);
 
+  const { bypassWarning } = useExitWarning(!!lobby || !!gameState);
+
   // Setup listeners on mount
   useEffect(() => {
     if (!userId) return;
@@ -202,7 +206,7 @@ function ColorWarsPageContent() {
       } catch (e) {}
 
       waveIndex++;
-      setTimeout(playWave, 350); // 350ms interval between waves
+      setTimeout(playWave, 600); // 600ms interval between waves
     };
 
     playWave();
@@ -214,6 +218,7 @@ function ColorWarsPageContent() {
   };
 
   const handleLeave = () => {
+    bypassWarning();
     const activeGameId = gameState?.gameId || lobby?.id;
     if (activeGameId && userId) {
       leaveLobby(activeGameId, userId);
@@ -260,7 +265,7 @@ function ColorWarsPageContent() {
           >
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold flex items-center gap-2">
-                <BookOpen className="w-6 h-6 text-rose-400" /> Color Wars Rules
+                <BookOpen className="w-6 h-6 text-rose-400" /> Chain Reaction Rules
               </h2>
               <button onClick={() => setShowRulesModal(false)} className="text-gray-400 hover:text-white p-1 hover:bg-white/10 rounded-md transition-colors">
                 <X className="w-6 h-6" />
@@ -336,7 +341,7 @@ function ColorWarsPageContent() {
               <ArrowLeft className="w-5 h-5" />
             </button>
             <div>
-              <h1 className="text-xl font-bold flex items-center gap-2">💥 Color Wars</h1>
+              <h1 className="text-xl font-bold flex items-center gap-2">💥 Chain Reaction</h1>
               <p className="text-xs text-gray-400">Strategically place energy, trigger reactions, and control the grid</p>
             </div>
           </div>
@@ -620,17 +625,18 @@ function ColorWarsPageContent() {
   // ACTIVE GAME VIEW
   // ========================
   if (gameState) {
-    const isMyTurn = gameState.currentTurnPlayerId === userId;
+    const isMyTurn = !isAnimating && gameState.currentTurnPlayerId === userId;
+    const activeTurnPlayerId = isAnimating && lastMoveResult ? lastMoveResult.playerId : gameState.currentTurnPlayerId;
     const gridToRender = localGrid || gameState.grid;
     const boardSize = gameState.boardSize;
-    const currentTurnPlayer = gameState.players.find(p => p.userId === gameState.currentTurnPlayerId);
+    const currentTurnPlayer = gameState.players.find(p => p.userId === activeTurnPlayerId);
     
     // Sort players by tile count
     const sortedPlayers = [...gameState.players].sort((a, b) => b.tileCount - a.tileCount);
 
     return (
       <div className="flex flex-col lg:flex-row h-screen bg-neutral-950 text-white overflow-hidden select-none">
-        
+        <TurnIndicator isMyTurn={isMyTurn} />
         {/* Main table area */}
         <div className="flex-1 flex flex-col overflow-hidden relative">
           
@@ -645,7 +651,7 @@ function ColorWarsPageContent() {
               </button>
               <div>
                 <span className="text-lg font-black tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-rose-500 to-red-500 flex items-center gap-2 select-none uppercase">
-                  💥 Color Wars
+                  💥 Chain Reaction
                 </span>
               </div>
             </div>
@@ -736,8 +742,9 @@ function ColorWarsPageContent() {
                     const colors = cellColor ? COLOR_ASSETS[cellColor] : null;
                     
                     const isExploding = explodingCells.some(ec => ec.r === r && ec.c === c);
-                    const isCurrentTurnPlayerCell = cell.ownerId === gameState.currentTurnPlayerId;
+                    const isCurrentTurnPlayerCell = cell.ownerId === activeTurnPlayerId;
                     const myPlayerState = gameState.players.find(p => p.userId === userId);
+                    const myColors = myPlayerState && myPlayerState.color ? COLOR_ASSETS[myPlayerState.color] : null;
                     const isFirstTurn = myPlayerState ? myPlayerState.tileCount === 0 : true;
                     
                     const canClickCell = isMyTurn && !isAnimating && (
@@ -760,8 +767,10 @@ function ColorWarsPageContent() {
                         onClick={() => handleCellClick(r, c)}
                         className={`w-full h-full rounded-xl border flex flex-col items-center justify-center relative transition-all duration-300 touch-game select-none ${
                           colors 
-                            ? `${colors.bgLight} ${borderClass} ${shadowClass}` 
-                            : 'bg-white/2 border-white/5 hover:bg-white/5 focus:bg-white/5'
+                            ? `${colors.bgLight} ${borderClass} ${shadowClass} ${canClickCell ? 'animate-pulse scale-[1.02] border-2 shadow-[0_0_15px_rgba(244,63,94,0.45)]' : ''}` 
+                            : canClickCell && myColors
+                              ? `bg-white/5 border-2 ${myColors.border} ${myColors.shadow} animate-pulse scale-[1.02]`
+                              : 'bg-white/2 border-white/5 hover:bg-white/5 focus:bg-white/5'
                         } ${isExploding ? 'scale-110 border-red-500 bg-red-500/20' : ''}`}
                       >
                         {/* Rendering energy dots */}
@@ -964,7 +973,7 @@ function ColorWarsPageContent() {
 
         {/* Winner overlay celebration modal */}
         <AnimatePresence>
-          {gameState.status === 'FINISHED' && (
+          {gameState.status === 'FINISHED' && !isAnimating && (
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}

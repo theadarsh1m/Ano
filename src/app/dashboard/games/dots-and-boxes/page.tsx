@@ -15,6 +15,8 @@ import { GlassCard } from "@/components/layout/GlassCard";
 import { ChatArea } from "@/components/room/ChatArea";
 import { MessageInput } from "@/components/room/MessageInput";
 import { socketService } from "@/lib/socket";
+import { TurnIndicator } from "@/components/games/TurnIndicator";
+import { useExitWarning } from "@/hooks/useExitWarning";
 
 // Unique colors for each player (up to 8)
 const PLAYER_COLORS = [
@@ -85,6 +87,8 @@ function DotsAndBoxesPageContent() {
     window.addEventListener('resize', updateSize);
     return () => window.removeEventListener('resize', updateSize);
   }, []);
+
+  const { bypassWarning } = useExitWarning(!!lobby || !!gameState);
 
   // Setup listeners on mount
   useEffect(() => {
@@ -161,6 +165,7 @@ function DotsAndBoxesPageContent() {
   };
 
   const handleLeave = () => {
+    bypassWarning();
     const activeGameId = gameState?.gameId || lobby?.id;
     if (activeGameId && userId) {
       leaveLobby(activeGameId, userId);
@@ -566,6 +571,7 @@ function DotsAndBoxesPageContent() {
 
     return (
       <div className="flex flex-col h-screen bg-black text-white select-none">
+        <TurnIndicator isMyTurn={isMyTurn} />
         {/* Top Bar */}
         <div className="flex items-center justify-between p-2 md:p-3 bg-white/5 border-b border-white/10 flex-shrink-0">
           <div className="flex items-center gap-3">

@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useState, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Gamepad2, Users, Play, UserPlus, LogOut, Loader2, Check, X, 
-  Volume2, VolumeX, MessageSquare, ShieldAlert, Award, ArrowLeft, Send, RefreshCw, Globe, BookOpen
+  Volume2, VolumeX, MessageSquare, ShieldAlert, Award, ArrowLeft, Send, RefreshCw, Globe, BookOpen,
+  ChevronLeft, ChevronRight
 } from "lucide-react";
 import { useUserStore } from "@/store/useUserStore";
 import { useRoomConnectionStore } from "@/store/useRoomConnectionStore";
@@ -15,6 +16,8 @@ import { GlassCard } from "@/components/layout/GlassCard";
 import { ChatArea } from "@/components/room/ChatArea";
 import { MessageInput } from "@/components/room/MessageInput";
 import { socketService } from "@/lib/socket";
+import { TurnIndicator } from "@/components/games/TurnIndicator";
+import { useExitWarning } from "@/hooks/useExitWarning";
 
 const DECLARED_RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'Jack', 'Queen', 'King', 'Ace'];
 
@@ -23,9 +26,9 @@ const SUIT_ORDER: Record<string, number> = { 'spades': 4, 'hearts': 3, 'diamonds
 
 function sortCards(cards: { id: string; suit: string; value: string }[]) {
   return [...cards].sort((a, b) => {
-    const rankDiff = (RANK_ORDER[a.value] || 0) - (RANK_ORDER[b.value] || 0);
+    const rankDiff = (RANK_ORDER[b.value] || 0) - (RANK_ORDER[a.value] || 0);
     if (rankDiff !== 0) return rankDiff;
-    return (SUIT_ORDER[a.suit] || 0) - (SUIT_ORDER[b.suit] || 0);
+    return (SUIT_ORDER[b.suit] || 0) - (SUIT_ORDER[a.suit] || 0);
   });
 }
 
@@ -67,6 +70,18 @@ function BluffGamePageContent() {
   const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
   const [roomMembers, setRoomMembers] = useState<any[]>([]);
   const [invitedUsers, setInvitedUsers] = useState<Set<string>>(new Set());
+
+  const handRowRef = useRef<HTMLDivElement>(null);
+  const scrollHand = (direction: "left" | "right") => {
+    if (handRowRef.current) {
+      const scrollAmount = 240;
+      handRowRef.current.scrollBy({
+        left: direction === "left" ? -scrollAmount : scrollAmount,
+        behavior: "smooth"
+      });
+    }
+  };
+  const { bypassWarning } = useExitWarning(!!lobby || !!gameState);
 
   // 1. Setup listeners on mount
   useEffect(() => {
@@ -178,6 +193,7 @@ function BluffGamePageContent() {
   };
 
   const handleLeave = () => {
+    bypassWarning();
     const activeGameId = gameState?.gameId || lobby?.id;
     if (activeGameId && userId) {
       leaveLobby(activeGameId, userId);
@@ -519,7 +535,7 @@ function BluffGamePageContent() {
 
     return (
       <div className="flex flex-col lg:flex-row h-screen bg-neutral-950 text-white overflow-hidden select-none">
-        
+        <TurnIndicator isMyTurn={isMyTurn} />
         {/* Main table area */}
         <div className="flex-1 flex flex-col overflow-hidden relative">
           
@@ -639,27 +655,51 @@ function BluffGamePageContent() {
             </AnimatePresence>
 
             {/* Pile Card placement in the middle */}
-            <div className="flex flex-col items-center justify-center p-4 md:p-8 bg-black/20 border border-white/5 rounded-full w-40 h-40 md:w-64 md:h-64 shadow-inner relative z-10">
+            <div className={`flex flex-col items-center justify-center p-4 md:p-8 bg-black/20 border rounded-full w-40 h-40 md:w-64 md:h-64 shadow-inner relative z-10 transition-all duration-500 ${isMyTurn ? 'border-amber-500/80 shadow-[0_0_30px_rgba(245,158,11,0.5)] animate-pulse' : 'border-white/5'}`}>
               <span className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-2">Center Pile</span>
               
               {gameState.pileCount > 0 ? (
-                <div className="relative w-24 h-36">
+                <div className="relative w-16 h-24 md:w-24 md:h-36 flex-shrink-0">
                   {/* Visual card stack representation */}
-                  {Array.from({ length: Math.min(gameState.pileCount, 5) }).map((_, idx) => (
-                    <div 
-                      key={idx}
-                      className="absolute inset-0 bg-neutral-900 border border-white/20 rounded-xl shadow-lg flex items-center justify-center"
-                      style={{
-                        transform: `translate(${idx * 2}px, ${-idx * 2}px) rotate(${idx * 3 - 6}deg)`
-                      }}
-                    >
-                      {idx === 0 && (
-                        <div className="w-20 h-32 border-2 border-dashed border-white/10 rounded-lg flex items-center justify-center">
-                          <span className="text-xl font-bold text-white">{gameState.pileCount}</span>
+                  {Array.from({ length: Math.min(gameState.pileCount, 5) }).map((_, idx) => {
+                    const isTopCard = idx === Math.min(gameState.pileCount, 5) - 1;
+                    return (
+                      <div 
+                        key={idx}
+                        className="absolute inset-0 bg-gradient-to-br from-red-700 via-red-800 to-rose-950 border-2 border-neutral-100 rounded-xl shadow-md flex items-center justify-center overflow-hidden select-none"
+                        style={{
+                          transform: `translate(${idx * 3}px, ${-idx * 5}px) rotate(${(idx - (Math.min(gameState.pileCount, 5) - 1) / 2) * 3}deg)`
+                        }}
+                      >
+                        {/* Decorative card back pattern */}
+                        <div className="absolute inset-1 border border-red-500/20 rounded-lg flex flex-col items-center justify-center bg-black/20 overflow-hidden">
+                          <div 
+                            className="absolute inset-0 opacity-20"
+                            style={{
+                              backgroundImage: `
+                                linear-gradient(45deg, #f43f5e 25%, transparent 25%), 
+                                linear-gradient(-45deg, #f43f5e 25%, transparent 25%), 
+                                linear-gradient(45deg, transparent 75%, #f43f5e 75%), 
+                                linear-gradient(-45deg, transparent 75%, #f43f5e 75%)
+                              `,
+                              backgroundSize: '12px 12px',
+                              backgroundPosition: '0 0, 0 6px, 6px -6px, -6px 0px'
+                            }}
+                          />
+                          <div className="w-8 h-8 rounded-full border border-red-500/30 flex items-center justify-center bg-red-950/60 relative z-10">
+                            <span className="text-[12px] text-red-500/70 select-none">♦</span>
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  ))}
+                        
+                        {/* Show count on top card */}
+                        {isTopCard && (
+                          <div className="absolute bg-neutral-950/85 border border-white/20 text-white font-extrabold px-2 py-0.5 rounded-full text-xs shadow-lg flex items-center justify-center min-w-8">
+                            {gameState.pileCount}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="w-24 h-36 border-2 border-dashed border-white/10 rounded-xl flex items-center justify-center text-gray-600 text-xs font-semibold">
@@ -744,31 +784,54 @@ function BluffGamePageContent() {
               </div>
 
               {/* Hand cards selection row */}
-              <div className="flex gap-2 md:gap-3 overflow-x-auto py-2 pr-4 scrollbar-hide select-none max-w-full">
-                {self.hand && sortCards(self.hand).map((c) => {
-                  const isSelected = selectedCards.includes(c.id);
-                  return (
-                    <motion.div
-                      key={c.id}
-                      onClick={() => isMyTurn && handleToggleCard(c.id)}
-                      whileHover={{ y: isMyTurn ? -10 : 0 }}
-                      className={`w-14 h-20 md:w-20 md:h-32 border-2 rounded-xl flex flex-col justify-between p-1.5 md:p-2 cursor-pointer shadow-lg select-none relative flex-shrink-0 ${
-                        isSelected 
-                          ? 'bg-blue-100 border-blue-500 text-blue-900 -translate-y-4' 
-                          : 'bg-white border-neutral-300 text-black'
-                      }`}
+              <div className="relative w-full group/scroller select-none">
+                {self.hand && self.hand.length > 5 && (
+                  <>
+                    <button 
+                      onClick={() => scrollHand('left')}
+                      className="absolute left-1 top-1/2 -translate-y-1/2 z-20 bg-neutral-900/90 hover:bg-neutral-800 border border-white/15 text-white rounded-full p-2 shadow-lg backdrop-blur-sm transition-all opacity-0 group-hover/scroller:opacity-100 cursor-pointer flex items-center justify-center"
+                      title="Scroll Left"
                     >
-                      <div className="text-left font-bold text-xs md:text-sm leading-none">{c.value}</div>
-                      <div className="text-lg md:text-2xl text-center self-center">
-                        {c.suit === 'hearts' && '♥'}
-                        {c.suit === 'diamonds' && '♦'}
-                        {c.suit === 'clubs' && '♣'}
-                        {c.suit === 'spades' && '♠'}
-                      </div>
-                      <div className="text-right font-bold text-xs md:text-sm leading-none">{c.value}</div>
-                    </motion.div>
-                  );
-                })}
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <button 
+                      onClick={() => scrollHand('right')}
+                      className="absolute right-1 top-1/2 -translate-y-1/2 z-20 bg-neutral-900/90 hover:bg-neutral-800 border border-white/15 text-white rounded-full p-2 shadow-lg backdrop-blur-sm transition-all opacity-0 group-hover/scroller:opacity-100 cursor-pointer flex items-center justify-center"
+                      title="Scroll Right"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </>
+                )}
+                <div 
+                  ref={handRowRef}
+                  className="flex gap-2 md:gap-3 overflow-x-auto py-2 pb-4 px-8 custom-scrollbar mobile-scrollbar-hide select-none max-w-full"
+                >
+                  {self.hand && sortCards(self.hand).map((c) => {
+                    const isSelected = selectedCards.includes(c.id);
+                    return (
+                      <motion.div
+                        key={c.id}
+                        onClick={() => isMyTurn && handleToggleCard(c.id)}
+                        whileHover={{ y: isMyTurn ? -10 : 0 }}
+                        className={`w-14 h-20 md:w-20 md:h-32 border-2 rounded-xl flex flex-col justify-between p-1.5 md:p-2 cursor-pointer shadow-lg select-none relative flex-shrink-0 ${
+                          isSelected 
+                            ? 'bg-blue-100 border-blue-500 text-blue-900 -translate-y-4' 
+                            : 'bg-white border-neutral-300 text-black'
+                        }`}
+                      >
+                        <div className="text-left font-bold text-xs md:text-sm leading-none">{c.value}</div>
+                        <div className="text-lg md:text-2xl text-center self-center">
+                          {c.suit === 'hearts' && '♥'}
+                          {c.suit === 'diamonds' && '♦'}
+                          {c.suit === 'clubs' && '♣'}
+                          {c.suit === 'spades' && '♠'}
+                        </div>
+                        <div className="text-right font-bold text-xs md:text-sm leading-none">{c.value}</div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}

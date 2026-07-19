@@ -13,6 +13,8 @@ import { useRoomConnectionStore } from "@/store/useRoomConnectionStore";
 import { useScribbleStore } from "@/store/useScribbleStore";
 import { GlassCard } from "@/components/layout/GlassCard";
 import { socketService } from "@/lib/socket";
+import { TurnIndicator } from "@/components/games/TurnIndicator";
+import { useExitWarning } from "@/hooks/useExitWarning";
 
 // Components
 import { ScribbleCanvas } from "@/components/games/scribble/ScribbleCanvas";
@@ -68,6 +70,8 @@ function ScribbleGameContent() {
   const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
   const [roomMembers, setRoomMembers] = useState<any[]>([]);
   const [invitedUsers, setInvitedUsers] = useState<Set<string>>(new Set());
+
+  const { bypassWarning } = useExitWarning(!!lobby || !!gameState);
 
   // Fetch friends, online users, and room members for invites
   useEffect(() => {
@@ -147,6 +151,7 @@ function ScribbleGameContent() {
   };
 
   const handleLeave = () => {
+    bypassWarning();
     const activeGameId = gameState?.gameId || lobby?.id;
     if (activeGameId && userId) {
       leaveLobby(activeGameId, userId);
@@ -447,8 +452,11 @@ function ScribbleGameContent() {
       );
     }
 
+    const isMyTurn = isDrawer && (gameState.turnState === 'DRAWING' || gameState.turnState === 'WAITING_FOR_WORD');
+
     return (
       <div className="flex flex-col h-auto lg:h-screen w-full p-2 md:p-4 pb-4 lg:pb-6 max-w-[1600px] mx-auto gap-4 overflow-y-auto lg:overflow-hidden relative">
+        <TurnIndicator isMyTurn={isMyTurn} />
         {/* Top Header */}
         <div className="flex flex-col md:flex-row justify-between items-center bg-white/5 border border-white/10 rounded-2xl p-3 backdrop-blur-md gap-4">
           <div className="flex items-center gap-4">

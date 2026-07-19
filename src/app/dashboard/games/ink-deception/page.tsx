@@ -12,6 +12,8 @@ import { useUserStore } from "@/store/useUserStore";
 import { useInkDeceptionStore } from "@/store/useInkDeceptionStore";
 import { GlassCard } from "@/components/layout/GlassCard";
 import { socketService } from "@/lib/socket";
+import { TurnIndicator } from "@/components/games/TurnIndicator";
+import { useExitWarning } from "@/hooks/useExitWarning";
 
 // Ink & Deception components
 
@@ -64,6 +66,8 @@ function InkDeceptionContent() {
   const [rounds, setRounds] = useState(3);
   const [turnsPerPlayer, setTurnsPerPlayer] = useState(2);
   const guessTime = 8;
+
+  const { bypassWarning } = useExitWarning(!!lobby || !!gameState);
 
   const rulesModal = (
     <AnimatePresence>
@@ -232,6 +236,7 @@ function InkDeceptionContent() {
   };
 
   const handleLeave = () => {
+    bypassWarning();
     const activeGameId = gameState?.gameId || lobby?.id;
     if (activeGameId && userId) {
       leaveLobby(activeGameId, userId!);
@@ -620,9 +625,14 @@ function InkDeceptionContent() {
       }
     };
 
+    const isMyTurn = 
+      (isActiveDrawer && isDrawingPhase) || 
+      (gameState.questionMasterId === userId && gameState.turnState === "QUESTION_MASTER_SELECTING") ||
+      (gameState.fakeArtistId === userId && gameState.turnState === "FAKE_GUESS");
+
     return (
       <div className="flex flex-col h-auto lg:h-dvh w-full p-2 md:p-6 pb-4 lg:pb-6 max-w-[1600px] mx-auto gap-4 overflow-y-auto lg:overflow-hidden relative">
-
+        <TurnIndicator isMyTurn={isMyTurn} />
         {/* Global Reveal Modal overlays */}
         <RoleRevealModal />
         <GuessOverlay />

@@ -93,6 +93,20 @@ class BluffEngine extends BaseGameEngine {
     const { cardIds, declaredRank } = data;
     const player = this.players.get(playerId);
 
+    // If there is a previous play, check if that player has emptied their hand.
+    // Since the current player is playing cards instead of challenging, the previous play is accepted.
+    if (this.lastPlay) {
+      const prevPlayer = this.players.get(this.lastPlay.playerId);
+      if (prevPlayer && prevPlayer.hand.length === 0) {
+        this.winnerId = prevPlayer.userId;
+        this.status = 'FINISHED';
+        this.historyLogs.push(`${prevPlayer.nickname}'s play was accepted with 0 cards left and wins the game!`);
+        GamePersistenceService.recordResult(this.gameId, prevPlayer.userId, 60).catch(console.error);
+        this.persistState();
+        return { success: true };
+      }
+    }
+
     if (!cardIds || !Array.isArray(cardIds) || cardIds.length === 0) {
       return { success: false, error: 'No cards selected!' };
     }

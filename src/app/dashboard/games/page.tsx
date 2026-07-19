@@ -56,7 +56,7 @@ export default function GamesHubPage() {
     },
     {
       id: "color-wars",
-      title: "Color Wars",
+      title: "Chain Reaction",
       description: "Place energy strategically, trigger explosive chain reactions, and capture the board to eliminate your opponents!",
       icon: "💥",
       color: "from-rose-500 to-red-600",

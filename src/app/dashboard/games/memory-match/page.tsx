@@ -15,6 +15,8 @@ import { GlassCard } from "@/components/layout/GlassCard";
 import { ChatArea } from "@/components/room/ChatArea";
 import { MessageInput } from "@/components/room/MessageInput";
 import { socketService } from "@/lib/socket";
+import { TurnIndicator } from "@/components/games/TurnIndicator";
+import { useExitWarning } from "@/hooks/useExitWarning";
 
 // Unique colors for each player (up to 8)
 const PLAYER_COLORS = [
@@ -69,6 +71,8 @@ function MemoryMatchPageContent() {
   const [roomMembers, setRoomMembers] = useState<any[]>([]);
   const [invitedUsers, setInvitedUsers] = useState<Set<string>>(new Set());
   const [showRulesModal, setShowRulesModal] = useState(false);
+
+  const { bypassWarning } = useExitWarning(!!lobby || !!gameState);
 
   // Setup listeners on mount
   useEffect(() => {
@@ -144,6 +148,7 @@ function MemoryMatchPageContent() {
   };
 
   const handleLeave = () => {
+    bypassWarning();
     const activeGameId = gameState?.gameId || lobby?.id;
     if (activeGameId && userId) {
       leaveLobby(activeGameId, userId);
@@ -494,6 +499,7 @@ function MemoryMatchPageContent() {
 
     return (
       <div className="flex flex-col h-screen bg-black text-white">
+        <TurnIndicator isMyTurn={isMyTurn} />
         {/* Top Bar */}
         <div className="flex items-center justify-between p-2 md:p-3 bg-white/5 border-b border-white/10 flex-shrink-0">
           <div className="flex items-center gap-3">
@@ -571,7 +577,7 @@ function MemoryMatchPageContent() {
                           : card.isFlipped 
                             ? 'bg-violet-500/20 border-2 border-violet-400/50 shadow-[0_0_15px_rgba(139,92,246,0.3)]'
                             : isMyTurn && gameState.status === 'PLAYING'
-                              ? 'bg-white/10 border-2 border-white/20 hover:border-violet-400/50 hover:bg-violet-500/10 hover:shadow-[0_0_15px_rgba(139,92,246,0.2)] hover:scale-105 active:scale-95'
+                              ? 'bg-violet-950/20 border-2 border-violet-500/60 shadow-[0_0_15px_rgba(139,92,246,0.4)] animate-pulse hover:border-violet-400 hover:bg-violet-500/20 hover:scale-105 active:scale-95'
                               : 'bg-white/5 border-2 border-white/10 cursor-default'
                         }
                         ${isRecentMatch ? 'animate-bounce' : ''}

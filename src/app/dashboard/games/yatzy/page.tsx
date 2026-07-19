@@ -15,6 +15,8 @@ import { useYatzyStore, YatzyPlayerState } from "@/store/useYatzyStore";
 import { GlassCard } from "@/components/layout/GlassCard";
 import { ChatArea } from "@/components/room/ChatArea";
 import { MessageInput } from "@/components/room/MessageInput";
+import { TurnIndicator } from "@/components/games/TurnIndicator";
+import { useExitWarning } from "@/hooks/useExitWarning";
 
 // 3D-Style Dice Dot Rendering Positions
 const DICE_DOTS: Record<number, number[][]> = {
@@ -275,6 +277,8 @@ function YatzyPageContent() {
   const [showFullComparisonModal, setShowFullComparisonModal] = useState<boolean>(false);
   const [showRulesModal, setShowRulesModal] = useState(false);
 
+  const { bypassWarning } = useExitWarning(!!lobby || !!gameState);
+
   // Setup listeners on mount
   useEffect(() => {
     if (!userId) return;
@@ -326,6 +330,7 @@ function YatzyPageContent() {
   };
 
   const handleLeave = () => {
+    bypassWarning();
     const currentGameId = lobby?.id || gameState?.gameId;
     if (currentGameId && userId) {
       leaveLobby(currentGameId, userId);
@@ -943,7 +948,7 @@ function YatzyPageContent() {
 
     return (
       <div className="flex flex-col h-screen bg-black text-white font-sans overflow-hidden">
-        
+        <TurnIndicator isMyTurn={isMyTurn} />
         {/* Top Navbar */}
         <div className="flex items-center justify-between p-3 bg-neutral-950 border-b border-neutral-800 flex-shrink-0 z-10 shadow-md">
           <div className="flex items-center gap-3">
