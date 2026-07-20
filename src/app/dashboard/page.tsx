@@ -6,13 +6,17 @@ import { useUserStore } from "@/store/useUserStore";
 import { GlassCard } from "@/components/layout/GlassCard";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { motion } from "framer-motion";
-import { MessageSquare, Lock, Gamepad2, Settings, Newspaper } from "lucide-react";
+import { MessageSquare, Gamepad2, Settings, Newspaper, Users, Activity, Zap } from "lucide-react";
 import { OnlineUsersList } from "@/components/dashboard/OnlineUsersList";
+import { API_URL } from "@/lib/config";
+import { socketService } from "@/lib/socket";
+import { AnnouncementsBanner } from "@/components/layout/AnnouncementsBanner";
 
 export default function Dashboard() {
   const router = useRouter();
   const { id, nickname, joinedAt } = useUserStore();
   const [isClient, setIsClient] = useState(false);
+  const [liveStats, setLiveStats] = useState({ onlineUsers: 0, activeRooms: 0, activeGames: 0 });
 
   useEffect(() => {
     setIsClient(true);
@@ -23,6 +27,36 @@ export default function Dashboard() {
       router.push("/");
     }
   }, [isClient, id, router]);
+
+  // Fetch live stats on mount + listen for real-time updates
+  useEffect(() => {
+    if (!isClient || !id) return;
+
+    const fetchLiveStats = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/stats/live`);
+        if (res.ok) {
+          const data = await res.json();
+          setLiveStats(data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch live stats:", err);
+      }
+    };
+
+    fetchLiveStats();
+
+    const socket = socketService.getSocket();
+    if (socket) {
+      const handleLiveStats = (data: { onlineUsers: number; activeRooms: number; activeGames: number }) => {
+        setLiveStats(data);
+      };
+      socket.on('live_stats', handleLiveStats);
+      return () => {
+        socket.off('live_stats', handleLiveStats);
+      };
+    }
+  }, [isClient, id]);
 
   if (!isClient || !id) return null;
 
@@ -39,8 +73,10 @@ export default function Dashboard() {
     <div className="flex h-screen max-h-screen">
       <AppSidebar />
 
-      <main className="flex-1 overflow-y-auto p-4 pt-14 md:pt-6 md:p-10">
-        <div className="max-w-4xl mx-auto space-y-8">
+      <main className="flex-1 overflow-y-auto pb-10">
+        <AnnouncementsBanner />
+        
+        <div className="max-w-4xl mx-auto space-y-8 p-4 pt-14 md:pt-6 md:p-10">
           {/* Header */}
           <motion.div
             initial={{ opacity: 0, y: -20 }}
@@ -100,3 +136,4 @@ export default function Dashboard() {
     </div>
   );
 }
+

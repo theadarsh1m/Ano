@@ -16,6 +16,8 @@ const authRoutes = require('./routes/authRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const gameRoutes = require('./routes/gameRoutes');
 const feedRoutes = require('./routes/feedRoutes');
+const createAdminRoutes = require('./routes/adminRoutes');
+const feedbackRoutes = require('./routes/feedbackRoutes');
 const notificationService = require('./services/notificationService');
 const voiceService = require('./services/voiceService');
 const prisma = require('./db');
@@ -32,6 +34,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/games', gameRoutes);
 app.use('/api/feed', feedRoutes);
+// adminRoutes is initialized after in-memory Maps are created (see below)
+app.use('/api/feedback', feedbackRoutes);
 
 const server = http.createServer(app);
 
@@ -57,6 +61,27 @@ const rooms = new Map();        // roomId -> Set of { socketId, userId, nickname
 const userToRoom = new Map();   // socketId -> roomId
 const onlineUsers = new Map();  // userId -> Set<socketId> (global presence)
 const socketToUser = new Map(); // socketId -> { userId, nickname }
+
+// Now register admin routes with access to in-memory Maps
+app.use('/api/admin', createAdminRoutes(onlineUsers, rooms, activeGames));
+
+// Live stats endpoint — single source of truth for online counts
+app.get('/api/stats/live', (req, res) => {
+  res.json({
+    onlineUsers: onlineUsers.size,
+    activeRooms: rooms.size,
+    activeGames: activeGames.size
+  });
+});
+
+// Helper to broadcast live stats to all connected clients
+function broadcastLiveStats() {
+  io.emit('live_stats', {
+    onlineUsers: onlineUsers.size,
+    activeRooms: rooms.size,
+    activeGames: activeGames.size
+  });
+}
 
 // Store active voice channel participants
 // Map of channelId -> Array of { userId, nickname, socketId }
@@ -536,6 +561,9 @@ io.on('connection', (socket) => {
     // Send current online user list to the connecting user
     const onlineIds = Array.from(onlineUsers.keys());
     socket.emit('online_users', onlineIds);
+
+    // Broadcast live stats update
+    broadcastLiveStats();
   });
 
   // ========================
@@ -975,6 +1003,9 @@ io.on('connection', (socket) => {
           onlineUsers.delete(userId);
           // Broadcast offline only when ALL tabs are closed
           socket.broadcast.emit('user_offline', { userId });
+
+          // Broadcast live stats update
+          broadcastLiveStats();
 
           // Update lastSeen
           try {

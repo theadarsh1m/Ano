@@ -1,7 +1,29 @@
 const express = require('express');
 const feedService = require('../services/feedService');
 
+const prisma = require('../db');
+
 const router = express.Router();
+
+// Get active announcements
+router.get('/announcements', async (req, res) => {
+  try {
+    const now = new Date();
+    const announcements = await prisma.announcement.findMany({
+      where: {
+        OR: [
+          { expiryDate: null },
+          { expiryDate: { gte: now } }
+        ]
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(announcements);
+  } catch (err) {
+    console.error('Error fetching announcements:', err);
+    res.status(500).json({ error: 'Failed to fetch announcements' });
+  }
+});
 
 // Get available tags
 router.get('/tags', (req, res) => {

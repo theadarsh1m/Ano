@@ -18,6 +18,7 @@ export interface UserState {
   isAnonymous: boolean;
   email: string | null;
   nsfwMode: 'HIDE' | 'BLUR' | 'SHOW';
+  role: 'USER' | 'SUPER_ADMIN';
   preferences: UserPreferences;
   login: (nickname: string) => void;
   loginWithGoogle: (token: string) => Promise<{ isNewUser?: boolean }>;
@@ -32,8 +33,6 @@ const defaultPreferences: UserPreferences = {
   theme: 'dark',
 };
 
-
-
 export const useUserStore = create<UserState>()(
   persist(
     (set, get) => ({
@@ -45,6 +44,7 @@ export const useUserStore = create<UserState>()(
       isAnonymous: true,
       email: null,
       nsfwMode: 'HIDE',
+      role: 'USER',
       preferences: defaultPreferences,
       login: (nickname: string) => {
         const id = `guest_${uuidv4().substring(0, 6)}`;
@@ -56,7 +56,7 @@ export const useUserStore = create<UserState>()(
           body: JSON.stringify({ id, nickname }),
         }).catch((err) => console.error('Failed to persist user:', err));
 
-        set({ id, nickname, joinedAt: Date.now(), avatar: null, bio: null, isAnonymous: true, email: null, nsfwMode: 'HIDE' });
+        set({ id, nickname, joinedAt: Date.now(), avatar: null, bio: null, isAnonymous: true, email: null, nsfwMode: 'HIDE', role: 'USER' });
       },
       loginWithGoogle: async (token: string) => {
         const currentId = get().id;
@@ -85,6 +85,7 @@ export const useUserStore = create<UserState>()(
             bio: user.bio,
             isAnonymous: user.isAnonymous,
             email: user.email,
+            role: user.role || 'USER',
             nsfwMode: (user.nsfwMode === 'ALWAYS' ? 'HIDE' : user.nsfwMode === 'NEVER' ? 'SHOW' : user.nsfwMode) || 'HIDE',
             joinedAt: new Date(user.createdAt).getTime() || Date.now(),
           });
@@ -104,6 +105,7 @@ export const useUserStore = create<UserState>()(
         isAnonymous: true,
         email: null,
         nsfwMode: 'HIDE',
+        role: 'USER',
         preferences: defaultPreferences,
       }),
       updatePreferences: (newPreferences) => set((state) => ({

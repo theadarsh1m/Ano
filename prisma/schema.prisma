@@ -20,6 +20,8 @@ model User {
   isOnline              Boolean         @default(false)
   nsfwMode              NsfwMode        @default(HIDE)
   presenceStatus        String?
+  role                  UserRole        @default(USER)
+  isBanned              Boolean         @default(false)
   comments              Comment[]       @relation("CommentAuthor")
   conversationsAsA      Conversation[]  @relation("ParticipantA")
   conversationsAsB      Conversation[]  @relation("ParticipantB")
@@ -33,6 +35,10 @@ model User {
   posts                 Post[]          @relation("PostAuthor")
   savedPosts            SavedPost[]     @relation("UserSavedPosts")
   votes                 Vote[]          @relation("UserVotes")
+  reviews               Review[]
+  bugReports            BugReport[]
+  reportsSent           UserReport[]    @relation("ReportedBy")
+  reportsReceived       UserReport[]    @relation("ReportedUser")
 }
 
 model Room {
@@ -322,3 +328,83 @@ enum MoveType {
   INK_DECEPTION_SELECT_WORD
   INK_DECEPTION_GUESS
 }
+
+enum UserRole {
+  USER
+  SUPER_ADMIN
+}
+
+model Review {
+  id         String   @id @default(uuid())
+  userId     String
+  stars      Int
+  content    String
+  category   String
+  isRead     Boolean  @default(false)
+  isArchived Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model BugReport {
+  id          String   @id @default(uuid())
+  userId      String
+  description String
+  screenshot  String?
+  browser     String?
+  device      String?
+  game        String?
+  status      String   @default("OPEN") // OPEN, INVESTIGATING, IN_PROGRESS, FIXED, CLOSED
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserReport {
+  id          String   @id @default(uuid())
+  reporterId  String
+  reportedId  String
+  reason      String // TOXIC_CHAT, OFFENSIVE_USERNAME, CHEATING, EXPLOITING, OTHER
+  details     String?
+  status      String   @default("OPEN") // OPEN, CLOSED
+  createdAt   DateTime @default(now())
+  reporter    User     @relation("ReportedBy", fields: [reporterId], references: [id], onDelete: Cascade)
+  reported    User     @relation("ReportedUser", fields: [reportedId], references: [id], onDelete: Cascade)
+}
+
+model Announcement {
+  id          String    @id @default(uuid())
+  title       String
+  description String
+  color       String
+  icon        String
+  expiryDate  DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  adminEmail String
+  action     String
+  target     String
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+}
+
+model GameConfig {
+  id            String   @id
+  isEnabled     Boolean  @default(true)
+  isFeatured    Boolean  @default(false)
+  isMaintenance Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model SiteConfig {
+  id                 String   @id @default("default")
+  registrationOpen   Boolean  @default(true)
+  googleLoginEnabled Boolean  @default(true)
+  maintenanceMode    Boolean  @default(false)
+  ratingsEnabled     Boolean  @default(true)
+  updatedAt          DateTime @updatedAt
+}
+

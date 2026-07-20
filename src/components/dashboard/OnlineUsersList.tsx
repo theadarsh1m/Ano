@@ -3,12 +3,13 @@ import { API_URL } from "@/lib/config";
 
 import { useEffect, useState } from "react";
 import { GlassCard } from "@/components/layout/GlassCard";
-import { Users, User, Circle } from "lucide-react";
+import { Users, User, Circle, ShieldAlert } from "lucide-react";
 import { motion } from "framer-motion";
 import Image from "next/image";
 import { useUserStore } from "@/store/useUserStore";
 import { useDMStore } from "@/store/useDMStore";
 import { useRouter } from "next/navigation";
+import { ReportUserModal } from "../feedback/ReportUserModal";
 
 interface OnlineUser {
   id: string;
@@ -21,9 +22,16 @@ export function OnlineUsersList() {
   const [users, setUsers] = useState<OnlineUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [selectedReportUser, setSelectedReportUser] = useState({ id: "", nickname: "" });
 
   const myUserId = useUserStore((s) => s.id);
   const router = useRouter();
+
+  const openReport = (id: string, nickname: string) => {
+    setSelectedReportUser({ id, nickname });
+    setReportOpen(true);
+  };
 
   useEffect(() => {
     const fetchOnlineUsers = async () => {
@@ -41,9 +49,24 @@ export function OnlineUsersList() {
 
     fetchOnlineUsers();
     
-    // Optional: Refresh periodically
-    const interval = setInterval(fetchOnlineUsers, 30000); // every 30s
-    return () => clearInterval(interval);
+    // Listen for socket events to refetch online users
+    import("@/lib/socket").then(({ socketService }) => {
+      const socket = socketService.getSocket();
+      if (socket) {
+        socket.on('user_online', fetchOnlineUsers);
+        socket.on('user_offline', fetchOnlineUsers);
+      }
+    });
+
+    return () => {
+      import("@/lib/socket").then(({ socketService }) => {
+        const socket = socketService.getSocket();
+        if (socket) {
+          socket.off('user_online', fetchOnlineUsers);
+          socket.off('user_offline', fetchOnlineUsers);
+        }
+      });
+    };
   }, [myUserId]);
 
   const handleUserClick = async (user: OnlineUser) => {
@@ -119,7 +142,19 @@ export function OnlineUsersList() {
                 <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-[#12121A] rounded-full" />
               </div>
               <div className="flex flex-col flex-1 min-w-0">
-                <span className="text-white font-medium truncate">{user.nickname}</span>
+                <div className="flex items-center justify-between gap-1 w-full">
+                  <span className="text-white font-medium truncate">{user.nickname}</span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openReport(user.id, user.nickname);
+                    }}
+                    className="p-1 rounded hover:bg-red-500/10 text-red-400/80 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                    title={`Report ${user.nickname}`}
+                  >
+                    <ShieldAlert className="w-3.5 h-3.5" />
+                  </button>
+                </div>
                 {user.bio && (
                   <span className="text-xs text-gray-400 truncate">{user.bio}</span>
                 )}
@@ -128,6 +163,13 @@ export function OnlineUsersList() {
           ))}
         </div>
       )}
+
+      <ReportUserModal
+        isOpen={reportOpen}
+        onClose={() => setReportOpen(false)}
+        reportedId={selectedReportUser.id}
+        reportedNickname={selectedReportUser.nickname}
+      />
     </GlassCard>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { API_URL } from "@/lib/config";
 import { useUserStore } from "@/store/useUserStore";
 import { GoogleLogin } from "@react-oauth/google";
 import { GlassCard } from "@/components/layout/GlassCard";
@@ -168,7 +169,209 @@ export default function SettingsPage() {
             </div>
           </GlassCard>
         )}
+
+        {/* ── RATINGS & REVIEWS SUBMISSION ── */}
+        <FeedbackAndBugsSection userId={useUserStore.getState().id || ""} />
+
       </div>
+    </div>
+  );
+}
+
+function FeedbackAndBugsSection({ userId }: { userId: string }) {
+  // Review state
+  const [stars, setStars] = useState(5);
+  const [reviewContent, setReviewContent] = useState("");
+  const [category, setCategory] = useState("UI");
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewSuccess, setReviewSuccess] = useState(false);
+
+  // Bug state
+  const [bugDesc, setBugDesc] = useState("");
+  const [bugGame, setBugGame] = useState("Global");
+  const [submittingBug, setSubmittingBug] = useState(false);
+  const [bugSuccess, setBugSuccess] = useState(false);
+
+  const handleReviewSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reviewContent.trim() || !userId) return;
+    setSubmittingReview(true);
+
+    try {
+      const res = await fetch(`${API_URL}/api/feedback/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          stars,
+          content: reviewContent,
+          category
+        })
+      });
+
+      if (res.ok) {
+        setReviewContent("");
+        setReviewSuccess(true);
+        setTimeout(() => setReviewSuccess(false), 4000);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  const handleBugSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bugDesc.trim() || !userId) return;
+    setSubmittingBug(true);
+
+    // Auto-detect browser and device from User Agent
+    const ua = navigator.userAgent;
+    let browser = "Other";
+    if (ua.includes("Firefox")) browser = "Firefox";
+    else if (ua.includes("Chrome")) browser = "Chrome";
+    else if (ua.includes("Safari")) browser = "Safari";
+    else if (ua.includes("Edge")) browser = "Edge";
+
+    let device = "Desktop";
+    if (/Mobi|Android|iPhone/i.test(ua)) device = "Mobile";
+
+    try {
+      const res = await fetch(`${API_URL}/api/feedback/bug`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          description: bugDesc,
+          browser,
+          device,
+          game: bugGame
+        })
+      });
+
+      if (res.ok) {
+        setBugDesc("");
+        setBugSuccess(true);
+        setTimeout(() => setBugSuccess(false), 4000);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSubmittingBug(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <GlassCard>
+        <h3 className="text-lg font-semibold text-white mb-2">Submit Feedback & Review</h3>
+        <p className="text-xs text-white/50 mb-4">Let us know what you think of Ano! Select a category and rate your experience.</p>
+        
+        {reviewSuccess ? (
+          <div className="p-4 bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-bold rounded-xl uppercase tracking-wider text-center">
+            Review submitted successfully! Thank you.
+          </div>
+        ) : (
+          <form onSubmit={handleReviewSubmit} className="space-y-4 text-xs">
+            <div className="flex gap-4">
+              <div className="flex-1">
+                <label className="block text-white/60 mb-1 font-semibold uppercase text-[9px]">Category</label>
+                <select 
+                  value={category} 
+                  onChange={e => setCategory(e.target.value)}
+                  className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-white/80 focus:outline-none"
+                >
+                  <option value="UI">User Interface</option>
+                  <option value="GAMEPLAY">Gameplay</option>
+                  <option value="MULTIPLAYER">Multiplayer</option>
+                  <option value="PERFORMANCE">Performance</option>
+                  <option value="BUG">Bug / Glitch</option>
+                  <option value="SUGGESTION">Suggestion</option>
+                  <option value="OTHER">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-white/60 mb-1 font-semibold uppercase text-[9px]">Rating</label>
+                <div className="flex gap-1 items-center bg-black/40 border border-white/10 rounded-xl p-2.5">
+                  {[1, 2, 3, 4, 5].map((num) => (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => setStars(num)}
+                      className={`text-base leading-none transition-colors ${num <= stars ? "text-yellow-400" : "text-zinc-600"}`}
+                    >
+                      ★
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-white/60 mb-1 font-semibold uppercase text-[9px]">Your Review</label>
+              <textarea
+                placeholder="What do you love? What can we improve?..."
+                value={reviewContent}
+                onChange={e => setReviewContent(e.target.value)}
+                rows={3}
+                className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-white/90 focus:outline-none placeholder:text-zinc-600 font-medium"
+                required
+              />
+            </div>
+
+            <Button type="submit" disabled={submittingReview} className="w-full glass-button text-white font-bold h-10 border-none">
+              {submittingReview ? "Submitting..." : "Submit Review"}
+            </Button>
+          </form>
+        )}
+      </GlassCard>
+
+      <GlassCard>
+        <h3 className="text-lg font-semibold text-white mb-2">Report a Bug</h3>
+        <p className="text-xs text-white/50 mb-4">Encountered an issue? Help us squash it by detailing the problem.</p>
+
+        {bugSuccess ? (
+          <div className="p-4 bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-bold rounded-xl uppercase tracking-wider text-center">
+            Bug report submitted! Our team will investigate.
+          </div>
+        ) : (
+          <form onSubmit={handleBugSubmit} className="space-y-4 text-xs">
+            <div>
+              <label className="block text-white/60 mb-1 font-semibold uppercase text-[9px]">Affected Area / Game</label>
+              <select
+                value={bugGame}
+                onChange={e => setBugGame(e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-white/80 focus:outline-none"
+              >
+                <option value="Global">Global Platform / Chat</option>
+                <option value="CHAMBER_CLASH">Chamber Clash</option>
+                <option value="BLUFF">Bluff</option>
+                <option value="SCRIBBLE">Scribble</option>
+                <option value="INK_DECEPTION">Ink Deception</option>
+                <option value="UNO">UNO</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-white/60 mb-1 font-semibold uppercase text-[9px]">Description of the Bug</label>
+              <textarea
+                placeholder="What happened? How can we reproduce it?..."
+                value={bugDesc}
+                onChange={e => setBugDesc(e.target.value)}
+                rows={3}
+                className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-white/90 focus:outline-none placeholder:text-zinc-600 font-medium"
+                required
+              />
+            </div>
+
+            <Button type="submit" disabled={submittingBug} className="w-full glass-button text-white font-bold h-10 border-none">
+              {submittingBug ? "Submitting Report..." : "Submit Bug Report"}
+            </Button>
+          </form>
+        )}
+      </GlassCard>
     </div>
   );
 }

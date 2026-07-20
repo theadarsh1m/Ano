@@ -19,16 +19,19 @@ import {
   Bookmark,
   Menu,
   X,
+  Bug,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
+import { ReportBugModal } from "@/components/feedback/ReportBugModal";
 
 export function AppSidebar() {
   const router = useRouter();
   const pathname = usePathname();
-  const { id: userId, nickname, avatar, logout } = useUserStore();
+  const { id: userId, nickname, avatar, role, logout } = useUserStore();
   const totalUnread = useDMStore((s) => s.getTotalUnreadDMs());
   const [searchOpen, setSearchOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [bugOpen, setBugOpen] = useState(false);
 
   const handleLogout = () => {
     socketService.disconnect();
@@ -43,6 +46,15 @@ export function AppSidebar() {
     { label: "Saved Posts", icon: Bookmark, href: "/feed/saved", active: pathname === "/feed/saved" },
     { label: "Settings", icon: Settings, href: "/dashboard/settings", active: pathname === "/dashboard/settings" },
   ];
+
+  if (role === 'SUPER_ADMIN') {
+    navItems.push({
+      label: "Admin Portal",
+      icon: Lock,
+      href: "/admin",
+      active: pathname?.startsWith("/admin") ?? false
+    });
+  }
 
   const navigateTo = (href: string) => {
     router.push(href);
@@ -87,6 +99,15 @@ export function AppSidebar() {
             {item.label}
           </button>
         ))}
+
+        {/* Report a Bug Button */}
+        <button
+          onClick={() => setBugOpen(true)}
+          className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm text-red-400/80 hover:text-red-400 hover:bg-red-500/5 transition-all mt-4 border border-dashed border-red-500/10 hover:border-red-500/20"
+        >
+          <Bug className="w-4 h-4 text-red-450" />
+          Report a Bug
+        </button>
       </div>
 
       {/* DM Section */}
@@ -197,6 +218,7 @@ export function AppSidebar() {
       </AnimatePresence>
 
       <UserSearchModal isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
+      <ReportBugModal isOpen={bugOpen} onClose={() => setBugOpen(false)} />
     </>
   );
 }

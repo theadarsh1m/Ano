@@ -6,7 +6,7 @@ import { GlassCard } from "@/components/layout/GlassCard";
 import { useUserStore } from "@/store/useUserStore";
 import { useDMStore } from "@/store/useDMStore";
 import { useRouter } from "next/navigation";
-import { MessageSquare, ShieldCheck, UserPlus } from "lucide-react";
+import { MessageSquare, ShieldCheck, UserPlus, ShieldAlert } from "lucide-react";
 
 
 
@@ -15,13 +15,21 @@ interface OnlineUsersSidebarProps {
 }
 
 import { RoomInviteModal } from "./RoomInviteModal";
+import { ReportUserModal } from "../feedback/ReportUserModal";
 import { useState } from "react";
 
 export function OnlineUsersSidebar({ roomId }: OnlineUsersSidebarProps) {
   const router = useRouter();
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [selectedReportUser, setSelectedReportUser] = useState({ id: "", nickname: "" });
   const activeUsers = useChatStore((state) => state.activeUsers[roomId]) || [];
   const myUserId = useUserStore((state) => state.id);
+
+  const openReport = (id: string, nickname: string) => {
+    setSelectedReportUser({ id, nickname });
+    setReportOpen(true);
+  };
 
   const handleStartDM = async (targetUserId: string) => {
     if (!myUserId || myUserId === targetUserId) return;
@@ -91,17 +99,29 @@ export function OnlineUsersSidebar({ roomId }: OnlineUsersSidebarProps) {
                   </p>
                   <p className="text-xs text-green-400">Online</p>
                 </div>
-                {!isMe && (
-                  <button
-                    className="opacity-0 group-hover:opacity-100 p-1.5 rounded-md hover:bg-white/10 text-gray-400 hover:text-white transition-all"
-                    title={`Message ${user.nickname}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleStartDM(user.userId);
-                    }}
-                  >
-                    <MessageSquare className="w-3.5 h-3.5" />
-                  </button>
+                 {!isMe && (
+                  <div className="flex gap-0.5">
+                    <button
+                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded-md hover:bg-white/10 text-gray-400 hover:text-white transition-all"
+                      title={`Message ${user.nickname}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleStartDM(user.userId);
+                      }}
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded-md hover:bg-red-500/10 text-red-400 hover:text-red-300 transition-all animate-fade-in"
+                      title={`Report ${user.nickname}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openReport(user.userId, user.nickname);
+                      }}
+                    >
+                      <ShieldAlert className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 )}
               </div>
             );
@@ -121,6 +141,13 @@ export function OnlineUsersSidebar({ roomId }: OnlineUsersSidebarProps) {
           roomName="the room" // Ideally passed as prop
         />
       )}
+
+      <ReportUserModal
+        isOpen={reportOpen}
+        onClose={() => setReportOpen(false)}
+        reportedId={selectedReportUser.id}
+        reportedNickname={selectedReportUser.nickname}
+      />
     </div>
   );
 }

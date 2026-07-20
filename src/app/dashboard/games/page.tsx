@@ -1,9 +1,20 @@
+"use client";
+
+import { useState } from "react";
 import { GlassCard } from "@/components/layout/GlassCard";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Gamepad2, Play, Trophy, Clock, ArrowLeft, MessageSquare } from "lucide-react";
+import { Gamepad2, Play, Trophy, Clock, ArrowLeft, MessageSquare, Star } from "lucide-react";
+import { GameRatingModal } from "@/components/feedback/GameRatingModal";
 
 export default function GamesHubPage() {
+  const [ratingOpen, setRatingOpen] = useState(false);
+  const [selectedGame, setSelectedGame] = useState({ id: "", title: "" });
+
+  const openRating = (id: string, title: string) => {
+    setSelectedGame({ id, title });
+    setRatingOpen(true);
+  };
   const singlePlayerGames = [
     {
       id: "2048",
@@ -134,11 +145,20 @@ export default function GamesHubPage() {
               {game.description}
             </p>
             
-            <Link href={game.href} className="relative z-10">
-              <button className="w-full py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2 group-hover:bg-emerald-500 group-hover:text-white">
-                <Play className="w-4 h-4" /> Play Now
+            <div className="flex gap-2 relative z-10">
+              <Link href={game.href} className="flex-grow">
+                <button className="w-full py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2 group-hover:bg-emerald-500 group-hover:text-white">
+                  <Play className="w-4 h-4" /> Play Now
+                </button>
+              </Link>
+              <button 
+                onClick={() => openRating(game.id, game.title)}
+                className="px-3 bg-white/5 hover:bg-yellow-500/10 border border-white/10 hover:border-yellow-500/30 text-yellow-500 rounded-lg transition-colors flex items-center justify-center"
+                title={`Rate ${game.title}`}
+              >
+                <Star className="w-4 h-4 fill-yellow-500 text-yellow-500" />
               </button>
-            </Link>
+            </div>
           </GlassCard>
         ))}
       </div>
@@ -183,14 +203,30 @@ export default function GamesHubPage() {
               </div>
             </div>
             
-            <Link href={`/dashboard/games/${game.id}`} className="relative z-10">
-              <button className="w-full py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2 group-hover:bg-purple-500 group-hover:text-white">
-                <Play className="w-4 h-4" /> Play Now
+            <div className="flex gap-2 relative z-10">
+              <Link href={`/dashboard/games/${game.id}`} className="flex-grow">
+                <button className="w-full py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2 group-hover:bg-purple-500 group-hover:text-white">
+                  <Play className="w-4 h-4" /> Play Now
+                </button>
+              </Link>
+              <button 
+                onClick={() => openRating(game.id, game.title)}
+                className="px-3 bg-white/5 hover:bg-yellow-500/10 border border-white/10 hover:border-yellow-500/30 text-yellow-500 rounded-lg transition-colors flex items-center justify-center"
+                title={`Rate ${game.title}`}
+              >
+                <Star className="w-4 h-4 fill-yellow-500 text-yellow-500" />
               </button>
-            </Link>
+            </div>
           </GlassCard>
         ))}
       </div>
+
+      <GameRatingModal
+        isOpen={ratingOpen}
+        onClose={() => setRatingOpen(false)}
+        gameId={selectedGame.id}
+        gameTitle={selectedGame.title}
+      />
     </div>
   );
 }

@@ -78,10 +78,15 @@ const userService = {
         createdAt: true,
         lastSeen: true,
         presenceStatus: true,
+        role: true,
+        isBanned: true,
       },
     });
 
     if (!user) return null;
+    if (user.isBanned) {
+      throw new Error("Your account has been banned.");
+    }
 
     return {
       id: user.id,
@@ -92,6 +97,8 @@ const userService = {
       createdAt: user.createdAt.getTime(),
       lastSeen: user.lastSeen.getTime(),
       presenceStatus: user.presenceStatus,
+      role: user.role,
+      isBanned: user.isBanned,
     };
   },
 
@@ -116,6 +123,8 @@ const userService = {
         nsfwMode: true,
         createdAt: true,
         lastSeen: true,
+        role: true,
+        isBanned: true,
       },
     });
 
@@ -127,6 +136,8 @@ const userService = {
       nsfwMode: user.nsfwMode,
       createdAt: user.createdAt.getTime(),
       lastSeen: user.lastSeen.getTime(),
+      role: user.role,
+      isBanned: user.isBanned,
     };
   },
 
@@ -149,6 +160,8 @@ const userService = {
         nickname: true,
         avatar: true,
         lastSeen: true,
+        role: true,
+        isBanned: true,
       },
       take: limit,
       orderBy: { lastSeen: 'desc' },
@@ -159,6 +172,8 @@ const userService = {
       nickname: u.nickname,
       avatar: u.avatar,
       lastSeen: u.lastSeen.getTime(),
+      role: u.role,
+      isBanned: u.isBanned,
     }));
   },
 
@@ -188,6 +203,12 @@ const userService = {
    */
   async findOrCreateGoogleUser(googleProfile) {
     const googleUserId = `google_${googleProfile.sub}`;
+    
+    // Check if email is in SUPER_ADMIN_EMAILS env variable
+    const adminsEnv = process.env.SUPER_ADMIN_EMAILS || '';
+    const adminEmails = adminsEnv.split(',').map(e => e.trim().toLowerCase());
+    const role = adminEmails.includes(googleProfile.email?.toLowerCase()) ? 'SUPER_ADMIN' : 'USER';
+
     let user = await prisma.user.findFirst({
       where: {
         OR: [
@@ -197,6 +218,10 @@ const userService = {
         ]
       },
     });
+
+    if (user && user.isBanned) {
+      throw new Error("Your account has been banned.");
+    }
 
     let isNewUser = false;
 
@@ -209,6 +234,7 @@ const userService = {
           nickname: googleProfile.name || 'Google User',
           avatar: googleProfile.picture,
           isAnonymous: false,
+          role,
         },
       });
       isNewUser = true;
@@ -220,6 +246,7 @@ const userService = {
           email: googleProfile.email,
           isAnonymous: false,
           avatar: googleProfile.picture || user.avatar,
+          role,
         },
       });
     }
@@ -243,6 +270,13 @@ const userService = {
     if (!guest || !guest.isAnonymous) {
       throw new Error("Invalid guest account.");
     }
+    if (guest.isBanned) {
+      throw new Error("Your account has been banned.");
+    }
+
+    const adminsEnv = process.env.SUPER_ADMIN_EMAILS || '';
+    const adminEmails = adminsEnv.split(',').map(e => e.trim().toLowerCase());
+    const role = adminEmails.includes(googleProfile.email?.toLowerCase()) ? 'SUPER_ADMIN' : 'USER';
 
     const user = await prisma.user.update({
       where: { id: guestId },
@@ -252,6 +286,7 @@ const userService = {
         avatar: googleProfile.picture || guest.avatar,
         nickname: googleProfile.name || guest.nickname,
         isAnonymous: false,
+        role,
       },
     });
 
