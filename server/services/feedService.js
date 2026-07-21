@@ -11,7 +11,7 @@ const feedService = {
   /**
    * Create a new post.
    */
-  async createPost(authorId, { content, imageUrl, isAnonymous = false, tags = [], moderationStatus, isNSFW, nsfwConfidence }) {
+  async createPost(authorId, { content, imageUrl, isAnonymous = false, tags = [], moderationStatus, moderationProvider, nudityScore, goreScore, rawModerationResponse, moderatedAt }) {
     // Filter to only valid tags
     const validTags = tags.filter(t => AVAILABLE_TAGS.includes(t));
 
@@ -23,8 +23,11 @@ const feedService = {
         authorId,
         tags: validTags,
         moderationStatus,
-        isNSFW,
-        nsfwConfidence,
+        moderationProvider,
+        nudityScore,
+        goreScore,
+        rawModerationResponse,
+        moderatedAt,
       },
       include: {
         author: {
@@ -47,11 +50,15 @@ const feedService = {
       where.tags = { has: tag };
     }
 
-    // Hide posts that are not fully moderated (PENDING/SCANNING) from other users
-    where.OR = [
-      { moderationStatus: { in: ['APPROVED', 'FLAGGED'] } },
-      ...(userId ? [{ authorId: userId }] : []),
-    ];
+    // Hide posts that are REJECTED or PENDING_MODERATION from other users
+    if (userId) {
+      where.OR = [
+        { moderationStatus: { in: ['SAFE', 'SENSITIVE'] } },
+        { authorId: userId }
+      ];
+    } else {
+      where.moderationStatus = { in: ['SAFE', 'SENSITIVE'] };
+    }
 
     let orderBy;
     if (tab === 'trending') {
@@ -102,8 +109,11 @@ const feedService = {
         createdAt: post.createdAt,
         updatedAt: post.updatedAt,
         moderationStatus: post.moderationStatus,
-        isNSFW: post.isNSFW,
-        nsfwConfidence: post.nsfwConfidence,
+        moderationProvider: post.moderationProvider,
+        nudityScore: post.nudityScore,
+        goreScore: post.goreScore,
+        rawModerationResponse: post.rawModerationResponse,
+        moderatedAt: post.moderatedAt,
         author: post.isAnonymous
           ? { id: null, nickname: 'Anonymous', avatar: null }
           : post.author,
@@ -144,8 +154,8 @@ const feedService = {
 
     if (!post) return null;
 
-    // Block non-author if post is still PENDING or SCANNING
-    if (['PENDING', 'SCANNING'].includes(post.moderationStatus) && post.authorId !== requesterId) {
+    // Block non-author if post is still PENDING_MODERATION or REJECTED
+    if (['PENDING_MODERATION', 'REJECTED'].includes(post.moderationStatus) && post.authorId !== requesterId) {
       return null;
     }
 
@@ -164,8 +174,11 @@ const feedService = {
       createdAt: post.createdAt,
       updatedAt: post.updatedAt,
       moderationStatus: post.moderationStatus,
-      isNSFW: post.isNSFW,
-      nsfwConfidence: post.nsfwConfidence,
+      moderationProvider: post.moderationProvider,
+      nudityScore: post.nudityScore,
+      goreScore: post.goreScore,
+      rawModerationResponse: post.rawModerationResponse,
+      moderatedAt: post.moderatedAt,
       author: post.isAnonymous
         ? { id: null, nickname: 'Anonymous', avatar: null }
         : post.author,

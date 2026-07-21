@@ -221,10 +221,12 @@ export default function PostDetailPage() {
                     )}
                     <SafeMedia
                       src={post.imageUrl}
-                      isNSFW={!!post.isNSFW}
-                      mediaId={`post_${post.id}`}
                       alt="Post image"
                       className="w-full max-h-[500px] object-contain bg-black/20"
+                      moderationStatus={post.moderationStatus}
+                      nudityScore={post.nudityScore}
+                      goreScore={post.goreScore}
+                      mediaId={`post_${post.id}`}
                     />
                   </div>
                 </div>

@@ -115,7 +115,9 @@ export function PostCard({ post, onVote, onSave, onUnsave, onDelete, isOwner }: 
               )}
               <SafeMedia
                 src={post.imageUrl}
-                isNSFW={!!post.isNSFW}
+                moderationStatus={post.moderationStatus}
+                nudityScore={post.nudityScore}
+                goreScore={post.goreScore}
                 mediaId={`post_${post.id}`}
                 alt="Post image"
                 className="w-full h-full object-cover"

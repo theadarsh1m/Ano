@@ -49,7 +49,9 @@ export function DMChatArea({ conversationId }: DMChatAreaProps) {
             )}
             <SafeMedia
               src={msg.fileUrl}
-              isNSFW={!!msg.isNSFW}
+              moderationStatus={msg.moderationStatus}
+              nudityScore={msg.nudityScore}
+              goreScore={msg.goreScore}
               mediaId={`dm_${msg.id}`}
               alt={msg.fileName || "Image"}
               className="block rounded-lg overflow-hidden max-w-[300px] cursor-pointer hover:opacity-90 transition-opacity w-full h-auto"

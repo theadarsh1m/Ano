@@ -78,21 +78,43 @@ router.post('/', async (req, res) => {
     if (!authorId) return res.status(400).json({ error: 'authorId is required' });
     if (!content && !imageUrl) return res.status(400).json({ error: 'Content or image is required' });
 
+    let moderationData = {
+      moderationStatus: imageUrl ? 'PENDING_MODERATION' : 'SAFE',
+      moderationProvider: 'Sightengine',
+      nudityScore: null,
+      goreScore: null,
+      rawModerationResponse: null,
+      moderatedAt: imageUrl ? null : new Date()
+    };
+
+    if (imageUrl) {
+      const sightengineService = require('../services/sightengineService');
+      const scan = await sightengineService.moderateImage(imageUrl);
+      
+      if (scan.status === 'REJECTED') {
+        // EXPLICIT -> Reject upload
+        // We could also delete from Cloudinary here if we had the publicId extraction, 
+        // but for now we just reject.
+        return res.status(400).json({ error: 'This image violates our community guidelines (Explicit Content).' });
+      }
+
+      moderationData = {
+        moderationStatus: scan.status,
+        moderationProvider: 'Sightengine',
+        nudityScore: scan.nudityScore,
+        goreScore: scan.goreScore,
+        rawModerationResponse: scan.rawModerationResponse,
+        moderatedAt: new Date()
+      };
+    }
+
     const post = await feedService.createPost(authorId, {
       content,
       imageUrl,
       isAnonymous,
       tags,
-      moderationStatus: imageUrl ? 'PENDING' : 'APPROVED',
-      isNSFW: false,
-      nsfwConfidence: 0,
+      ...moderationData
     });
-
-    // Run moderation pipeline asynchronously in the background queue
-    if (imageUrl) {
-      const moderationQueue = require('../services/moderationQueue');
-      moderationQueue.addJob({ type: 'POST', id: post.id, imageUrl });
-    }
 
     res.status(201).json(post);
   } catch (err) {

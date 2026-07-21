@@ -153,7 +153,6 @@ export default function FeedPage() {
             )}
 
             {posts
-              .filter((post) => !(post.isNSFW && nsfwMode === "HIDE"))
               .map((post) => (
                 <PostCard
                   key={post.id}

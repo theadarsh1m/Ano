@@ -64,21 +64,24 @@ model VoiceChannel {
 }
 
 model Message {
-  id               String           @id
-  content          String
-  type             String           @default("text")
-  createdAt        DateTime         @default(now())
-  senderId         String?
-  roomId           String
-  fileName         String?
-  fileSize         Int?
-  fileType         String?
-  fileUrl          String?
-  isNSFW           Boolean          @default(false)
-  moderationStatus ModerationStatus @default(PENDING)
-  nsfwConfidence   Float            @default(0)
-  room             Room             @relation(fields: [roomId], references: [id])
-  sender           User?            @relation(fields: [senderId], references: [id])
+  id                    String           @id
+  content               String
+  type                  String           @default("text")
+  createdAt             DateTime         @default(now())
+  senderId              String?
+  roomId                String
+  fileName              String?
+  fileSize              Int?
+  fileType              String?
+  fileUrl               String?
+  moderationStatus      ModerationStatus @default(PENDING_MODERATION)
+  moderationProvider    String           @default("Sightengine")
+  nudityScore           Float?
+  goreScore             Float?
+  rawModerationResponse Json?
+  moderatedAt           DateTime?
+  room                  Room             @relation(fields: [roomId], references: [id])
+  sender                User?            @relation(fields: [senderId], references: [id])
 }
 
 model Conversation {
@@ -95,22 +98,25 @@ model Conversation {
 }
 
 model DirectMessage {
-  id               String           @id @default(uuid())
-  content          String
-  type             String           @default("text")
-  createdAt        DateTime         @default(now())
-  senderId         String
-  conversationId   String
-  fileUrl          String?
-  fileName         String?
-  fileSize         Int?
-  fileType         String?
-  isRead           Boolean          @default(false)
-  isNSFW           Boolean          @default(false)
-  moderationStatus ModerationStatus @default(PENDING)
-  nsfwConfidence   Float            @default(0)
-  conversation     Conversation     @relation(fields: [conversationId], references: [id])
-  sender           User             @relation("DMSender", fields: [senderId], references: [id])
+  id                    String           @id @default(uuid())
+  content               String
+  type                  String           @default("text")
+  createdAt             DateTime         @default(now())
+  senderId              String
+  conversationId        String
+  fileUrl               String?
+  fileName              String?
+  fileSize              Int?
+  fileType              String?
+  isRead                Boolean          @default(false)
+  moderationStatus      ModerationStatus @default(PENDING_MODERATION)
+  moderationProvider    String           @default("Sightengine")
+  nudityScore           Float?
+  goreScore             Float?
+  rawModerationResponse Json?
+  moderatedAt           DateTime?
+  conversation          Conversation     @relation(fields: [conversationId], references: [id])
+  sender                User             @relation("DMSender", fields: [senderId], references: [id])
 }
 
 model Notification {
@@ -156,24 +162,27 @@ model GameStat {
 }
 
 model Post {
-  id               String           @id @default(uuid())
-  content          String?
-  imageUrl         String?
-  isAnonymous      Boolean          @default(false)
-  score            Int              @default(0)
-  authorId         String
-  tags             String[]         @default([])
-  commentCount     Int              @default(0)
-  isLocked         Boolean          @default(false)
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  isNSFW           Boolean          @default(false)
-  moderationStatus ModerationStatus @default(PENDING)
-  nsfwConfidence   Float            @default(0)
-  comments         Comment[]
-  author           User             @relation("PostAuthor", fields: [authorId], references: [id])
-  savedBy          SavedPost[]
-  votes            Vote[]
+  id                    String           @id @default(uuid())
+  content               String?
+  imageUrl              String?
+  isAnonymous           Boolean          @default(false)
+  score                 Int              @default(0)
+  authorId              String
+  tags                  String[]         @default([])
+  commentCount          Int              @default(0)
+  isLocked              Boolean          @default(false)
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  moderationStatus      ModerationStatus @default(PENDING_MODERATION)
+  moderationProvider    String           @default("Sightengine")
+  nudityScore           Float?
+  goreScore             Float?
+  rawModerationResponse Json?
+  moderatedAt           DateTime?
+  comments              Comment[]
+  author                User             @relation("PostAuthor", fields: [authorId], references: [id])
+  savedBy               SavedPost[]
+  votes                 Vote[]
 }
 
 model Comment {
@@ -215,12 +224,15 @@ model SavedPost {
 }
 
 model ModerationCache {
-  id             String           @id @default(uuid())
-  publicId       String           @unique
-  isNSFW         Boolean
-  nsfwConfidence Float
-  status         ModerationStatus
-  createdAt      DateTime         @default(now())
+  id                    String           @id @default(uuid())
+  publicId              String           @unique
+  status                ModerationStatus
+  moderationProvider    String           @default("Sightengine")
+  nudityScore           Float?
+  goreScore             Float?
+  rawModerationResponse Json?
+  moderatedAt           DateTime?
+  createdAt             DateTime         @default(now())
 }
 
 model GameSession {
@@ -275,11 +287,10 @@ enum NsfwMode {
 }
 
 enum ModerationStatus {
-  PENDING
-  SCANNING
-  APPROVED
-  FLAGGED
-  SCANNING_FAILED
+  SAFE
+  SENSITIVE
+  PENDING_MODERATION
+  REJECTED
 }
 
 enum GameType {
@@ -360,15 +371,15 @@ model BugReport {
 }
 
 model UserReport {
-  id          String   @id @default(uuid())
-  reporterId  String
-  reportedId  String
-  reason      String // TOXIC_CHAT, OFFENSIVE_USERNAME, CHEATING, EXPLOITING, OTHER
-  details     String?
-  status      String   @default("OPEN") // OPEN, CLOSED
-  createdAt   DateTime @default(now())
-  reporter    User     @relation("ReportedBy", fields: [reporterId], references: [id], onDelete: Cascade)
-  reported    User     @relation("ReportedUser", fields: [reportedId], references: [id], onDelete: Cascade)
+  id         String   @id @default(uuid())
+  reporterId String
+  reportedId String
+  reason     String // TOXIC_CHAT, OFFENSIVE_USERNAME, CHEATING, EXPLOITING, OTHER
+  details    String?
+  status     String   @default("OPEN") // OPEN, CLOSED
+  createdAt  DateTime @default(now())
+  reporter   User     @relation("ReportedBy", fields: [reporterId], references: [id], onDelete: Cascade)
+  reported   User     @relation("ReportedUser", fields: [reportedId], references: [id], onDelete: Cascade)
 }
 
 model Announcement {
@@ -407,4 +418,3 @@ model SiteConfig {
   ratingsEnabled     Boolean  @default(true)
   updatedAt          DateTime @updatedAt
 }
-

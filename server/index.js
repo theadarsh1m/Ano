@@ -46,12 +46,7 @@ const io = new Server(server, {
   }
 });
 
-// Inject Socket.IO into moderation service and queue
-const moderationService = require('./services/moderationService');
-const moderationQueue = require('./services/moderationQueue');
-moderationService.setSocketIO(io);
-moderationQueue.setSocketIO(io);
-
+// Socket.io initialized
 // Reusable Multiplayer Game Framework Imports
 const registerGameSockets = require('./games/socket/GameSocket');
 const activeGames = new Map(); // gameId -> gameEngine instance
@@ -279,11 +274,12 @@ app.put('/api/users/:userId', async (req, res) => {
 
     if (avatar) {
       try {
-        const moderationService = require('./services/moderationService');
-        const scan = await moderationService.moderateImage(avatar);
-        if (scan.isNSFW) {
+        const sightengineService = require('./services/sightengineService');
+        const scan = await sightengineService.moderateImage(avatar);
+        if (scan.status === 'REJECTED') {
           // Delete from Cloudinary
-          const publicId = moderationService.extractPublicId(avatar);
+          const uploadService = require('./services/uploadService');
+          const publicId = uploadService.extractPublicId ? uploadService.extractPublicId(avatar) : null;
           if (publicId) {
             const uploadService = require('./services/uploadService');
             await uploadService.deleteImage(publicId).catch(console.error);
@@ -632,29 +628,36 @@ io.on('connection', (socket) => {
   socket.on('send_message', async (message) => {
     try {
       const isImage = message.fileUrl && message.fileType && message.fileType.startsWith('image/');
-      const initialModeration = {
-        moderationStatus: isImage ? 'PENDING' : 'APPROVED',
-        isNSFW: false,
-        nsfwConfidence: 0,
+      let moderationData = {
+        moderationStatus: isImage ? 'PENDING_MODERATION' : 'SAFE',
+        moderationProvider: 'Sightengine',
+        nudityScore: null,
+        goreScore: null,
+        rawModerationResponse: null,
+        moderatedAt: isImage ? null : new Date()
       };
+
+      if (isImage) {
+        const sightengineService = require('./services/sightengineService');
+        const scan = await sightengineService.moderateImage(message.fileUrl);
+        moderationData = {
+          moderationStatus: scan.status,
+          moderationProvider: 'Sightengine',
+          nudityScore: scan.nudityScore,
+          goreScore: scan.goreScore,
+          rawModerationResponse: scan.rawModerationResponse,
+          moderatedAt: new Date()
+        };
+      }
 
       const messageToSave = {
         ...message,
-        ...initialModeration,
+        ...moderationData,
       };
 
       io.to(message.roomId).emit('receive_message', messageToSave);
 
-      const savedMsg = await messageService.saveMessage(messageToSave);
-
-      if (isImage) {
-        moderationQueue.addJob({
-          type: 'MESSAGE',
-          id: savedMsg.id,
-          imageUrl: message.fileUrl,
-          roomId: message.roomId,
-        });
-      }
+      await messageService.saveMessage(messageToSave);
 
       // Parse mentions
       const mentionMatches = message.content.match(/@([a-zA-Z0-9_]+)/g);
@@ -760,15 +763,31 @@ io.on('connection', (socket) => {
 
   socket.on('dm_send', async (message) => {
     const isImage = message.fileUrl && message.fileType && message.fileType.startsWith('image/');
-    const initialModeration = {
-      moderationStatus: isImage ? 'PENDING' : 'APPROVED',
-      isNSFW: false,
-      nsfwConfidence: 0,
+    let moderationData = {
+      moderationStatus: isImage ? 'PENDING_MODERATION' : 'SAFE',
+      moderationProvider: 'Sightengine',
+      nudityScore: null,
+      goreScore: null,
+      rawModerationResponse: null,
+      moderatedAt: isImage ? null : new Date()
     };
+
+    if (isImage) {
+      const sightengineService = require('./services/sightengineService');
+      const scan = await sightengineService.moderateImage(message.fileUrl);
+      moderationData = {
+        moderationStatus: scan.status,
+        moderationProvider: 'Sightengine',
+        nudityScore: scan.nudityScore,
+        goreScore: scan.goreScore,
+        rawModerationResponse: scan.rawModerationResponse,
+        moderatedAt: new Date()
+      };
+    }
 
     const messageToSave = {
       ...message,
-      ...initialModeration,
+      ...moderationData,
     };
 
     // Check if the recipient is online and currently viewing the DM room
@@ -809,16 +828,7 @@ io.on('connection', (socket) => {
 
     // Persist to database
     try {
-      const savedMsg = await dmService.saveDirectMessage(messageToSave);
-
-      if (isImage) {
-        moderationQueue.addJob({
-          type: 'DM',
-          id: savedMsg.id,
-          imageUrl: message.fileUrl,
-          conversationId: message.conversationId,
-        });
-      }
+      await dmService.saveDirectMessage(messageToSave);
 
       // Parse mentions in DMs
       const mentionMatches = message.content.match(/@([a-zA-Z0-9_]+)/g);

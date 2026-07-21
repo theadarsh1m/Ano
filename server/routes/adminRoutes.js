@@ -476,6 +476,69 @@ router.post('/rewards/grant', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// ──── MODERATION QUEUE ────
+router.get('/moderation', async (req, res) => {
+  try {
+    const [posts, messages, dms] = await Promise.all([
+      prisma.post.findMany({
+        where: { moderationStatus: 'PENDING_MODERATION' },
+        include: { author: { select: { nickname: true, email: true } } },
+        orderBy: { createdAt: 'desc' }
+      }),
+      prisma.message.findMany({
+        where: { moderationStatus: 'PENDING_MODERATION' },
+        include: { sender: { select: { nickname: true, email: true } } },
+        orderBy: { createdAt: 'desc' }
+      }),
+      prisma.directMessage.findMany({
+        where: { moderationStatus: 'PENDING_MODERATION' },
+        include: { sender: { select: { nickname: true, email: true } } },
+        orderBy: { createdAt: 'desc' }
+      })
+    ]);
+
+    const queue = [
+      ...posts.map(p => ({ ...p, type: 'POST', user: p.author })),
+      ...messages.map(m => ({ ...m, type: 'MESSAGE', user: m.sender })),
+      ...dms.map(d => ({ ...d, type: 'DM', user: d.sender }))
+    ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    res.json(queue);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/moderation/:type/:id/:action', async (req, res) => {
+  try {
+    const { type, id, action } = req.params; // action: 'approve', 'sensitive', 'reject', 'delete'
+    let status = action === 'approve' ? 'SAFE' : action === 'sensitive' ? 'SENSITIVE' : 'REJECTED';
+    
+    // If delete, we remove the record completely
+    if (action === 'delete') {
+      if (type === 'POST') await prisma.post.delete({ where: { id } });
+      else if (type === 'MESSAGE') await prisma.message.delete({ where: { id } });
+      else if (type === 'DM') await prisma.directMessage.delete({ where: { id } });
+      await logAction(req.adminUser.email, `Deleted moderated item`, `Type: ${type}, ID: ${id}`, req);
+      return res.json({ success: true, deleted: true });
+    }
+
+    // Otherwise just update status
+    let record;
+    if (type === 'POST') {
+      record = await prisma.post.update({ where: { id }, data: { moderationStatus: status } });
+    } else if (type === 'MESSAGE') {
+      record = await prisma.message.update({ where: { id }, data: { moderationStatus: status } });
+    } else if (type === 'DM') {
+      record = await prisma.directMessage.update({ where: { id }, data: { moderationStatus: status } });
+    }
+
+    await logAction(req.adminUser.email, `Moderated item`, `Type: ${type}, ID: ${id} ➔ ${status}`, req);
+    res.json({ success: true, record });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // ──── AUDIT LOGS ────
 router.get('/audit-logs', async (req, res) => {

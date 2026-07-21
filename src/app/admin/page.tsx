@@ -10,7 +10,7 @@ import {
   Megaphone, Gift, FileText, Check, Trash2, Ban, Star, LogOut, Loader2
 } from "lucide-react";
 
-type Section = 'dashboard' | 'users' | 'reviews' | 'bugs' | 'reports' | 'games' | 'announcements' | 'rewards' | 'settings' | 'audit_logs';
+type Section = 'dashboard' | 'users' | 'reviews' | 'bugs' | 'reports' | 'games' | 'announcements' | 'rewards' | 'settings' | 'audit_logs' | 'moderation';
 
 export default function AdminPortal() {
   const router = useRouter();
@@ -80,6 +80,10 @@ export default function AdminPortal() {
   // Reward success
   const [rewardSuccess, setRewardSuccess] = useState(false);
 
+  // Moderation Queue
+  const [moderationQueue, setModerationQueue] = useState<any[]>([]);
+  const [loadingModeration, setLoadingModeration] = useState(false);
+
   // Debounce timer refs
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reviewSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -130,6 +134,8 @@ export default function AdminPortal() {
       fetchLogs();
     } else if (activeSection === 'settings') {
       fetchSettings();
+    } else if (activeSection === 'moderation') {
+      fetchModerationQueue();
     }
   }, [activeSection, role, userFilter]);
 
@@ -249,6 +255,22 @@ export default function AdminPortal() {
       console.error(err);
     } finally {
       setLoadingAnnouncements(false);
+    }
+  };
+
+  const fetchModerationQueue = async () => {
+    setLoadingModeration(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/moderation`, {
+        headers: { 'x-user-id': userId || '' }
+      });
+      if (res.ok) {
+        setModerationQueue(await res.json());
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingModeration(false);
     }
   };
 
@@ -421,6 +443,21 @@ export default function AdminPortal() {
         headers: { 'x-user-id': userId || '' }
       });
       if (res.ok) fetchAnnouncements();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Moderation Action
+  const handleModerationAction = async (id: string, type: string, action: 'approve' | 'sensitive' | 'reject' | 'delete') => {
+    try {
+      const res = await fetch(`${API_URL}/api/admin/moderation/${type}/${id}/${action}`, {
+        method: 'POST',
+        headers: { 'x-user-id': userId || '' }
+      });
+      if (res.ok) {
+        setModerationQueue(q => q.filter(item => item.id !== id));
+      }
     } catch (err) {
       console.error(err);
     }
@@ -939,6 +976,57 @@ export default function AdminPortal() {
                     </tbody>
                   </table>
                   {reports.length === 0 && <div className="text-center py-10 text-zinc-600 font-bold uppercase tracking-widest">No moderation reports found</div>}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ──── VIEW: MODERATION QUEUE ──── */}
+          {activeSection === 'moderation' && (
+            <div className="space-y-4">
+              {loadingModeration ? (
+                <div className="flex justify-center py-20 text-zinc-500"><Loader2 className="w-8 h-8 animate-spin" /></div>
+              ) : (
+                <div className="overflow-x-auto border border-zinc-800/80 rounded-xl bg-zinc-950">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-zinc-800 text-zinc-500 uppercase tracking-widest text-[9px] font-bold bg-zinc-900/25">
+                        <th className="p-4">Type</th>
+                        <th className="p-4">User</th>
+                        <th className="p-4">Content / File</th>
+                        <th className="p-4">Scores</th>
+                        <th className="p-4">Date</th>
+                        <th className="p-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-900">
+                      {moderationQueue.map(m => (
+                        <tr key={m.id} className="hover:bg-zinc-900/20 transition-colors">
+                          <td className="p-4 font-bold text-zinc-400">{m.type}</td>
+                          <td className="p-4 font-bold text-zinc-300">{m.user?.nickname || 'Unknown'}</td>
+                          <td className="p-4 text-zinc-400 max-w-[200px] truncate">
+                            {m.content && <div className="truncate">{m.content}</div>}
+                            {m.imageUrl && <a href={m.imageUrl} target="_blank" rel="noreferrer" className="text-indigo-400 hover:underline">View Image</a>}
+                            {m.fileUrl && <a href={m.fileUrl} target="_blank" rel="noreferrer" className="text-indigo-400 hover:underline">View File</a>}
+                          </td>
+                          <td className="p-4 text-zinc-500 text-[10px]">
+                            Nudity: {m.nudityScore?.toFixed(2) || 'N/A'}<br/>
+                            Gore: {m.goreScore?.toFixed(2) || 'N/A'}
+                          </td>
+                          <td className="p-4 text-zinc-500">{new Date(m.createdAt).toLocaleString()}</td>
+                          <td className="p-4 text-right">
+                            <div className="flex gap-1 justify-end">
+                              <button onClick={() => handleModerationAction(m.id, m.type, 'approve')} className="px-2 py-1 bg-green-500/10 text-green-500 hover:bg-green-500/25 border border-green-500/20 rounded-lg text-[10px] font-bold">Mark as Safe</button>
+                              <button onClick={() => handleModerationAction(m.id, m.type, 'sensitive')} className="px-2 py-1 bg-orange-500/10 text-orange-500 hover:bg-orange-500/25 border border-orange-500/20 rounded-lg text-[10px] font-bold">Mark as Sensitive</button>
+                              <button onClick={() => handleModerationAction(m.id, m.type, 'reject')} className="px-2 py-1 bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/25 border border-yellow-500/20 rounded-lg text-[10px] font-bold">Reject</button>
+                              <button onClick={() => handleModerationAction(m.id, m.type, 'delete')} className="px-2 py-1 bg-red-500/10 text-red-500 hover:bg-red-500/25 border border-red-500/20 rounded-lg text-[10px] font-bold">Delete</button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {moderationQueue.length === 0 && <div className="text-center py-10 text-zinc-600 font-bold uppercase tracking-widest">No pending items</div>}
                 </div>
               )}
             </div>

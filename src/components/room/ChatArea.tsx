@@ -50,7 +50,9 @@ export function ChatArea({ roomId }: ChatAreaProps) {
             )}
             <SafeMedia
               src={msg.fileUrl}
-              isNSFW={!!msg.isNSFW}
+              moderationStatus={msg.moderationStatus}
+              nudityScore={msg.nudityScore}
+              goreScore={msg.goreScore}
               mediaId={`msg_${msg.id}`}
               alt={msg.fileName || "Image"}
               className="block rounded-lg overflow-hidden max-w-[300px] cursor-pointer hover:opacity-90 transition-opacity w-full h-auto"
