@@ -1,11 +1,15 @@
 "use client";
 
 import { useEffect } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import { useUserStore } from "@/store/useUserStore";
 import { usePresenceStore } from "@/store/usePresenceStore";
 import { useDMStore, DMMessage } from "@/store/useDMStore";
 import { useNotificationStore, AppNotification } from "@/store/useNotificationStore";
+import { useToast } from "@/components/providers/ToastProvider";
+import { getNotificationDetails } from "@/lib/notificationRoutes";
 import { socketService } from "@/lib/socket";
+import { MessageSquare } from "lucide-react";
 
 const getApiUrl = () => {
   if (process.env.NEXT_PUBLIC_SOCKET_URL) return process.env.NEXT_PUBLIC_SOCKET_URL;
@@ -18,9 +22,13 @@ const getApiUrl = () => {
  * - User registration for presence
  * - Online/offline broadcasts
  * - Real-time DM updates (conversations, previews, unread counts)
- * - App notifications
+ * - App notifications & in-app toasts
  */
 export function SocketProvider({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const { addToast } = useToast();
+
   const userId = useUserStore((s) => s.id);
   const nickname = useUserStore((s) => s.nickname);
 
@@ -70,6 +78,30 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
           })
           .catch(() => {});
       }
+
+      // Smart Active View Check: Suppress toast if user is currently viewing this open chat
+      const activeConvId = useDMStore.getState().activeConversationId;
+      const isSelfMessage = message.senderId === userId;
+      const isCurrentlyOpenChat = activeConvId === conversationId;
+
+      if (!isSelfMessage && !isCurrentlyOpenChat) {
+        addToast({
+          title: message.senderName || "New Message",
+          description: message.content || "sent you a message",
+          sender: {
+            id: message.senderId,
+            nickname: message.senderName,
+            avatar: message.senderAvatar || null,
+          },
+          icon: MessageSquare,
+          type: "DM_MESSAGE",
+          onClick: () => {
+            useDMStore.getState().setActiveConversation(conversationId);
+            useDMStore.getState().markConversationAsRead(conversationId);
+            router.push(`/dm/${conversationId}`);
+          },
+        });
+      }
     };
 
     const onDMSeen = ({ conversationId, readerId }: { conversationId: string; readerId: string }) => {
@@ -78,6 +110,29 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
     const onNewNotification = (notification: AppNotification) => {
       useNotificationStore.getState().addNotification(notification);
+
+      const details = getNotificationDetails(notification);
+
+      addToast({
+        notificationId: notification.id,
+        title: details.title,
+        description: details.description,
+        sender: details.sender,
+        icon: details.icon,
+        type: notification.type,
+        onClick: () => {
+          // Mark notification as read locally & in backend
+          useNotificationStore.getState().markAsRead(notification.id);
+          fetch(`${getApiUrl()}/api/notifications/${notification.id}/read`, {
+            method: "POST",
+            headers: { "x-user-id": userId },
+          }).catch(() => {});
+
+          if (details.destination) {
+            router.push(details.destination);
+          }
+        },
+      });
     };
 
     socket.on("user_online", onUserOnline);
@@ -106,7 +161,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       socket.off("new_notification", onNewNotification);
       socket.off("connect", registerUser);
     };
-  }, [userId, nickname, setUserOnline, setUserOffline, setOnlineUsers]);
+  }, [userId, nickname, setUserOnline, setUserOffline, setOnlineUsers, addToast, pathname, router]);
 
   return <>{children}</>;
 }

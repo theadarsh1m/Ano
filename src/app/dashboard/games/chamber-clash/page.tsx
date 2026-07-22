@@ -626,36 +626,40 @@ function ChamberClashGameContent() {
     return (
       <div className="flex flex-col h-screen bg-[#050607] text-white p-4">
         <div className="max-w-4xl mx-auto w-full space-y-6 mt-8">
-          <div className="flex justify-between items-center bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4">
-            <div className="flex items-center gap-4">
-              <h1 className="text-2xl font-black text-red-500">Chamber Clash</h1>
-              <button onClick={() => setShowRules(true)} className="p-2 hover:bg-white/10 rounded-lg transition-colors flex items-center gap-1.5 text-zinc-400 hover:text-zinc-200">
+          <div className="flex flex-wrap items-center justify-between bg-white/[0.03] border border-white/[0.06] rounded-2xl p-3 sm:p-4 gap-2">
+            <div className="flex items-center gap-2 sm:gap-4">
+              <h1 className="text-lg sm:text-2xl font-black text-red-500">Chamber Clash</h1>
+              <button onClick={() => setShowRules(true)} className="p-2 hover:bg-white/10 rounded-lg transition-colors flex items-center gap-1.5 text-zinc-400 hover:text-zinc-200 cursor-pointer">
                 <BookOpen className="w-4 h-4" />
-                <span className="text-xs font-bold uppercase tracking-wider">Rules</span>
+                <span className="text-xs font-bold uppercase tracking-wider hidden sm:inline">Rules</span>
               </button>
             </div>
-            <button onClick={handleLeave} className="p-2 bg-red-600/20 text-red-400 rounded-lg hover:bg-red-600/30 transition-colors"><LogOut className="w-5 h-5" /></button>
+            <button onClick={handleLeave} className="px-3 py-2 bg-red-600/20 text-red-400 rounded-xl hover:bg-red-600/30 transition-colors flex items-center gap-1.5 text-xs font-bold cursor-pointer">
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline">Leave Lobby</span>
+              <span className="sm:hidden">Leave</span>
+            </button>
           </div>
 
-          <GlassCard className="p-6 space-y-6">
+          <GlassCard className="p-4 sm:p-6 space-y-6">
             <h2 className="text-lg font-bold">Players ({lobby.players.length}/8)</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
               {lobby.players.map((p: any) => (
-                <div key={p.userId} className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${p.userId === userId ? 'border-red-500/50 bg-red-500/10' : 'border-white/[0.06] bg-white/[0.03]'}`}>
-                  <div className="w-12 h-12 bg-zinc-800 rounded-full flex items-center justify-center font-black text-lg">{p.nickname.substring(0, 2).toUpperCase()}</div>
-                  <span className="font-semibold text-sm truncate w-full text-center">{p.nickname}</span>
-                  <span className="text-xs text-zinc-500">{p.role === 'HOST' ? '👑 Host' : (p.isReady ? '✅ Ready' : '⏳ Not Ready')}</span>
+                <div key={p.userId} className={`p-3 sm:p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${p.userId === userId ? 'border-red-500/50 bg-red-500/10' : 'border-white/[0.06] bg-white/[0.03]'}`}>
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-zinc-800 rounded-full flex items-center justify-center font-black text-base sm:text-lg">{p.nickname.substring(0, 2).toUpperCase()}</div>
+                  <span className="font-semibold text-xs sm:text-sm truncate w-full text-center">{p.nickname}</span>
+                  <span className="text-[11px] sm:text-xs text-zinc-500">{p.role === 'HOST' ? '👑 Host' : (p.isReady ? '✅ Ready' : '⏳ Not Ready')}</span>
                 </div>
               ))}
             </div>
-            <div className="flex justify-end gap-4 pt-4 border-t border-white/[0.06]">
+            <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-white/[0.06]">
               {!isHost && (
-                <button onClick={() => toggleReady(lobby.id, userId, !lobby.players.find((p: any) => p.userId === userId)?.isReady)} className="px-6 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-xl font-bold transition-colors">
+                <button onClick={() => toggleReady(lobby.id, userId, !lobby.players.find((p: any) => p.userId === userId)?.isReady)} className="w-full sm:w-auto px-6 py-2.5 bg-zinc-800 hover:bg-zinc-700 rounded-xl font-bold transition-colors cursor-pointer">
                   {lobby.players.find((p: any) => p.userId === userId)?.isReady ? 'Unready' : 'Ready'}
                 </button>
               )}
               {isHost && (
-                <button onClick={() => startGame(lobby.id, userId)} disabled={!canStart} className={`px-8 py-2 rounded-xl font-bold transition-all ${canStart ? 'bg-red-600 hover:bg-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)]' : 'bg-zinc-900 text-zinc-600 cursor-not-allowed'}`}>
+                <button onClick={() => startGame(lobby.id, userId)} disabled={!canStart} className={`w-full sm:w-auto px-8 py-2.5 rounded-xl font-bold transition-all cursor-pointer ${canStart ? 'bg-red-600 hover:bg-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)]' : 'bg-zinc-900 text-zinc-600 cursor-not-allowed'}`}>
                   Start Match
                 </button>
               )}

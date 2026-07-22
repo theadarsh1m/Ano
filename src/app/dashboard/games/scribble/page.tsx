@@ -13,8 +13,10 @@ import { useRoomConnectionStore } from "@/store/useRoomConnectionStore";
 import { useScribbleStore } from "@/store/useScribbleStore";
 import { GlassCard } from "@/components/layout/GlassCard";
 import { socketService } from "@/lib/socket";
+import { copyToClipboard } from "@/lib/clipboard";
 import { TurnIndicator } from "@/components/games/TurnIndicator";
 import { useExitWarning } from "@/hooks/useExitWarning";
+import { useInviteCooldown } from "@/hooks/useInviteCooldown";
 
 // Components
 import { ScribbleCanvas } from "@/components/games/scribble/ScribbleCanvas";
@@ -114,11 +116,13 @@ function ScribbleGameContent() {
     };
   }, [userId]);
 
+  const { triggerInvite, getInviteStatus } = useInviteCooldown(lobby?.id || gameState?.gameId);
+
   const sendInvite = (targetId: string) => {
     const activeGameId = gameState?.gameId || lobby?.id;
     if (!activeGameId || !userId || !nickname) return;
     invitePlayer(activeGameId, userId, nickname, targetId, 'SCRIBBLE');
-    setInvitedUsers(prev => new Set(prev).add(targetId));
+    triggerInvite(targetId);
   };
 
   useEffect(() => {
@@ -254,7 +258,7 @@ function ScribbleGameContent() {
     return (
       <div className="flex flex-col h-screen bg-black text-white">
         {/* Global Header Navbar */}
-        <div className="flex items-center justify-between p-4 bg-white/5 border-b border-white/10 flex-shrink-0">
+        <div className="flex items-center justify-between p-3 sm:p-4 bg-white/5 border-b border-white/10 flex-shrink-0 gap-2 flex-wrap">
           <div className="flex items-center gap-4">
             <button onClick={handleLeave} className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer">
               <ArrowLeft className="w-5 h-5" />
@@ -279,10 +283,13 @@ function ScribbleGameContent() {
               <BookOpen className="w-4 h-4" /> <span className="hidden sm:inline">Rules</span>
             </button>
             <button 
-              onClick={() => {
-                navigator.clipboard.writeText(`${window.location.origin}/dashboard/games/scribble?gameId=${lobby.id}`);
-                setInviteCopied(true);
-                setTimeout(() => setInviteCopied(false), 2000);
+              onClick={async () => {
+                const url = `${window.location.origin}/dashboard/games/scribble?gameId=${lobby.id}`;
+                const success = await copyToClipboard(url);
+                if (success) {
+                  setInviteCopied(true);
+                  setTimeout(() => setInviteCopied(false), 2000);
+                }
               }}
               className="px-3 sm:px-4 py-2 bg-sky-500/20 hover:bg-sky-500/35 text-sky-400 rounded-full text-sm font-bold flex items-center gap-2 transition-colors cursor-pointer"
             >
@@ -392,6 +399,7 @@ function ScribbleGameContent() {
                        .filter(u => !lobby.players.some(p => p.userId === u.id))
                        .map(u => {
                          const isFriend = friendsList.some(f => f.id === u.id);
+                         const status = getInviteStatus(u.id);
                          return (
                            <div key={u.id} className="flex justify-between items-center p-2.5 bg-white/5 border border-white/5 rounded-xl text-sm">
                              <div className="flex items-center gap-2.5">
@@ -404,14 +412,14 @@ function ScribbleGameContent() {
                              </div>
                              <button
                                onClick={() => sendInvite(u.id)}
-                               disabled={invitedUsers.has(u.id)}
+                               disabled={!status.canInvite}
                                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-                                 invitedUsers.has(u.id)
-                                   ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30 cursor-default'
-                                   : 'bg-sky-500 hover:bg-sky-600 text-white'
+                                 !status.canInvite
+                                   ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30 cursor-not-allowed'
+                                   : 'bg-sky-500 hover:bg-sky-600 text-white cursor-pointer'
                                }`}
                              >
-                               {invitedUsers.has(u.id) ? '✓ Invited' : 'Invite'}
+                               {status.label}
                              </button>
                            </div>
                          );

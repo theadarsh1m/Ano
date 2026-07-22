@@ -8,6 +8,8 @@ import { FlappyCore } from './engine/FlappyCore';
 import { PhysicsEngine } from './engine/PhysicsEngine';
 import { BirdSkin, GameStatus, PipeStyle, ThemeType, WeatherType } from './engine/types';
 import { socketService } from '@/lib/socket';
+import { copyToClipboard } from '@/lib/clipboard';
+import { useInviteCooldown } from '@/hooks/useInviteCooldown';
 import {
   Trophy,
   Award,
@@ -171,6 +173,24 @@ export function FlappyGameHub() {
   // Track explicit return to lobby user action
   const [hasReturnedToLobby, setHasReturnedToLobby] = useState(false);
 
+  const startMultiplayerGameSession = (seed: number) => {
+    setLastRewards(null);
+    setCurrentScore(0);
+    const activeRoom = roomState || roomStateRef.current;
+    if (coreRef.current && activeRoom) {
+      coreRef.current.mode = 'MULTIPLAYER';
+
+      const opponents = activeRoom.players
+        .filter((p) => p.userId !== userId)
+        .map((p) => ({
+          id: p.userId,
+          nickname: p.nickname
+        }));
+      coreRef.current.setOpponentBirds(opponents);
+      coreRef.current.startMatch(seed);
+    }
+  };
+
   // Handle Room State changes for Multiplayer Match Transition
   useEffect(() => {
     if (roomState) {
@@ -332,6 +352,18 @@ export function FlappyGameHub() {
     };
   }, [activeView]);
 
+  // Singleplayer Start
+  const startSinglePlayerGame = () => {
+    setActiveView('SINGLEPLAYER');
+    setLastRewards(null);
+    setCurrentScore(0);
+    if (coreRef.current) {
+      coreRef.current.mode = 'SINGLEPLAYER';
+      coreRef.current.clearOpponentBirds();
+      coreRef.current.startMatch();
+    }
+  };
+
   const triggerJumpOrStart = () => {
     if (!coreRef.current) return;
     const core = coreRef.current;
@@ -376,7 +408,7 @@ export function FlappyGameHub() {
 
   const lastTouchTimeRef = useRef(0);
 
-  const handleCanvasClick = (e?: React.MouseEvent) => {
+  const handleCanvasClick = () => {
     if (Date.now() - lastTouchTimeRef.current < 400) {
       return;
     }
@@ -389,54 +421,28 @@ export function FlappyGameHub() {
     triggerJumpOrStart();
   };
 
-  // Singleplayer Start
-  const startSinglePlayerGame = () => {
-    setActiveView('SINGLEPLAYER');
-    setLastRewards(null);
-    setCurrentScore(0);
-    if (coreRef.current) {
-      coreRef.current.mode = 'SINGLEPLAYER';
-      coreRef.current.clearOpponentBirds();
-      coreRef.current.startMatch();
-    }
-  };
-
-  const startMultiplayerGameSession = (seed: number) => {
-    setLastRewards(null);
-    setCurrentScore(0);
-    const activeRoom = roomState || roomStateRef.current;
-    if (coreRef.current && activeRoom) {
-      coreRef.current.mode = 'MULTIPLAYER';
-
-      const opponents = activeRoom.players
-        .filter((p) => p.userId !== userId)
-        .map((p) => ({
-          id: p.userId,
-          nickname: p.nickname
-        }));
-      coreRef.current.setOpponentBirds(opponents);
-      coreRef.current.startMatch(seed);
-    }
-  };
-
   // Copy Lobby Invite Link
-  const copyInviteLink = () => {
+  const copyInviteLink = async () => {
     if (!roomState) return;
     const url = `${window.location.origin}/dashboard/games/flappy-bird?gameId=${roomState.id}`;
-    navigator.clipboard.writeText(url);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2500);
+    const success = await copyToClipboard(url);
+    if (success) {
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2500);
+    }
   };
+
+  const { triggerInvite, getInviteStatus } = useInviteCooldown(roomState?.id);
 
   // Handle Send Friend Invite Notification
   const handleSendInvite = (targetUserId: string) => {
     if (!roomState) return;
     invitePlayer(roomState.id, userId, nickname, targetUserId, 'FLAPPY_BIRD');
-    setInvitedUsers((prev) => new Set(prev).add(targetUserId));
+    triggerInvite(targetUserId);
   };
 
-  const localBirdState = coreRef.current?.birds.get(coreRef.current?.localBirdId || 'player_local');
-  const isLocalDeadInMP = activeView === 'MULTIPLAYER_MATCH' && !!localBirdState && !localBirdState.isAlive;
+  const myPlayerInMP = roomState?.players.find((p) => p.userId === userId);
+  const isLocalDeadInMP = activeView === 'MULTIPLAYER_MATCH' && !!myPlayerInMP && (!myPlayerInMP.isAlive || myPlayerInMP.status === 'DEAD');
   const aliveMPPlayers = roomState?.players.filter((p) => p.isAlive || p.status === 'PLAYING') || [];
 
   return (
@@ -811,7 +817,7 @@ export function FlappyGameHub() {
               </div>
             </div>
           ) : (
-            <div className="flex-1 bg-white/5 border border-white/10 rounded-3xl p-6 backdrop-blur-xl flex flex-col justify-between space-y-6">
+            <div className="flex-1 bg-white/5 border border-white/10 rounded-3xl p-4 sm:p-6 backdrop-blur-xl flex flex-col justify-between space-y-6 overflow-hidden">
               <div>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 pb-4 border-b border-white/10">
                   <div>
@@ -826,20 +832,21 @@ export function FlappyGameHub() {
                     <p className="text-xs text-white/60 mt-0.5">Ano Real-Time Multiplayer Lobby</p>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <button
                       onClick={copyInviteLink}
-                      className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 active:scale-95 transition-all"
+                      className="px-2.5 sm:px-3 py-2 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 active:scale-95 transition-all"
                     >
                       {copiedLink ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                      {copiedLink ? 'Link Copied!' : 'Copy Link'}
+                      <span className="hidden sm:inline">{copiedLink ? 'Link Copied!' : 'Copy Link'}</span>
+                      <span className="sm:hidden">{copiedLink ? 'Copied' : 'Link'}</span>
                     </button>
 
                     <button
                       onClick={() => setShowInviteModal(true)}
-                      className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-lg active:scale-95 transition-all"
+                      className="px-2.5 sm:px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-lg active:scale-95 transition-all"
                     >
-                      <UserPlus className="w-4 h-4" /> Invite Friends
+                      <UserPlus className="w-4 h-4" /> <span className="hidden sm:inline">Invite Friends</span><span className="sm:hidden">Invite</span>
                     </button>
                   </div>
                 </div>
@@ -904,29 +911,29 @@ export function FlappyGameHub() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 pt-4 border-t border-white/10">
-                <button
-                  onClick={() => leaveLobby(userId)}
-                  className="px-5 py-3.5 bg-red-500/20 border border-red-500/40 text-red-300 font-bold text-sm rounded-xl hover:bg-red-500/30 active:scale-95 transition-all"
-                >
-                  Leave Lobby
-                </button>
-
+              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 pt-4 border-t border-white/10">
                 {roomState.hostId === userId ? (
                   <button
                     onClick={() => startMatch(roomState.id, userId)}
-                    className="flex-1 py-3.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-black font-extrabold rounded-xl shadow-xl active:scale-95 transition-all text-base flex items-center justify-center gap-2"
+                    className="flex-1 py-3 sm:py-3.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-black font-extrabold rounded-xl shadow-xl active:scale-95 transition-all text-sm sm:text-base flex items-center justify-center gap-2"
                   >
                     🚀 Start Game Match
                   </button>
                 ) : (
                   <button
                     onClick={() => toggleReady(roomState.id, userId)}
-                    className="flex-1 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold rounded-xl shadow-xl active:scale-95 transition-all text-base"
+                    className="flex-1 py-3 sm:py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold rounded-xl shadow-xl active:scale-95 transition-all text-sm sm:text-base"
                   >
                     Toggle Ready
                   </button>
                 )}
+
+                <button
+                  onClick={() => leaveLobby(userId)}
+                  className="px-4 sm:px-5 py-2.5 sm:py-3.5 bg-red-500/20 border border-red-500/40 text-red-300 font-bold text-xs sm:text-sm rounded-xl hover:bg-red-500/30 active:scale-95 transition-all text-center"
+                >
+                  Leave Lobby
+                </button>
               </div>
             </div>
           )}
@@ -1111,6 +1118,8 @@ export function FlappyGameHub() {
                 onlineFriends.map((friend) => {
                   const isInvited = invitedUsers.has(friend.id);
 
+                  const status = getInviteStatus(friend.id);
+
                   return (
                     <div
                       key={friend.id}
@@ -1125,10 +1134,14 @@ export function FlappyGameHub() {
 
                       <button
                         onClick={() => handleSendInvite(friend.id)}
-                        disabled={isInvited}
-                        className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-all ${isInvited ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md active:scale-95'}`}
+                        disabled={!status.canInvite}
+                        className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-all ${
+                          !status.canInvite
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 cursor-not-allowed'
+                            : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md active:scale-95 cursor-pointer'
+                        }`}
                       >
-                        {isInvited ? 'Invite Sent' : 'Invite'}
+                        {status.label}
                       </button>
                     </div>
                   );

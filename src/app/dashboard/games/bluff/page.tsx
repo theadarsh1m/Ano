@@ -18,6 +18,7 @@ import { MessageInput } from "@/components/room/MessageInput";
 import { socketService } from "@/lib/socket";
 import { TurnIndicator } from "@/components/games/TurnIndicator";
 import { useExitWarning } from "@/hooks/useExitWarning";
+import { useInviteCooldown } from "@/hooks/useInviteCooldown";
 
 const DECLARED_RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'Jack', 'Queen', 'King', 'Ace'];
 
@@ -202,11 +203,13 @@ function BluffGamePageContent() {
     router.push("/dashboard/games");
   };
 
+  const { triggerInvite, getInviteStatus } = useInviteCooldown(lobby?.id || gameState?.gameId);
+
   const sendInvite = (targetId: string) => {
     const activeGameId = gameState?.gameId || lobby?.id;
     if (!activeGameId || !userId || !nickname) return;
     invitePlayer(activeGameId, userId, nickname, targetId, 'BLUFF');
-    setInvitedUsers(prev => new Set(prev).add(targetId));
+    triggerInvite(targetId);
   };
 
   // Hydration guard to avoid Next.js CSR bails and Zustand mismatch
@@ -301,27 +304,27 @@ function BluffGamePageContent() {
         {/* Main Lobby View */}
         <div className="flex-1 flex flex-col p-6 space-y-6 overflow-y-auto">
           {/* Header */}
-          <div className="flex justify-between items-center bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-md">
+          <div className="flex flex-wrap items-center justify-between bg-white/5 border border-white/10 rounded-2xl p-3 sm:p-4 backdrop-blur-md gap-2">
             <div>
-              <h1 className="text-2xl font-bold flex items-center gap-2">
-                <Gamepad2 className="w-6 h-6 text-emerald-400" />
+              <h1 className="text-lg sm:text-2xl font-bold flex items-center gap-2">
+                <Gamepad2 className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-400" />
                 Bluff Card Game Lobby
               </h1>
-              <p className="text-gray-400 text-sm mt-1">Lobby ID: {lobby.id}</p>
+              <p className="text-gray-400 text-xs sm:text-sm mt-0.5 select-text">Lobby ID: {lobby.id}</p>
             </div>
             
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <button 
                 onClick={() => setShowRulesModal(true)}
-                className="px-4 py-2 bg-white/5 border border-white/10 text-gray-300 hover:text-white rounded-xl flex items-center gap-2 transition-colors text-sm font-semibold animate-pulse"
+                className="px-2.5 sm:px-4 py-2 bg-white/5 border border-white/10 text-gray-300 hover:text-white rounded-xl flex items-center gap-1.5 transition-colors text-xs sm:text-sm font-semibold animate-pulse cursor-pointer"
               >
-                <BookOpen className="w-4 h-4" /> Rules
+                <BookOpen className="w-4 h-4" /> <span className="hidden sm:inline">Rules</span>
               </button>
               <button 
                 onClick={handleLeave}
-                className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-300 rounded-xl flex items-center gap-2 transition-colors text-sm font-semibold"
+                className="px-2.5 sm:px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-300 rounded-xl flex items-center gap-1.5 transition-colors text-xs sm:text-sm font-semibold cursor-pointer"
               >
-                <LogOut className="w-4 h-4" /> Leave Lobby
+                <LogOut className="w-4 h-4" /> <span className="hidden sm:inline">Leave Lobby</span><span className="sm:hidden">Leave</span>
               </button>
             </div>
           </div>
@@ -329,23 +332,23 @@ function BluffGamePageContent() {
           {/* Lobby grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Players list card */}
-            <GlassCard className="md:col-span-2 p-6 flex flex-col space-y-4">
+            <GlassCard className="md:col-span-2 p-4 sm:p-6 flex flex-col space-y-4">
               <h2 className="text-lg font-bold flex items-center gap-2">
                 <Users className="w-5 h-5 text-blue-400" />
                 Players ({lobby.players.length}/6)
               </h2>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 {lobby.players.map(p => (
-                  <div key={p.userId} className="flex items-center justify-between p-4 bg-white/5 border border-white/10 rounded-xl relative group">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center font-bold">
+                  <div key={p.userId} className="flex items-center justify-between p-3.5 bg-white/5 border border-white/10 rounded-xl relative group">
+                    <div className="flex items-center gap-3 min-w-0 pr-2">
+                      <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center font-bold shrink-0">
                         {p.nickname[0].toUpperCase()}
                       </div>
-                      <div>
-                        <div className="font-semibold text-sm flex items-center gap-1.5">
-                          {p.nickname}
-                          {p.role === 'HOST' && <span className="text-[10px] bg-yellow-500/20 text-yellow-300 px-1.5 py-0.5 border border-yellow-500/20 rounded font-bold uppercase tracking-wider">Host</span>}
+                      <div className="min-w-0">
+                        <div className="font-semibold text-sm flex items-center gap-1.5 truncate">
+                          <span className="truncate">{p.nickname}</span>
+                          {p.role === 'HOST' && <span className="text-[10px] bg-yellow-500/20 text-yellow-300 px-1.5 py-0.5 border border-yellow-500/20 rounded font-bold uppercase tracking-wider shrink-0">Host</span>}
                         </div>
                         <span className="text-xs text-gray-400">
                           {p.role === 'HOST' ? 'Ready' : (p.isReady ? 'Ready' : 'Not Ready')}
@@ -353,7 +356,7 @@ function BluffGamePageContent() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 shrink-0">
                       {p.role !== 'HOST' && p.isReady && (
                         <div className="p-1 bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 rounded-full">
                           <Check className="w-4 h-4" />
@@ -369,7 +372,7 @@ function BluffGamePageContent() {
                       {isHost && p.userId !== userId && (
                         <button
                           onClick={() => kickPlayer(lobby.id, userId, p.userId)}
-                          className="opacity-0 group-hover:opacity-100 p-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-300 rounded-lg transition-all text-xs"
+                          className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 p-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-300 rounded-lg transition-all text-xs cursor-pointer"
                         >
                           Kick
                         </button>
@@ -380,11 +383,11 @@ function BluffGamePageContent() {
               </div>
 
               {/* Ready / Start Control */}
-              <div className="pt-4 border-t border-white/5 flex justify-end gap-3">
+              <div className="pt-4 border-t border-white/5 flex flex-col sm:flex-row justify-end gap-3">
                 {!isHost && selfPlayer && (
                   <button
                     onClick={() => toggleReady(lobby.id, userId || "", !selfPlayer.isReady)}
-                    className={`px-6 py-2.5 rounded-xl font-semibold transition-all border ${
+                    className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-semibold transition-all border cursor-pointer ${
                       selfPlayer.isReady 
                         ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-300' 
                         : 'bg-emerald-500 hover:bg-emerald-600 border-emerald-600 text-white'
@@ -398,7 +401,7 @@ function BluffGamePageContent() {
                   <button
                     onClick={() => startGame(lobby.id, userId || "")}
                     disabled={lobby.players.length < 2 || !allReady}
-                    className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 border border-emerald-600 text-white disabled:opacity-40 disabled:cursor-not-allowed rounded-xl font-semibold transition-all flex items-center gap-2"
+                    className="w-full sm:w-auto px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 border border-emerald-600 text-white disabled:opacity-40 disabled:cursor-not-allowed rounded-xl font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <Play className="w-4 h-4" /> Start Game
                   </button>
@@ -422,6 +425,7 @@ function BluffGamePageContent() {
                       .filter(u => !lobby.players.some(p => p.userId === u.id))
                       .map(u => {
                         const isFriend = friendsList.some(f => f.id === u.id);
+                        const status = getInviteStatus(u.id);
                         return (
                           <div key={u.id} className="flex justify-between items-center p-2.5 bg-white/5 border border-white/5 rounded-xl text-sm">
                             <div className="flex items-center gap-2.5">
@@ -440,14 +444,14 @@ function BluffGamePageContent() {
                             </div>
                             <button
                               onClick={() => sendInvite(u.id)}
-                              disabled={invitedUsers.has(u.id)}
+                              disabled={!status.canInvite}
                               className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-                                invitedUsers.has(u.id)
-                                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 cursor-default'
-                                  : 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                                !status.canInvite
+                                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 cursor-not-allowed'
+                                  : 'bg-emerald-500 hover:bg-emerald-600 text-white cursor-pointer'
                               }`}
                             >
-                              {invitedUsers.has(u.id) ? '✓ Invited' : 'Invite'}
+                              {status.label}
                             </button>
                           </div>
                         );
@@ -464,33 +468,36 @@ function BluffGamePageContent() {
                     <span className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Offline Friends</span>
                     {friendsList
                       .filter(f => !f.isOnline && !lobby.players.some(p => p.userId === f.id) && !onlineUsers.some(u => u.id === f.id))
-                      .map(f => (
-                        <div key={f.id} className="flex justify-between items-center p-2.5 bg-white/5 border border-white/5 rounded-xl text-sm opacity-60">
-                          <div className="flex items-center gap-2.5">
-                            <div className="relative">
-                              <div className="w-8 h-8 bg-gradient-to-br from-gray-600 to-gray-700 rounded-lg flex items-center justify-center text-xs font-bold">
-                                {f.nickname?.[0]?.toUpperCase() || '?'}
+                      .map(f => {
+                        const status = getInviteStatus(f.id);
+                        return (
+                          <div key={f.id} className="flex justify-between items-center p-2.5 bg-white/5 border border-white/5 rounded-xl text-sm opacity-60">
+                            <div className="flex items-center gap-2.5">
+                              <div className="relative">
+                                <div className="w-8 h-8 bg-gradient-to-br from-gray-600 to-gray-700 rounded-lg flex items-center justify-center text-xs font-bold">
+                                  {f.nickname?.[0]?.toUpperCase() || '?'}
+                                </div>
+                                <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-neutral-900 bg-gray-500" />
                               </div>
-                              <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-neutral-900 bg-gray-500" />
+                              <div>
+                                <span className="font-medium block leading-tight">{f.nickname}</span>
+                                <span className="text-[10px] text-gray-500">Offline</span>
+                              </div>
                             </div>
-                            <div>
-                              <span className="font-medium block leading-tight">{f.nickname}</span>
-                              <span className="text-[10px] text-gray-500">Offline</span>
-                            </div>
+                            <button
+                              onClick={() => sendInvite(f.id)}
+                              disabled={!status.canInvite}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                                !status.canInvite
+                                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 cursor-not-allowed'
+                                  : 'bg-white/10 hover:bg-white/20 text-gray-300 cursor-pointer'
+                              }`}
+                            >
+                              {status.label}
+                            </button>
                           </div>
-                          <button
-                            onClick={() => sendInvite(f.id)}
-                            disabled={invitedUsers.has(f.id)}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-                              invitedUsers.has(f.id)
-                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 cursor-default'
-                                : 'bg-white/10 hover:bg-white/20 text-gray-300'
-                            }`}
-                          >
-                            {invitedUsers.has(f.id) ? '✓ Invited' : 'Invite'}
-                          </button>
-                        </div>
-                      ))}
+                        );
+                      })}
                   </div>
                 )}
 

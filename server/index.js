@@ -559,6 +559,7 @@ io.on('connection', (socket) => {
       }
     }
     onlineUsers.get(userId).add(socket.id);
+    socket.join(userId);
 
     // Broadcast that this user is online
     socket.broadcast.emit('user_online', { userId });

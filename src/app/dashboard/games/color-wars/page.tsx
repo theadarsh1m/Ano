@@ -16,6 +16,7 @@ import { ChatArea } from "@/components/room/ChatArea";
 import { MessageInput } from "@/components/room/MessageInput";
 import { TurnIndicator } from "@/components/games/TurnIndicator";
 import { useExitWarning } from "@/hooks/useExitWarning";
+import { useInviteCooldown } from "@/hooks/useInviteCooldown";
 
 // Map server color names to Tailwind design assets and hex codes
 interface ColorAsset {
@@ -227,11 +228,13 @@ function ColorWarsPageContent() {
     router.push("/dashboard/games");
   };
 
+  const { triggerInvite, getInviteStatus } = useInviteCooldown(lobby?.id || gameState?.gameId);
+
   const sendInvite = (targetId: string) => {
     const activeGameId = gameState?.gameId || lobby?.id;
     if (!activeGameId || !userId || !nickname) return;
     invitePlayer(activeGameId, userId, nickname, targetId);
-    setInvitedUsers(prev => new Set(prev).add(targetId));
+    triggerInvite(targetId);
   };
 
   const handleCellClick = (r: number, c: number) => {
@@ -418,51 +421,57 @@ function ColorWarsPageContent() {
 
     return (
       <div className="flex flex-col h-screen bg-black text-white p-4 space-y-6 overflow-y-auto">
-        <div className="flex justify-between items-center bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-md max-w-4xl mx-auto w-full">
-          <div className="flex items-center gap-4">
-            <button onClick={handleLeave} className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
+        <div className="flex flex-wrap items-center justify-between bg-white/5 border border-white/10 rounded-2xl p-3 sm:p-4 backdrop-blur-md max-w-4xl mx-auto w-full gap-2">
+          <div className="flex items-center gap-2 sm:gap-4">
+            <button onClick={handleLeave} className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer">
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <h1 className="text-xl font-bold flex items-center gap-2">💥 Color Wars Lobby</h1>
+            <h1 className="text-base sm:text-xl font-bold flex items-center gap-2">💥 Color Wars Lobby</h1>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <button 
               onClick={() => setShowRulesModal(true)}
-              className="px-4 py-2 bg-white/5 border border-white/10 text-gray-300 hover:text-white rounded-xl text-sm font-bold flex items-center gap-2 transition-colors hover:bg-white/10"
+              className="px-2.5 sm:px-4 py-2 bg-white/5 border border-white/10 text-gray-300 hover:text-white rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-colors hover:bg-white/10 cursor-pointer"
             >
-              <BookOpen className="w-4 h-4" /> Rules
+              <BookOpen className="w-4 h-4" /> <span className="hidden sm:inline">Rules</span>
             </button>
-            <button onClick={() => setShowInviteModal(true)} className="px-4 py-2 bg-rose-600 hover:bg-rose-500 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors">
-              <UserPlus className="w-4 h-4" /> Invite
+            <button 
+              onClick={() => setShowInviteModal(true)} 
+              className="px-2.5 sm:px-4 py-2 bg-rose-600 hover:bg-rose-500 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <UserPlus className="w-4 h-4" /> <span className="hidden sm:inline">Invite</span>
             </button>
-            <button onClick={handleLeave} className="px-4 py-2 bg-red-600/20 hover:bg-red-600/40 border border-red-500/30 rounded-xl text-sm font-bold text-red-400 flex items-center gap-2 transition-colors">
-              <LogOut className="w-4 h-4" /> Leave
+            <button 
+              onClick={handleLeave} 
+              className="px-2.5 sm:px-4 py-2 bg-red-600/20 hover:bg-red-600/40 border border-red-500/30 rounded-xl text-xs sm:text-sm font-bold text-red-400 flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" /> <span className="hidden sm:inline">Leave</span>
             </button>
           </div>
         </div>
 
         <div className="max-w-4xl mx-auto w-full grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-          <GlassCard className="p-6 md:col-span-2 space-y-4">
+          <GlassCard className="p-4 sm:p-6 md:col-span-2 space-y-4">
             <h2 className="text-lg font-bold flex items-center gap-2">
               <Users className="w-5 h-5 text-rose-400" /> Players ({players.length}/{settings.maxPlayers || 8})
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               {players.map(p => (
                 <div key={p.userId} className="flex items-center justify-between p-3 bg-white/5 border border-white/10 rounded-2xl relative group">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 bg-gradient-to-br from-rose-500 to-red-600 rounded-xl flex items-center justify-center font-bold text-sm shadow">
+                  <div className="flex items-center gap-3 min-w-0 pr-2">
+                    <div className="w-9 h-9 bg-gradient-to-br from-rose-500 to-red-600 rounded-xl flex items-center justify-center font-bold text-sm shadow shrink-0">
                       {p.nickname?.[0]?.toUpperCase()}
                     </div>
-                    <div>
-                      <div className="font-semibold text-sm flex items-center gap-1.5">
-                        {p.nickname}
-                        {p.role === 'HOST' && <span className="text-[9px] bg-yellow-500/20 text-yellow-300 px-1.5 py-0.5 rounded border border-yellow-500/20 font-bold uppercase tracking-wider">Host</span>}
+                    <div className="min-w-0">
+                      <div className="font-semibold text-sm flex items-center gap-1.5 truncate">
+                        <span className="truncate">{p.nickname}</span>
+                        {p.role === 'HOST' && <span className="text-[9px] bg-yellow-500/20 text-yellow-300 px-1.5 py-0.5 rounded border border-yellow-500/20 font-bold uppercase tracking-wider shrink-0">Host</span>}
                       </div>
                       <span className="text-[10px] text-gray-400">{p.role === 'HOST' ? 'Ready' : (p.isReady ? 'Ready' : 'Not Ready')}</span>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     {p.role !== 'HOST' && p.isReady && (
                       <div className="p-1 bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 rounded-full">
                         <Check className="w-3.5 h-3.5" />
@@ -474,7 +483,7 @@ function ColorWarsPageContent() {
                     {isHost && p.userId !== userId && (
                       <button
                         onClick={() => kickPlayer(lobby.id, userId, p.userId)}
-                        className="opacity-0 group-hover:opacity-100 px-2.5 py-1 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-300 rounded-lg transition-all text-xs font-semibold"
+                        className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 px-2.5 py-1 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-300 rounded-lg transition-all text-xs font-semibold cursor-pointer"
                       >
                         Kick
                       </button>
@@ -485,14 +494,14 @@ function ColorWarsPageContent() {
             </div>
 
             {/* Ready/Start panel */}
-            <div className="pt-4 border-t border-white/5 flex justify-end gap-3">
+            <div className="pt-4 border-t border-white/5 flex flex-col sm:flex-row justify-end gap-3">
               {!isHost && (
                 <button
                   onClick={() => {
                     const self = players.find(p => p.userId === userId);
                     if (self) toggleReady(lobby.id, userId, !self.isReady);
                   }}
-                  className={`px-6 py-2.5 rounded-xl font-bold transition-all border ${
+                  className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-bold transition-all border cursor-pointer ${
                     players.find(p => p.userId === userId)?.isReady 
                       ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-300' 
                       : 'bg-emerald-500 hover:bg-emerald-600 border-emerald-600 text-white'
@@ -506,7 +515,7 @@ function ColorWarsPageContent() {
                 <button
                   onClick={() => startGame(lobby.id, userId)}
                   disabled={!canStart}
-                  className={`px-8 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2 ${
+                  className={`w-full sm:w-auto px-8 py-2.5 rounded-xl font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
                     canStart 
                       ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-500/20 hover:scale-[1.02]' 
                       : 'bg-white/5 border border-white/5 text-gray-500 cursor-not-allowed'
@@ -576,18 +585,21 @@ function ColorWarsPageContent() {
                     <p className="text-xs text-gray-500">No other users in this room channel.</p>
                   ) : (
                     <div className="space-y-2">
-                      {roomMembers.map(m => (
-                        <div key={m.id} className="flex justify-between items-center p-2.5 bg-white/5 rounded-xl border border-white/5">
-                          <span className="text-sm font-semibold">{m.nickname}</span>
-                          <button
-                            disabled={invitedUsers.has(m.id)}
-                            onClick={() => sendInvite(m.id)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${invitedUsers.has(m.id) ? 'bg-white/5 border border-white/5 text-gray-400 cursor-default' : 'bg-rose-600 hover:bg-rose-500 text-white'}`}
-                          >
-                            {invitedUsers.has(m.id) ? 'Invited' : 'Invite'}
-                          </button>
-                        </div>
-                      ))}
+                      {roomMembers.map(m => {
+                        const status = getInviteStatus(m.id);
+                        return (
+                          <div key={m.id} className="flex justify-between items-center p-2.5 bg-white/5 rounded-xl border border-white/5">
+                            <span className="text-sm font-semibold">{m.nickname}</span>
+                            <button
+                              disabled={!status.canInvite}
+                              onClick={() => sendInvite(m.id)}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${!status.canInvite ? 'bg-white/5 border border-white/5 text-gray-400 cursor-not-allowed' : 'bg-rose-600 hover:bg-rose-500 text-white cursor-pointer'}`}
+                            >
+                              {status.label}
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -598,18 +610,21 @@ function ColorWarsPageContent() {
                     <p className="text-xs text-gray-500">No other players online.</p>
                   ) : (
                     <div className="space-y-2">
-                      {onlineUsers.map(u => (
-                        <div key={u.id} className="flex justify-between items-center p-2.5 bg-white/5 rounded-xl border border-white/5">
-                          <span className="text-sm font-semibold">{u.nickname}</span>
-                          <button
-                            disabled={invitedUsers.has(u.id)}
-                            onClick={() => sendInvite(u.id)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${invitedUsers.has(u.id) ? 'bg-white/5 border border-white/5 text-gray-400 cursor-default' : 'bg-rose-600 hover:bg-rose-500 text-white'}`}
-                          >
-                            {invitedUsers.has(u.id) ? 'Invited' : 'Invite'}
-                          </button>
-                        </div>
-                      ))}
+                      {onlineUsers.map(u => {
+                        const status = getInviteStatus(u.id);
+                        return (
+                          <div key={u.id} className="flex justify-between items-center p-2.5 bg-white/5 rounded-xl border border-white/5">
+                            <span className="text-sm font-semibold">{u.nickname}</span>
+                            <button
+                              disabled={!status.canInvite}
+                              onClick={() => sendInvite(u.id)}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${!status.canInvite ? 'bg-white/5 border border-white/5 text-gray-400 cursor-not-allowed' : 'bg-rose-600 hover:bg-rose-500 text-white cursor-pointer'}`}
+                            >
+                              {status.label}
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>

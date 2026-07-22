@@ -143,8 +143,15 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
     broadcastLobbies();
   });
 
-  socket.on('lobby_invite', async ({ gameId, senderId, senderName, targetUserId, gameType }) => {
+  const handleLobbyInvite = async (data) => {
     try {
+      const { gameId, targetUserId } = data || {};
+      const senderId = data?.senderId || data?.hostId;
+      const senderName = data?.senderName || data?.hostName || 'Someone';
+      const gameType = data?.gameType || 'FLAPPY_BIRD';
+
+      if (!targetUserId || !gameId) return;
+
       const notificationService = require('../../services/notificationService');
       const notif = await notificationService.createNotification({
         recipientId: targetUserId,
@@ -154,14 +161,21 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
         message: `Join their ${GAME_DISPLAY_NAMES[gameType] || gameType} lobby.`,
         metadata: { gameId, gameType }
       });
-      const targetSockets = onlineUsers.get(targetUserId);
-      if (targetSockets && notif) {
-        targetSockets.forEach(sId => io.to(sId).emit('new_notification', notif));
+
+      if (notif) {
+        io.to(targetUserId).emit('new_notification', notif);
+        const targetSockets = onlineUsers.get(targetUserId);
+        if (targetSockets) {
+          targetSockets.forEach(sId => io.to(sId).emit('new_notification', notif));
+        }
       }
     } catch (err) {
       console.error('Failed to send game invite:', err.message);
     }
-  });
+  };
+
+  socket.on('lobby_invite', handleLobbyInvite);
+  socket.on('game_invite', handleLobbyInvite);
 
   socket.on('lobby_settings_update', ({ gameId, hostId, settings }) => {
     const lobby = LobbyService.getLobby(gameId);

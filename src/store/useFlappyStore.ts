@@ -233,7 +233,17 @@ export const useFlappyStore = create<FlappyStoreState>((set, get) => ({
   invitePlayer: (gameId, hostId, hostName, targetUserId, gameType = 'FLAPPY_BIRD') => {
     const socket = socketService.getSocket();
     if (!socket) return;
-    socket.emit('game_invite', { gameId, hostId, hostName, targetUserId, gameType });
+    const payload = {
+      gameId,
+      hostId,
+      senderId: hostId,
+      hostName,
+      senderName: hostName,
+      targetUserId,
+      gameType
+    };
+    socket.emit('lobby_invite', payload);
+    socket.emit('game_invite', payload);
   },
 
   startMatch: (lobbyId, hostId) => {

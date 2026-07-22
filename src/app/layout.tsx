@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Analytics } from "@vercel/analytics/next";
+import { ToastProvider } from "@/components/providers/ToastProvider";
 import { SocketProvider } from "@/components/providers/SocketProvider";
 import { GlobalRoomProvider } from "@/components/room/GlobalRoomProvider";
-
 import { GoogleOAuthProvider } from '@react-oauth/google';
 
 const geistSans = Geist({
@@ -38,11 +38,13 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "1234567890"}>
-          <SocketProvider>
-            <GlobalRoomProvider>
-              {children}
-            </GlobalRoomProvider>
-          </SocketProvider>
+          <ToastProvider>
+            <SocketProvider>
+              <GlobalRoomProvider>
+                {children}
+              </GlobalRoomProvider>
+            </SocketProvider>
+          </ToastProvider>
         </GoogleOAuthProvider>
         <Analytics />
       </body>

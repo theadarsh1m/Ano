@@ -12,6 +12,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
+import { getNotificationDetails } from "@/lib/notificationRoutes";
+
 export default function NotificationsPage() {
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotificationStore();
   const userId = useUserStore((s) => s.id);
@@ -56,25 +58,9 @@ export default function NotificationsPage() {
       handleMarkAsRead(notification.id);
     }
 
-    if (notification.type === "room_invite") {
-      if (notification.metadata?.gameId) {
-        const gameTypeMap: Record<string, string> = { 'BLUFF': 'bluff', 'MEMORY_MATCH': 'memory-match', 'DOTS_AND_BOXES': 'dots-and-boxes' };
-        const gameTypeKey = typeof notification.metadata?.gameType === 'string' ? notification.metadata.gameType : '';
-        const gamePath = gameTypeMap[gameTypeKey] || 'bluff';
-        router.push(`/dashboard/games/${gamePath}?gameId=${notification.metadata.gameId}`);
-      } else if (notification.metadata?.roomId) {
-        router.push(`/room/${notification.metadata.roomId}`);
-      }
-    } else if (notification.type === "mention") {
-      if (notification.metadata?.roomId) {
-        router.push(`/room/${notification.metadata.roomId}`);
-      }
-    } else if (notification.type === "dm") {
-      if (notification.metadata?.conversationId) {
-        router.push(`/dm/${notification.metadata.conversationId}`);
-      }
-    } else if (notification.type === "friend_request" || notification.type === "friend_accepted") {
-      router.push("/dashboard/friends");
+    const details = getNotificationDetails(notification);
+    if (details.destination) {
+      router.push(details.destination);
     }
   };
 

@@ -12,8 +12,10 @@ import { useUserStore } from "@/store/useUserStore";
 import { useInkDeceptionStore } from "@/store/useInkDeceptionStore";
 import { GlassCard } from "@/components/layout/GlassCard";
 import { socketService } from "@/lib/socket";
+import { copyToClipboard } from "@/lib/clipboard";
 import { TurnIndicator } from "@/components/games/TurnIndicator";
 import { useExitWarning } from "@/hooks/useExitWarning";
+import { useInviteCooldown } from "@/hooks/useInviteCooldown";
 
 // Ink & Deception components
 
@@ -210,11 +212,13 @@ function InkDeceptionContent() {
       .catch(console.error);
   }, [userId, showInviteModal]);
 
+  const { triggerInvite, getInviteStatus } = useInviteCooldown(lobby?.id || gameState?.gameId);
+
   const sendInvite = (targetId: string) => {
     const activeGameId = gameState?.gameId || lobby?.id;
     if (!activeGameId || !userId || !nickname) return;
     invitePlayer(activeGameId, userId, nickname, targetId);
-    setInvitedUsers(prev => new Set(prev).add(targetId));
+    triggerInvite(targetId);
   };
 
   // Safe unmount leave logic
@@ -305,7 +309,7 @@ function InkDeceptionContent() {
     return (
       <div className="flex flex-col h-screen bg-black text-white">
         {/* Global Header Navbar */}
-        <div className="flex items-center justify-between p-4 bg-white/5 border-b border-white/10 flex-shrink-0">
+        <div className="flex flex-wrap items-center justify-between p-3 sm:p-4 bg-white/5 border-b border-white/10 flex-shrink-0 gap-2">
           <div className="flex items-center gap-4">
             <button onClick={handleLeave} className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer">
               <ArrowLeft className="w-5 h-5" />
@@ -539,11 +543,13 @@ function InkDeceptionContent() {
                       className="flex-1 bg-black border border-white/10 rounded-lg px-3 py-1.5 text-xs text-slate-300 font-mono outline-none"
                     />
                     <button
-                      onClick={() => {
+                      onClick={async () => {
                         const link = `${window.location.origin}/dashboard/games/ink-deception?gameId=${lobby.id}`;
-                        navigator.clipboard.writeText(link);
-                        setInviteCopied(true);
-                        setTimeout(() => setInviteCopied(false), 2000);
+                        const success = await copyToClipboard(link);
+                        if (success) {
+                          setInviteCopied(true);
+                          setTimeout(() => setInviteCopied(false), 2000);
+                        }
                       }}
                       className="px-3 py-1.5 bg-[#6AA6FF]/20 hover:bg-[#6AA6FF]/35 text-[#6AA6FF] border border-[#6AA6FF]/30 rounded-lg text-xs font-mono transition-colors cursor-pointer"
                     >
@@ -563,22 +569,25 @@ function InkDeceptionContent() {
                     <div className="max-h-[250px] overflow-y-auto pr-1 space-y-2 custom-scrollbar">
                       {onlineUsers
                         .filter(u => !lobby.players.some(p => p.userId === u.id))
-                        .map(user => (
-                          <div key={user.id} className="flex items-center justify-between p-3 bg-white/5 border border-white/10 rounded-xl">
-                            <span className="text-xs font-bold text-white">{user.nickname}</span>
-                            <button
-                              onClick={() => sendInvite(user.id)}
-                              disabled={invitedUsers.has(user.id)}
-                              className={`px-3 py-1 rounded-full text-[10px] font-bold transition-colors cursor-pointer ${
-                                invitedUsers.has(user.id)
-                                  ? 'bg-emerald-500/20 text-emerald-400 cursor-default'
-                                  : 'bg-[#FF5DA8]/20 hover:bg-[#FF5DA8]/35 text-[#FF5DA8]'
-                              }`}
-                            >
-                               {invitedUsers.has(user.id) ? '✓ Invited' : 'Invite'}
-                            </button>
-                          </div>
-                        ))
+                        .map(user => {
+                          const status = getInviteStatus(user.id);
+                          return (
+                            <div key={user.id} className="flex items-center justify-between p-3 bg-white/5 border border-white/10 rounded-xl">
+                              <span className="text-xs font-bold text-white">{user.nickname}</span>
+                              <button
+                                onClick={() => sendInvite(user.id)}
+                                disabled={!status.canInvite}
+                                className={`px-3 py-1 rounded-full text-[10px] font-bold transition-colors cursor-pointer ${
+                                  !status.canInvite
+                                    ? 'bg-emerald-500/20 text-emerald-400 cursor-not-allowed'
+                                    : 'bg-[#FF5DA8]/20 hover:bg-[#FF5DA8]/35 text-[#FF5DA8]'
+                                }`}
+                              >
+                                {status.label}
+                              </button>
+                            </div>
+                          );
+                        })
                       }
                     </div>
                   )}
