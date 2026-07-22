@@ -97,7 +97,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
           useNotificationStore.getState().setNotifications(data);
         }
       })
-      .catch(console.error);
+      .catch((err) => console.warn('Failed to fetch initial notifications:', err));
 
     return () => {
       socket.off("user_online", onUserOnline);

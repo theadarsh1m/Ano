@@ -3,8 +3,13 @@ const prisma = require('../../db');
 class GamePersistenceService {
   static async createSession(sessionId, gameType) {
     try {
-      return await prisma.gameSession.create({
-        data: {
+      return await prisma.gameSession.upsert({
+        where: { id: sessionId },
+        update: {
+          gameType,
+          status: 'WAITING',
+        },
+        create: {
           id: sessionId,
           gameType,
           status: 'WAITING',

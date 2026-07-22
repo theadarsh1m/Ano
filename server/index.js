@@ -18,6 +18,7 @@ const gameRoutes = require('./routes/gameRoutes');
 const feedRoutes = require('./routes/feedRoutes');
 const createAdminRoutes = require('./routes/adminRoutes');
 const feedbackRoutes = require('./routes/feedbackRoutes');
+const flappyRoutes = require('./routes/flappyRoutes');
 const notificationService = require('./services/notificationService');
 const voiceService = require('./services/voiceService');
 const prisma = require('./db');
@@ -33,6 +34,8 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/games', gameRoutes);
+app.use('/api/games/flappy', flappyRoutes);
+app.use('/api/games/flappy-bird', flappyRoutes);
 app.use('/api/feed', feedRoutes);
 // adminRoutes is initialized after in-memory Maps are created (see below)
 app.use('/api/feedback', feedbackRoutes);

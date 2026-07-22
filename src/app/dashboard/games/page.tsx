@@ -5,6 +5,7 @@ import { GlassCard } from "@/components/layout/GlassCard";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Gamepad2, Play, Trophy, Clock, ArrowLeft, MessageSquare, Star } from "lucide-react";
+import { getSinglePlayerGames, getMultiplayerGames } from "@/config/gamesRegistry";
 import { GameRatingModal } from "@/components/feedback/GameRatingModal";
 
 export default function GamesHubPage() {
@@ -15,82 +16,9 @@ export default function GamesHubPage() {
     setSelectedGame({ id, title });
     setRatingOpen(true);
   };
-  const singlePlayerGames = [
-    {
-      id: "2048",
-      title: "2048",
-      description: "Slide tiles and merge them to reach 2048. A simple but addictive puzzle game.",
-      icon: "🔢",
-      color: "from-yellow-500 to-orange-600",
-    },
-    {
-      id: "minesweeper",
-      title: "Minesweeper",
-      description: "Clear the board without detonating any hidden mines. Use logic to figure out where they are.",
-      icon: "💣",
-      color: "from-red-500 to-rose-700",
-    }
-  ];
 
-  const multiplayerGames = [
-    {
-      id: "bluff",
-      title: "Bluff Card Game",
-      description: "Card game of lies, deception, and challenges. Get rid of your cards and catch other players bluffing!",
-      icon: "🃏",
-      color: "from-emerald-500 to-teal-700",
-      href: "/dashboard/games/bluff"
-    },
-    {
-      id: "memory-match",
-      title: "Memory Match",
-      description: "Flip cards, find matching pairs, and outscore your opponents in this classic multiplayer memory game!",
-      icon: "🧠",
-      color: "from-violet-500 to-fuchsia-700",
-      href: "/dashboard/games/memory-match"
-    },
-    {
-      id: "dots-and-boxes",
-      title: "Dots and Boxes",
-      description: "Connect the dots, close the boxes, and capture the board in this classic strategy game!",
-      icon: "✏️",
-      color: "from-blue-500 to-indigo-700",
-      href: "/dashboard/games/dots-and-boxes"
-    },
-
-    {
-      id: "color-wars",
-      title: "Chain Reaction",
-      description: "Place energy strategically, trigger explosive chain reactions, and capture the board to eliminate your opponents!",
-      icon: "💥",
-      color: "from-rose-500 to-red-600",
-      href: "/dashboard/games/color-wars"
-    },
-    {
-      id: "scribble",
-      title: "Scribble",
-      description: "Draw, guess, and win! The ultimate multiplayer drawing party game.",
-      icon: "🎨",
-      color: "from-sky-400 to-indigo-600",
-      href: "/dashboard/games/scribble"
-    },
-    {
-      id: "ink-deception",
-      title: "Ink & Deception",
-      description: "One Drawing. One Impostor. Trust No Stroke. Expose the Fake Artist or blend in and guess the secret word!",
-      icon: "🖌️",
-      color: "from-slate-900 via-indigo-950 to-pink-950 border-[#FF5DA8]/20",
-      href: "/dashboard/games/ink-deception"
-    },
-    {
-      id: "chamber-clash",
-      title: "Chamber Clash",
-      description: "Manage risk, use items, and survive the chamber in this tense 2-8 player strategy game!",
-      icon: "🔫",
-      color: "from-slate-800 to-zinc-900 border-red-500/20",
-      href: "/dashboard/games/chamber-clash"
-    }
-  ];
+  const singlePlayerGames = getSinglePlayerGames();
+  const multiplayerGames = getMultiplayerGames();
 
   return (
     <div className="flex flex-col h-full space-y-4 md:space-y-6 max-w-6xl mx-auto w-full p-3 pb-12 md:p-6 md:pb-12">
@@ -204,7 +132,7 @@ export default function GamesHubPage() {
             </div>
             
             <div className="flex gap-2 relative z-10">
-              <Link href={`/dashboard/games/${game.id}`} className="flex-grow">
+              <Link href={game.href} className="flex-grow">
                 <button className="w-full py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2 group-hover:bg-purple-500 group-hover:text-white">
                   <Play className="w-4 h-4" /> Play Now
                 </button>

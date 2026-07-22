@@ -5,11 +5,8 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useUserStore } from "@/store/useUserStore";
 import { ArrowLeft, Loader2, MessageSquare, Trophy, Medal, ChevronUp, X } from "lucide-react";
-import { Game2048 } from "@/components/games/Game2048";
-import { Minesweeper } from "@/components/games/Minesweeper";
+import { getGameDefinition } from "@/config/gamesRegistry";
 import { GlassCard } from "@/components/layout/GlassCard";
-
-
 
 export default function SinglePlayerGamePage() {
   const params = useParams();
@@ -20,6 +17,8 @@ export default function SinglePlayerGamePage() {
   const [stats, setStats] = useState<{ highScore: number; totalPlayTimeSeconds: number } | null>(null);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [showMobileLeaderboard, setShowMobileLeaderboard] = useState(false);
+
+  const gameDef = getGameDefinition(gameType);
 
   const fetchLeaderboard = () => {
     fetch(`${API_URL}/api/games/leaderboard/${gameType}`)
@@ -67,22 +66,15 @@ export default function SinglePlayerGamePage() {
   };
 
   const renderGame = () => {
-    switch (gameType) {
-      case '2048':
-        return <Game2048 onGameEnd={handleSaveResult} />;
-      case 'minesweeper':
-        return <Minesweeper onGameEnd={handleSaveResult} />;
-      default:
-        return <div className="text-white text-xl">Game not found</div>;
+    if (gameDef && gameDef.component) {
+      const GameComp = gameDef.component;
+      return <GameComp onGameEnd={handleSaveResult} />;
     }
+    return <div className="text-white text-xl">Game not found</div>;
   };
 
   const getGameName = () => {
-    switch (gameType) {
-      case '2048': return '2048';
-      case 'minesweeper': return 'Minesweeper';
-      default: return 'Game';
-    }
+    return gameDef?.title || 'Game';
   };
 
   return (

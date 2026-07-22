@@ -6,6 +6,7 @@ const MAX_PLAYERS = {
   'DOTS_AND_BOXES': 8,
   'COLOR_WARS': 8,
   'INK_DECEPTION': 10,
+  'FLAPPY_BIRD': 8,
 };
 const DEFAULT_MAX_PLAYERS = 6;
 

@@ -308,6 +308,7 @@ enum GameType {
   SCRIBBLE
   INK_DECEPTION
   CHAMBER_CLASH
+  FLAPPY_BIRD
 }
 
 enum GameStatus {

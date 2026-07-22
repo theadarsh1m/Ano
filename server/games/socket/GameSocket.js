@@ -6,6 +6,7 @@ const ColorWarsEngine = require('../color-wars/ColorWarsEngine');
 const ScribbleEngine = require('../scribble/ScribbleEngine');
 const InkDeceptionEngine = require('../ink-deception/InkDeceptionEngine');
 const ChamberClashEngine = require('../chamber-clash/ChamberClashEngine');
+const FlappyBirdEngine = require('../flappy-bird/FlappyBirdEngine');
 const userService = require('../../services/userService');
 
 const ENGINE_MAP = {
@@ -16,6 +17,7 @@ const ENGINE_MAP = {
   'SCRIBBLE': ScribbleEngine,
   'INK_DECEPTION': InkDeceptionEngine,
   'CHAMBER_CLASH': ChamberClashEngine,
+  'FLAPPY_BIRD': FlappyBirdEngine,
 };
 
 const GAME_DISPLAY_NAMES = {
@@ -26,6 +28,7 @@ const GAME_DISPLAY_NAMES = {
   'SCRIBBLE': 'Scribble',
   'INK_DECEPTION': 'Ink & Deception',
   'CHAMBER_CLASH': 'Chamber Clash',
+  'FLAPPY_BIRD': 'Flappy Bird',
 };
 
 function registerGameSockets(io, socket, onlineUsers, activeGames) {
@@ -484,6 +487,107 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
     engine.spectators.add(userId);
     socket.join(gameId);
     socket.emit('game_state', engine.serializeState(null));
+  });
+
+  // ========================
+  // FLAPPY BIRD SPECIFIC SOCKET EVENTS
+  // ========================
+  socket.on('flappy_jump', ({ gameId, userId, y, vy }) => {
+    const engine = activeGames.get(gameId);
+    if (engine && typeof engine.handleJump === 'function') {
+      const res = engine.handleJump(userId, y, vy);
+      if (res) {
+        socket.to(gameId).emit('flappy_jump', res);
+      }
+    }
+  });
+
+  socket.on('flappy_death', ({ gameId, userId, score, timeSurvived }) => {
+    const engine = activeGames.get(gameId);
+    if (engine && typeof engine.handlePlayerDeath === 'function') {
+      const res = engine.handlePlayerDeath(userId, score, timeSurvived);
+      if (res) {
+        io.to(gameId).emit('flappy_death', res);
+        broadcastGameStates(gameId, engine);
+      }
+    }
+  });
+
+  const restoreLobbyFromEngine = (gameId, engine) => {
+    let lobby = LobbyService.getLobby(gameId);
+    if (!lobby && engine) {
+      const hostUser = Array.from(engine.players.values()).find(p => p.role === 'HOST') || Array.from(engine.players.values())[0];
+      const hostId = hostUser ? hostUser.userId : '';
+      const hostName = hostUser ? hostUser.nickname : 'Player';
+
+      const playersMap = new Map();
+      for (const p of engine.players.values()) {
+        playersMap.set(p.userId, {
+          userId: p.userId,
+          nickname: p.nickname,
+          role: p.role || (p.userId === hostId ? 'HOST' : 'PLAYER'),
+          isReady: p.userId === hostId
+        });
+      }
+
+      lobby = {
+        id: gameId,
+        hostId,
+        gameType: engine.gameType || 'FLAPPY_BIRD',
+        players: playersMap,
+        status: 'WAITING',
+        settings: engine.settings || { maxPlayers: 8 },
+        createdAt: new Date()
+      };
+      LobbyService.lobbies.set(gameId, lobby);
+    }
+    return lobby;
+  };
+
+  socket.on('flappy_return_to_lobby', ({ gameId, userId }) => {
+    const engine = activeGames.get(gameId);
+    if (engine && typeof engine.handleReturnToLobby === 'function') {
+      engine.handleReturnToLobby(userId);
+      broadcastGameStates(gameId, engine);
+    }
+
+    // Only restore the lobby when the game is actually finished
+    // If game is still in progress (other players alive), don't create a lobby yet
+    if (!engine || engine.status === 'FINISHED') {
+      const lobby = restoreLobbyFromEngine(gameId, engine);
+      if (lobby) {
+        const player = lobby.players.get(userId);
+        if (player && player.role !== 'HOST') {
+          player.isReady = false;
+        }
+        socket.join(gameId);
+        io.to(gameId).emit('lobby_state', serializeLobby(lobby));
+        broadcastLobbies();
+      }
+    } else {
+      // Game still in progress — just make sure the returning player stays in the socket room
+      socket.join(gameId);
+    }
+  });
+
+  socket.on('flappy_reset_lobby', ({ gameId }) => {
+    const engine = activeGames.get(gameId);
+    const lobby = restoreLobbyFromEngine(gameId, engine);
+
+    if (engine && typeof engine.resetToLobby === 'function') {
+      const newState = engine.resetToLobby();
+      io.to(gameId).emit('game_state', newState);
+    }
+
+    if (lobby) {
+      for (const p of lobby.players.values()) {
+        p.isReady = p.role === 'HOST';
+      }
+      io.to(gameId).emit('lobby_state', serializeLobby(lobby));
+    }
+
+    activeGames.delete(gameId);
+    broadcastLobbies();
   });
 }
 
