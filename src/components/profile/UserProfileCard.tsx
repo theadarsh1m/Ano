@@ -1,6 +1,6 @@
 "use client";
-import { API_URL } from "@/lib/config";
 
+import { API_URL } from "@/lib/config";
 import { useEffect, useState } from "react";
 import { usePresenceStore } from "@/store/usePresenceStore";
 import { useUserStore } from "@/store/useUserStore";
@@ -8,8 +8,7 @@ import { useRouter } from "next/navigation";
 import { Camera, Edit3, Check, X, MessageSquare, Calendar } from "lucide-react";
 import { uploadProfilePicture, validateImageFile } from "@/lib/upload";
 import { motion } from "framer-motion";
-
-
+import { UserAvatar } from "@/components/ui/UserAvatar";
 
 interface UserProfile {
   id: string;
@@ -127,17 +126,13 @@ export function UserProfileCard({ userId, onStartDM }: UserProfileCardProps) {
     >
       {/* Avatar */}
       <div className="relative group">
-        {profile.avatar ? (
-          <img
-            src={profile.avatar}
-            alt={profile.nickname}
-            className="w-20 h-20 rounded-full object-cover ring-2 ring-white/10"
-          />
-        ) : (
-          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-2xl ring-2 ring-white/10">
-            {profile.nickname.substring(0, 2).toUpperCase()}
-          </div>
-        )}
+        <UserAvatar
+          src={profile.avatar}
+          nickname={profile.nickname}
+          size="w-20 h-20"
+          textClassName="text-2xl font-bold"
+          className="ring-2 ring-white/10"
+        />
 
         {/* Online indicator */}
         <span

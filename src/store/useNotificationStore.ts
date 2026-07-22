@@ -13,7 +13,7 @@ export interface AppNotification {
   title: string;
   message: string;
   isRead: boolean;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   createdAt: string;
 }
 

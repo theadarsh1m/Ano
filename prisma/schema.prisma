@@ -39,6 +39,7 @@ model User {
   bugReports            BugReport[]
   reportsSent           UserReport[]    @relation("ReportedBy")
   reportsReceived       UserReport[]    @relation("ReportedUser")
+  ipLogs                IpLog[]
 }
 
 model Room {
@@ -419,3 +420,18 @@ model SiteConfig {
   ratingsEnabled     Boolean  @default(true)
   updatedAt          DateTime @updatedAt
 }
+
+model IpLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  ipAddress String
+  userAgent String?
+  eventType String   // REGISTER, LOGIN, ANONYMOUS_SESSION, PASSWORD_CHANGE, EMAIL_CHANGE
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([ipAddress])
+  @@index([userId])
+  @@index([createdAt])
+}
+

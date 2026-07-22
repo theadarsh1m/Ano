@@ -18,7 +18,7 @@ export interface DMMessage {
   moderationProvider?: string;
   nudityScore?: number | null;
   goreScore?: number | null;
-  rawModerationResponse?: any;
+  rawModerationResponse?: unknown;
   moderatedAt?: string | null;
 }
 
@@ -77,8 +77,10 @@ export const useDMStore = create<DMState>((set, get) => ({
     conversations.forEach((c) => {
       counts[c.id] = c.unreadCount || 0;
     });
+    // Ensure sorted by updatedAt descending
+    const sorted = [...conversations].sort((a, b) => b.updatedAt - a.updatedAt);
     set({ 
-      conversations, 
+      conversations: sorted, 
       dmUnreadCounts: { ...get().dmUnreadCounts, ...counts },
       conversationsLoaded: true 
     });
@@ -90,7 +92,6 @@ export const useDMStore = create<DMState>((set, get) => ({
       if (existing >= 0) {
         const updated = [...state.conversations];
         updated[existing] = conversation;
-        // Re-sort by updatedAt descending
         updated.sort((a, b) => b.updatedAt - a.updatedAt);
         return { conversations: updated };
       }
@@ -104,14 +105,52 @@ export const useDMStore = create<DMState>((set, get) => ({
   addDMMessage: (conversationId, message) =>
     set((state) => {
       const existing = state.dmMessages[conversationId] || [];
-      // Prevent duplicates
-      if (existing.some((m) => m.id === message.id)) return state;
+      const isDuplicate = existing.some((m) => m.id === message.id);
+      const updatedMessages = isDuplicate ? existing : [...existing, message];
+
+      const timestamp = message.timestamp || Date.now();
+      const lastMessageObj = {
+        id: message.id,
+        content: message.content,
+        type: message.type || 'text',
+        timestamp,
+        senderId: message.senderId,
+      };
+
+      const existingIndex = state.conversations.findIndex((c) => c.id === conversationId);
+      const newConversations = [...state.conversations];
+
+      if (existingIndex >= 0) {
+        const target = newConversations[existingIndex];
+        const updatedConv: ConversationPreview = {
+          ...target,
+          lastMessage: lastMessageObj,
+          updatedAt: timestamp,
+        };
+        newConversations.splice(existingIndex, 1);
+        newConversations.unshift(updatedConv);
+      }
+
+      // Check unread count logic
+      const isInactive = state.activeConversationId !== conversationId;
+      const isIncoming = existingIndex >= 0
+        ? state.conversations[existingIndex]?.otherUser.id === message.senderId
+        : message.senderId !== state.activeConversationId;
+
+      const newUnreadCounts = { ...state.dmUnreadCounts };
+      if (!isDuplicate && isInactive && isIncoming) {
+        newUnreadCounts[conversationId] = (newUnreadCounts[conversationId] || 0) + 1;
+      } else if (state.activeConversationId === conversationId) {
+        newUnreadCounts[conversationId] = 0;
+      }
 
       return {
         dmMessages: {
           ...state.dmMessages,
-          [conversationId]: [...existing, message],
+          [conversationId]: updatedMessages,
         },
+        conversations: newConversations,
+        dmUnreadCounts: newUnreadCounts,
       };
     }),
 

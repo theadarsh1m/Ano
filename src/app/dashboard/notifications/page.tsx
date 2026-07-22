@@ -1,19 +1,19 @@
 "use client";
-import { API_URL } from "@/lib/config";
 
+import { API_URL } from "@/lib/config";
 import { useState } from "react";
 import { GlassCard } from "@/components/layout/GlassCard";
-import { useNotificationStore } from "@/store/useNotificationStore";
+import { useNotificationStore, AppNotification } from "@/store/useNotificationStore";
 import { useUserStore } from "@/store/useUserStore";
-import { Bell, Check, Users, MessageSquare, AtSign, Settings, Megaphone, Trash2 } from "lucide-react";
+import { Bell, Check, Users, MessageSquare, AtSign, Settings, Megaphone, ArrowLeft } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-
-
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
 export default function NotificationsPage() {
-  const { notifications, unreadCount, markAsRead, markAllAsRead, setNotifications } = useNotificationStore();
+  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotificationStore();
   const userId = useUserStore((s) => s.id);
   const router = useRouter();
   const [filter, setFilter] = useState("all");
@@ -51,15 +51,16 @@ export default function NotificationsPage() {
     }
   };
 
-  const handleAction = (notification: any) => {
+  const handleAction = (notification: AppNotification) => {
     if (!notification.isRead) {
       handleMarkAsRead(notification.id);
     }
-    
+
     if (notification.type === "room_invite") {
       if (notification.metadata?.gameId) {
         const gameTypeMap: Record<string, string> = { 'BLUFF': 'bluff', 'MEMORY_MATCH': 'memory-match', 'DOTS_AND_BOXES': 'dots-and-boxes' };
-        const gamePath = gameTypeMap[notification.metadata?.gameType] || 'bluff';
+        const gameTypeKey = typeof notification.metadata?.gameType === 'string' ? notification.metadata.gameType : '';
+        const gamePath = gameTypeMap[gameTypeKey] || 'bluff';
         router.push(`/dashboard/games/${gamePath}?gameId=${notification.metadata.gameId}`);
       } else if (notification.metadata?.roomId) {
         router.push(`/room/${notification.metadata.roomId}`);
@@ -73,7 +74,7 @@ export default function NotificationsPage() {
         router.push(`/dm/${notification.metadata.conversationId}`);
       }
     } else if (notification.type === "friend_request" || notification.type === "friend_accepted") {
-      router.push("/dashboard/friends"); // Note: If friends page exists
+      router.push("/dashboard/friends");
     }
   };
 
@@ -89,22 +90,53 @@ export default function NotificationsPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto w-full flex flex-col h-full overflow-hidden p-4 md:p-8">
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4">
+    <div className="max-w-4xl mx-auto w-full flex flex-col h-full overflow-hidden p-4 md:p-8 space-y-6">
+      {/* Main Navbar Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white/5 border border-white/10 rounded-2xl p-4 shadow-lg backdrop-blur-md">
+        <div className="flex items-center gap-4">
+          <Link href="/dashboard">
+            <div className="flex items-center gap-3 cursor-pointer group hover:opacity-80 transition-opacity">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
+                <MessageSquare className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <span className="text-xl font-bold text-white tracking-wide block leading-tight">
+                  Ano
+                </span>
+                <span className="text-xs text-gray-400">Notification Center</span>
+              </div>
+            </div>
+          </Link>
+        </div>
+
+        <Link href="/dashboard">
+          <Button
+            variant="ghost"
+            className="text-gray-400 hover:text-white text-xs sm:text-sm"
+          >
+            <ArrowLeft className="w-4 h-4 mr-1 sm:mr-2" />
+            <span className="hidden sm:inline">Back to Dashboard</span>
+            <span className="sm:hidden">Back</span>
+          </Button>
+        </Link>
+      </div>
+
+      {/* Subheader Title & Mark All Read */}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
-            <Bell className="w-8 h-8 text-blue-400" />
-            Notification Center
+          <h1 className="text-2xl md:text-3xl font-bold text-white mb-1 flex items-center gap-3">
+            <Bell className="w-7 h-7 text-blue-400" />
+            Notifications
           </h1>
           <p className="text-gray-400 text-sm">
             You have {unreadCount} unread notification{unreadCount !== 1 ? 's' : ''}.
           </p>
         </div>
-        
+
         {unreadCount > 0 && (
           <button
             onClick={handleMarkAllAsRead}
-            className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm text-white transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs sm:text-sm text-white transition-colors font-medium"
           >
             <Check className="w-4 h-4 text-blue-400" />
             Mark all as read
@@ -113,12 +145,12 @@ export default function NotificationsPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
+      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
         {["all", "unread", "mentions", "invites"].map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+            className={`px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
               filter === f
                 ? "bg-blue-500 text-white"
                 : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white"
@@ -129,12 +161,13 @@ export default function NotificationsPage() {
         ))}
       </div>
 
+      {/* Notification List */}
       <GlassCard className="flex-1 overflow-y-auto p-0">
         {filteredNotifications.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center p-8 text-gray-500">
             <Bell className="w-16 h-16 mb-4 opacity-20" />
             <p className="text-lg">No notifications found.</p>
-            <p className="text-sm">You're all caught up!</p>
+            <p className="text-sm">You&apos;re all caught up!</p>
           </div>
         ) : (
           <div className="divide-y divide-white/5">

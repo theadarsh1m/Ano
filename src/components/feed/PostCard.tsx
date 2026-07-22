@@ -1,10 +1,11 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { MessageCircle, Bookmark, BookmarkCheck, Share2, Trash2, MoreHorizontal, User, Check, Loader2, AlertCircle } from "lucide-react";
+import { MessageCircle, Bookmark, BookmarkCheck, Share2, Trash2, MoreHorizontal, Check, Loader2, AlertCircle } from "lucide-react";
 import { VoteButtons } from "./VoteButtons";
 import { FeedPost } from "@/store/useFeedStore";
 import { SafeMedia } from "../ui/SafeMedia";
+import { UserAvatar } from "../ui/UserAvatar";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -57,17 +58,12 @@ export function PostCard({ post, onVote, onSave, onUnsave, onDelete, isOwner }: 
       <div className="p-4 min-w-0">
         {/* Author row */}
         <div className="flex items-center gap-2 mb-2">
-          {post.author.avatar ? (
-            <img
-              src={post.author.avatar}
-              alt=""
-              className="w-6 h-6 rounded-full object-cover"
-            />
-          ) : (
-            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-              <User className="w-3 h-3 text-white" />
-            </div>
-          )}
+          <UserAvatar
+            src={post.author.avatar}
+            nickname={post.author.nickname}
+            size="w-6 h-6"
+            textClassName="text-[10px] font-bold"
+          />
           <span className="text-sm text-gray-300 font-medium">
             {post.author.nickname}
           </span>
@@ -149,7 +145,11 @@ export function PostCard({ post, onVote, onSave, onUnsave, onDelete, isOwner }: 
           <button
             onClick={(e) => {
               e.stopPropagation();
-              post.isSaved ? onUnsave(post.id) : onSave(post.id);
+              if (post.isSaved) {
+                onUnsave(post.id);
+              } else {
+                onSave(post.id);
+              }
             }}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-colors border border-white/5 bg-white/5 hover:bg-white/10 ${
               post.isSaved

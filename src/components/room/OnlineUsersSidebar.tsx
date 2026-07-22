@@ -7,6 +7,7 @@ import { useUserStore } from "@/store/useUserStore";
 import { useDMStore } from "@/store/useDMStore";
 import { useRouter } from "next/navigation";
 import { MessageSquare, ShieldCheck, UserPlus, ShieldAlert } from "lucide-react";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 
 
 
@@ -83,9 +84,11 @@ export function OnlineUsersSidebar({ roomId }: OnlineUsersSidebarProps) {
                 }`}
                 onClick={() => !isMe && handleStartDM(user.userId)}
               >
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
-                  {user.nickname.substring(0, 2).toUpperCase()}
-                </div>
+                <UserAvatar
+                  src={user.avatar}
+                  nickname={user.nickname}
+                  size="w-8 h-8"
+                />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-white truncate flex items-center gap-1">
                     {user.nickname} {isMe && <span className="text-gray-400 text-xs">(You)</span>}

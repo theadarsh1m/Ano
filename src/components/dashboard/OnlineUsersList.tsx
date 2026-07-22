@@ -3,9 +3,9 @@ import { API_URL } from "@/lib/config";
 
 import { useEffect, useState } from "react";
 import { GlassCard } from "@/components/layout/GlassCard";
-import { Users, User, Circle, ShieldAlert } from "lucide-react";
+import { Users, Circle, ShieldAlert } from "lucide-react";
 import { motion } from "framer-motion";
-import Image from "next/image";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { useUserStore } from "@/store/useUserStore";
 import { useDMStore } from "@/store/useDMStore";
 import { useRouter } from "next/navigation";
@@ -40,8 +40,8 @@ export function OnlineUsersList() {
         if (!res.ok) throw new Error("Failed to fetch online users");
         const data = await res.json();
         setUsers(data.filter((u: OnlineUser) => u.id !== myUserId));
-      } catch (err: any) {
-        setError(err.message);
+      } catch (err: unknown) {
+        setError((err as Error).message || "Failed to fetch online users");
       } finally {
         setLoading(false);
       }
@@ -126,19 +126,11 @@ export function OnlineUsersList() {
               className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/10 transition-colors border border-white/5 cursor-pointer"
             >
               <div className="relative">
-                {user.avatar ? (
-                  <Image
-                    src={user.avatar}
-                    alt={user.nickname}
-                    width={40}
-                    height={40}
-                    className="rounded-full object-cover w-10 h-10"
-                  />
-                ) : (
-                  <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center">
-                    <User className="w-5 h-5 text-indigo-400" />
-                  </div>
-                )}
+                <UserAvatar
+                  src={user.avatar}
+                  nickname={user.nickname}
+                  size="w-10 h-10"
+                />
                 <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-[#12121A] rounded-full" />
               </div>
               <div className="flex flex-col flex-1 min-w-0">

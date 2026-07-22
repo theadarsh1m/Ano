@@ -4,7 +4,8 @@ import { useState } from "react";
 import { FeedComment } from "@/store/useFeedStore";
 import { useUserStore } from "@/store/useUserStore";
 import { CommentInput } from "./CommentInput";
-import { Reply, Trash2, User } from "lucide-react";
+import { UserAvatar } from "../ui/UserAvatar";
+import { Reply, Trash2 } from "lucide-react";
 import { motion } from "framer-motion";
 
 function timeAgo(dateStr: string): string {
@@ -40,17 +41,12 @@ function CommentNode({ comment, depth, onReply, onDelete }: CommentNodeProps) {
       <div className="py-2">
         {/* Author */}
         <div className="flex items-center gap-2 mb-1">
-          {comment.author.avatar ? (
-            <img
-              src={comment.author.avatar}
-              alt=""
-              className="w-5 h-5 rounded-full object-cover"
-            />
-          ) : (
-            <div className="w-5 h-5 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-              <User className="w-2.5 h-2.5 text-white" />
-            </div>
-          )}
+          <UserAvatar
+            src={comment.author.avatar}
+            nickname={comment.author.nickname}
+            size="w-5 h-5"
+            textClassName="text-[9px] font-bold"
+          />
           <span className="text-xs font-medium text-gray-300">
             {comment.author.nickname}
           </span>

@@ -1,5 +1,6 @@
 const express = require('express');
 const prisma = require('../db');
+const ipService = require('../services/ipService');
 
 // Factory: accepts in-memory Maps from the main server
 module.exports = function createAdminRoutes(onlineUsersMap, roomsMap, activeGamesMap) {
@@ -606,6 +607,54 @@ router.post('/settings', async (req, res) => {
     });
     await logAction(req.adminUser.email, 'Updated site settings', JSON.stringify(req.body), req);
     res.json({ success: true, config });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ──── IP ANALYTICS & SECURITY ────
+router.get('/ip-analytics/summary', async (req, res) => {
+  try {
+    const summary = await ipService.getIpSummary();
+    res.json(summary);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/ip-analytics/list', async (req, res) => {
+  try {
+    const { search, filter, page, limit } = req.query;
+    const listData = await ipService.getIpList({
+      search: search || '',
+      filter: filter || 'all',
+      page: parseInt(page) || 1,
+      limit: parseInt(limit) || 20,
+    });
+    res.json(listData);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/ip-analytics/details/:ipAddress', async (req, res) => {
+  try {
+    const { ipAddress } = req.params;
+    const details = await ipService.getIpDetails(ipAddress);
+    if (!details) {
+      return res.status(404).json({ error: 'IP Address record not found.' });
+    }
+    res.json(details);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/ip-analytics/user/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const userAnalytics = await ipService.getUserIpAnalytics(userId);
+    res.json(userAnalytics);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

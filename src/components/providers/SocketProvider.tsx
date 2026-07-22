@@ -3,10 +3,8 @@
 import { useEffect } from "react";
 import { useUserStore } from "@/store/useUserStore";
 import { usePresenceStore } from "@/store/usePresenceStore";
-import { useDMStore } from "@/store/useDMStore";
-import { useNotificationStore } from "@/store/useNotificationStore";
-import { useFeedStore } from "@/store/useFeedStore";
-import { useChatStore } from "@/store/useChatStore";
+import { useDMStore, DMMessage } from "@/store/useDMStore";
+import { useNotificationStore, AppNotification } from "@/store/useNotificationStore";
 import { socketService } from "@/lib/socket";
 
 const getApiUrl = () => {
@@ -19,9 +17,8 @@ const getApiUrl = () => {
  * Global socket provider — mounts once and handles:
  * - User registration for presence
  * - Online/offline broadcasts
- * - DM notifications (unread counts when not viewing a conversation)
- *
- * Place this in the root layout so it works on ALL pages.
+ * - Real-time DM updates (conversations, previews, unread counts)
+ * - App notifications
  */
 export function SocketProvider({ children }: { children: React.ReactNode }) {
   const userId = useUserStore((s) => s.id);
@@ -30,11 +27,6 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const setUserOnline = usePresenceStore((s) => s.setUserOnline);
   const setUserOffline = usePresenceStore((s) => s.setUserOffline);
   const setOnlineUsers = usePresenceStore((s) => s.setOnlineUsers);
-
-  const addDMMessage = useDMStore((s) => s.addDMMessage);
-  const incrementUnread = useDMStore((s) => s.incrementUnread);
-  const activeConversationId = useDMStore((s) => s.activeConversationId);
-  const setConversations = useDMStore((s) => s.setConversations);
 
   useEffect(() => {
     if (!userId || !nickname) return;
@@ -63,22 +55,28 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       setOnlineUsers(userIds);
     };
 
-    const onDMNotification = ({ conversationId, message }: any) => {
-      addDMMessage(conversationId, message);
-      if (activeConversationId !== conversationId) {
-        incrementUnread(conversationId);
+    const onDMNotification = ({ conversationId, message }: { conversationId: string; message: DMMessage }) => {
+      if (!conversationId || !message) return;
+      useDMStore.getState().addDMMessage(conversationId, message);
+      
+      const hasConv = useDMStore.getState().conversations.some((c) => c.id === conversationId);
+      if (!hasConv) {
+        fetch(`${getApiUrl()}/api/conversations/${userId}`)
+          .then((res) => res.json())
+          .then((data) => {
+            if (Array.isArray(data)) {
+              useDMStore.getState().setConversations(data);
+            }
+          })
+          .catch(() => {});
       }
-      fetch(`${getApiUrl()}/api/conversations/${userId}`)
-        .then((res) => res.json())
-        .then((data) => setConversations(data))
-        .catch(() => {});
     };
 
-    const onDMSeen = ({ conversationId, readerId }: any) => {
+    const onDMSeen = ({ conversationId, readerId }: { conversationId: string; readerId: string }) => {
       useDMStore.getState().markMessagesAsSeen(conversationId, readerId);
     };
 
-    const onNewNotification = (notification: any) => {
+    const onNewNotification = (notification: AppNotification) => {
       useNotificationStore.getState().addNotification(notification);
     };
 
@@ -108,7 +106,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       socket.off("new_notification", onNewNotification);
       socket.off("connect", registerUser);
     };
-  }, [userId, nickname, activeConversationId, setUserOnline, setUserOffline, setOnlineUsers, addDMMessage, incrementUnread, setConversations]);
+  }, [userId, nickname, setUserOnline, setUserOffline, setOnlineUsers]);
 
   return <>{children}</>;
 }

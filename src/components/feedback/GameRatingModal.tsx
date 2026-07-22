@@ -15,14 +15,17 @@ interface GameRatingModalProps {
 
 export function GameRatingModal({ isOpen, onClose, gameId, gameTitle }: GameRatingModalProps) {
   const userId = useUserStore((s) => s.id);
-  const [stars, setStars] = useState(5);
+  const [stars, setStars] = useState(0);
+  const [hoverStars, setHoverStars] = useState(0);
   const [content, setContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
 
+  const activeRating = hoverStars || stars;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userId || submitting) return;
+    if (!userId || submitting || stars === 0) return;
 
     setSubmitting(true);
     try {
@@ -42,7 +45,8 @@ export function GameRatingModal({ isOpen, onClose, gameId, gameTitle }: GameRati
         setTimeout(() => {
           setSuccess(false);
           setContent("");
-          setStars(5);
+          setStars(0);
+          setHoverStars(0);
           onClose();
         }, 2000);
       }
@@ -53,8 +57,15 @@ export function GameRatingModal({ isOpen, onClose, gameId, gameTitle }: GameRati
     }
   };
 
+  const handleCloseModal = () => {
+    setStars(0);
+    setHoverStars(0);
+    setContent("");
+    onClose();
+  };
+
   return (
-    <GlassModal isOpen={isOpen} onClose={onClose} title={`Rate ${gameTitle}`}>
+    <GlassModal isOpen={isOpen} onClose={handleCloseModal} title={`Rate ${gameTitle}`}>
       {success ? (
         <div className="flex flex-col items-center justify-center py-8 space-y-3 text-center">
           <div className="w-12 h-12 bg-green-500/10 border border-green-500/30 rounded-full flex items-center justify-center text-green-400">
@@ -68,23 +79,31 @@ export function GameRatingModal({ isOpen, onClose, gameId, gameTitle }: GameRati
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           <div className="flex flex-col items-center justify-center space-y-2 py-2">
-            <label className="text-white/60 font-semibold uppercase text-[10px] tracking-wider">Your Rating</label>
-            <div className="flex gap-1.5">
+            <label className="text-white/60 font-semibold uppercase text-[10px] tracking-wider">
+              {stars === 0 ? "Select Your Rating" : `${stars} Out of 5 Stars`}
+            </label>
+            <div className="flex gap-1.5" onMouseLeave={() => setHoverStars(0)}>
               {[1, 2, 3, 4, 5].map((num) => (
                 <button
                   key={num}
                   type="button"
                   onClick={() => setStars(num)}
+                  onMouseEnter={() => setHoverStars(num)}
                   className="p-1 hover:scale-110 transition-transform focus:outline-none"
                 >
                   <Star
                     className={`w-8 h-8 transition-colors ${
-                      num <= stars ? "fill-yellow-400 text-yellow-400" : "text-zinc-600 hover:text-zinc-500"
+                      num <= activeRating
+                        ? "fill-yellow-400 text-yellow-400"
+                        : "text-zinc-600 hover:text-zinc-500"
                     }`}
                   />
                 </button>
               ))}
             </div>
+            {stars === 0 && (
+              <span className="text-[10px] text-amber-400/80 italic">Click a star to rate</span>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -101,15 +120,15 @@ export function GameRatingModal({ isOpen, onClose, gameId, gameTitle }: GameRati
           <div className="flex gap-3 pt-2">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleCloseModal}
               className="flex-1 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-xl font-bold uppercase tracking-wider text-[10px] transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={submitting}
-              className="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl font-bold uppercase tracking-wider text-[10px] transition-all flex items-center justify-center gap-2"
+              disabled={submitting || stars === 0}
+              className="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white disabled:opacity-40 disabled:cursor-not-allowed rounded-xl font-bold uppercase tracking-wider text-[10px] transition-all flex items-center justify-center gap-2"
             >
               {submitting ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />

@@ -21,6 +21,7 @@ const feedbackRoutes = require('./routes/feedbackRoutes');
 const flappyRoutes = require('./routes/flappyRoutes');
 const notificationService = require('./services/notificationService');
 const voiceService = require('./services/voiceService');
+const ipService = require('./services/ipService');
 const prisma = require('./db');
 
 // Start cleanup service
@@ -222,6 +223,11 @@ app.post('/api/users', async (req, res) => {
       return res.status(400).json({ error: 'id and nickname are required' });
     }
     const user = await userService.upsertUser(id, nickname);
+    await ipService.logIpEvent({
+      userId: user.id,
+      req,
+      eventType: user.isAnonymous ? 'ANONYMOUS_SESSION' : 'LOGIN'
+    });
     res.json(user);
   } catch (err) {
     console.error('Error upserting user:', err);

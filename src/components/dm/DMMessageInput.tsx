@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Send, Paperclip, X, Loader2, AlertCircle, File as FileIcon } from "lucide-react";
 import { socketService } from "@/lib/socket";
 import { useUserStore } from "@/store/useUserStore";
+import { useDMStore } from "@/store/useDMStore";
 import { v4 as uuidv4 } from "uuid";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -20,7 +21,7 @@ interface DMMessageInputProps {
 
 export function DMMessageInput({ conversationId, recipientId }: DMMessageInputProps) {
   const [message, setMessage] = useState("");
-  const { id: userId, nickname } = useUserStore();
+  const { id: userId, nickname, avatar } = useUserStore();
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -62,9 +63,9 @@ export function DMMessageInput({ conversationId, recipientId }: DMMessageInputPr
 
   // Expose for DropZone
   useEffect(() => {
-    (window as any).__anoDMFileDropHandler = handleFileSelect;
+    (window as unknown as { __anoDMFileDropHandler?: (file: File) => void }).__anoDMFileDropHandler = handleFileSelect;
     return () => {
-      delete (window as any).__anoDMFileDropHandler;
+      delete (window as unknown as { __anoDMFileDropHandler?: (file: File) => void }).__anoDMFileDropHandler;
     };
   }, [handleFileSelect]);
 
@@ -120,19 +121,21 @@ export function DMMessageInput({ conversationId, recipientId }: DMMessageInputPr
           conversationId,
           senderId: userId,
           senderName: nickname,
+          senderAvatar: avatar,
           recipientId,
           content: message.trim() || "",
           timestamp: Date.now(),
-          type: isImageType(selectedFile.type) ? "image" : "file",
+          type: (isImageType(selectedFile.type) ? "image" : "file") as "image" | "file",
           fileUrl: uploadResult.secureUrl,
           fileName: uploadResult.fileName,
           fileSize: uploadResult.fileSize,
           fileType: uploadResult.fileType,
         };
+        useDMStore.getState().addDMMessage(conversationId, msg);
         socket.emit("dm_send", msg);
         clearSelectedFile();
-      } catch (err: any) {
-        setUploadError(err.message || "Upload failed");
+      } catch (err: unknown) {
+        setUploadError((err as Error).message || "Upload failed");
         return;
       }
     } else {
@@ -141,11 +144,13 @@ export function DMMessageInput({ conversationId, recipientId }: DMMessageInputPr
         conversationId,
         senderId: userId,
         senderName: nickname,
+        senderAvatar: avatar,
         recipientId,
         content: message.trim(),
         timestamp: Date.now(),
-        type: "text",
+        type: "text" as const,
       };
+      useDMStore.getState().addDMMessage(conversationId, msg);
       socket.emit("dm_send", msg);
     }
     setMessage("");

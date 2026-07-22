@@ -4,13 +4,14 @@ import { API_URL } from "@/lib/config";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useUserStore } from "@/store/useUserStore";
-import { useDMStore } from "@/store/useDMStore";
+import { useDMStore, DMMessage } from "@/store/useDMStore";
 import { usePresenceStore } from "@/store/usePresenceStore";
 import { socketService } from "@/lib/socket";
 import { GlassCard } from "@/components/layout/GlassCard";
 import { DMChatArea } from "@/components/dm/DMChatArea";
 import { DMMessageInput } from "@/components/dm/DMMessageInput";
 import { UserProfileCard } from "@/components/profile/UserProfileCard";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { DropZone } from "@/components/room/DropZone";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { Loader2, ArrowLeft } from "lucide-react";
@@ -30,7 +31,6 @@ export default function DMPage() {
   const conversationId = params.conversationId as string;
 
   const { id: userId, nickname } = useUserStore();
-  const [isClient, setIsClient] = useState(false);
   const [conversation, setConversation] = useState<ConversationInfo | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -42,13 +42,9 @@ export default function DMPage() {
   const removeDMTypingUser = useDMStore((s) => s.removeDMTypingUser);
   const isOnline = usePresenceStore((s) => s.isOnline);
 
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-
   // Fetch conversation info
   useEffect(() => {
-    if (!isClient || !userId) return;
+    if (!userId) return;
 
     const load = async () => {
       setLoading(true);
@@ -64,11 +60,11 @@ export default function DMPage() {
     };
 
     load();
-  }, [isClient, userId, conversationId]);
+  }, [userId, conversationId]);
 
   // Socket.IO DM lifecycle
   useEffect(() => {
-    if (!isClient || !userId || !nickname || !conversation) return;
+    if (!userId || !nickname || !conversation) return;
 
     const socket = socketService.connect();
 
@@ -97,11 +93,11 @@ export default function DMPage() {
     };
     loadHistory();
 
-    const onDMReceive = (message: any) => {
+    const onDMReceive = (message: DMMessage) => {
       addDMMessage(conversationId, message);
     };
 
-    const onDMTyping = ({ conversationId: cId, nickname: typingName, isTyping }: any) => {
+    const onDMTyping = ({ conversationId: cId, nickname: typingName, isTyping }: { conversationId: string; nickname: string; isTyping: boolean }) => {
       if (cId !== conversationId) return;
       if (isTyping) {
         addDMTypingUser(conversationId, typingName);
@@ -119,15 +115,15 @@ export default function DMPage() {
       socket.off("dm_user_typing", onDMTyping);
       setActiveConversation(null);
     };
-  }, [isClient, conversation, userId, nickname, conversationId, setActiveConversation, setDMMessages, addDMMessage, markConversationAsRead, addDMTypingUser, removeDMTypingUser]);
+  }, [conversation, userId, nickname, conversationId, setActiveConversation, setDMMessages, addDMMessage, markConversationAsRead, addDMTypingUser, removeDMTypingUser]);
 
   useEffect(() => {
-    if (isClient && !userId) {
+    if (!userId) {
       router.push("/");
     }
-  }, [isClient, userId, router]);
+  }, [userId, router]);
 
-  if (!isClient || loading) {
+  if (loading) {
     return (
       <div className="flex h-screen">
         <AppSidebar />
@@ -181,13 +177,11 @@ export default function DMPage() {
           </button>
 
           <div className="relative">
-            {otherUser.avatar ? (
-              <img src={otherUser.avatar} alt={otherUser.nickname} className="w-9 h-9 rounded-full object-cover" />
-            ) : (
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xs">
-                {otherUser.nickname.substring(0, 2).toUpperCase()}
-              </div>
-            )}
+            <UserAvatar
+              src={otherUser.avatar}
+              nickname={otherUser.nickname}
+              size="w-9 h-9"
+            />
             <span
               className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-zinc-900 ${
                 online ? "bg-green-500" : "bg-gray-600"
@@ -207,9 +201,8 @@ export default function DMPage() {
         <div className="flex-1 flex min-h-0">
           <DropZone
             onFileDrop={(file) => {
-              if ((window as any).__anoDMFileDropHandler) {
-                (window as any).__anoDMFileDropHandler(file);
-              }
+              const handler = (window as unknown as { __anoDMFileDropHandler?: (f: File) => void }).__anoDMFileDropHandler;
+              if (handler) handler(file);
             }}
             className="flex-1 flex flex-col overflow-hidden relative"
           >

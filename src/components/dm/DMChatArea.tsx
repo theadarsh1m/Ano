@@ -6,6 +6,7 @@ import { useUserStore } from "@/store/useUserStore";
 import { FileCard } from "@/components/room/FileCard";
 import { ImageLightbox } from "@/components/room/ImageLightbox";
 import { SafeMedia } from "@/components/ui/SafeMedia";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { Loader2, AlertCircle } from "lucide-react";
 
 interface DMChatAreaProps {
@@ -13,20 +14,21 @@ interface DMChatAreaProps {
 }
 
 export function DMChatArea({ conversationId }: DMChatAreaProps) {
-  const messages = useDMStore((s) => s.dmMessages[conversationId]) || [];
-  const typingUsers = useDMStore((s) => s.dmTypingUsers[conversationId]) || [];
+  const rawMessages = useDMStore((s) => s.dmMessages[conversationId]);
+  const rawTyping = useDMStore((s) => s.dmTypingUsers[conversationId]);
+  const messages = rawMessages || [];
+  const typingUsers = rawTyping || [];
   const userId = useUserStore((s) => s.id);
+
+  const messagesCount = messages.length;
+  const typingCount = typingUsers.length;
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, typingUsers]);
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messagesCount, typingCount]);
 
   const renderContent = (msg: DMMessage) => {
     if (msg.type === "image" && msg.fileUrl) {
@@ -101,17 +103,11 @@ export function DMChatArea({ conversationId }: DMChatAreaProps) {
                 <div className="flex items-end gap-2 max-w-[80%]">
                   {!isMe && (
                     <div className="flex-shrink-0">
-                      {msg.senderAvatar ? (
-                        <img
-                          src={msg.senderAvatar}
-                          alt={msg.senderName}
-                          className="w-8 h-8 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xs">
-                          {msg.senderName.substring(0, 2).toUpperCase()}
-                        </div>
-                      )}
+                      <UserAvatar
+                        src={msg.senderAvatar}
+                        nickname={msg.senderName}
+                        size="w-8 h-8"
+                      />
                     </div>
                   )}
 

@@ -1,90 +1,112 @@
 "use client";
-import { API_URL } from "@/lib/config";
 
-import { useState, useRef, useEffect } from "react";
+import { API_URL } from "@/lib/config";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Bell, Check, Users, MessageSquare, AtSign, Settings, Megaphone } from "lucide-react";
-import { useNotificationStore } from "@/store/useNotificationStore";
+import { useNotificationStore, AppNotification } from "@/store/useNotificationStore";
 import { useUserStore } from "@/store/useUserStore";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 
-
-
 export function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  
+
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotificationStore();
   const userId = useUserStore((s) => s.id);
 
-  const [localUnread, setLocalUnread] = useState(0);
-
-  // Sync local unread, but allow clearing it visually
+  // Request browser notification permission once
   useEffect(() => {
-    if (unreadCount > localUnread) {
-      setLocalUnread(unreadCount);
-    }
-  }, [unreadCount]);
-
-  // Request browser notification permission
-  useEffect(() => {
-    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
       Notification.requestPermission();
     }
   }, []);
 
-  // Close dropdown on click outside
+  // Handle Mark All as Read
+  const handleMarkAllAsRead = useCallback(async (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    markAllAsRead();
+    if (!userId) return;
+    try {
+      await fetch(`${API_URL}/api/notifications/read-all`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+    } catch (err) {
+      console.error("Failed to mark all notifications as read:", err);
+    }
+  }, [markAllAsRead, userId]);
+
+  // Toggle panel & clear unread indicator immediately upon opening
+  const togglePanel = () => {
+    const nextOpenState = !isOpen;
+    setIsOpen(nextOpenState);
+    if (nextOpenState && unreadCount > 0) {
+      handleMarkAllAsRead();
+    }
+  };
+
+  // Close dropdown on click/tap outside & Escape key
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    if (!isOpen) return;
+
+    const handleOutsideClick = (event: MouseEvent | TouchEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("touchstart", handleOutsideClick);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("touchstart", handleOutsideClick);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen]);
 
   const handleMarkAsRead = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     try {
       markAsRead(id);
-      await fetch(`${API_URL}/api/notifications/${id}/read`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId })
-      });
+      if (userId) {
+        await fetch(`${API_URL}/api/notifications/${id}/read`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId }),
+        });
+      }
     } catch (err) {
-      console.error("Failed to mark as read", err);
+      console.error("Failed to mark notification as read:", err);
     }
   };
 
-  const handleMarkAllAsRead = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    try {
-      markAllAsRead();
-      await fetch(`${API_URL}/api/notifications/read-all`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId })
-      });
-    } catch (err) {
-      console.error("Failed to mark all as read", err);
-    }
-  };
-
-  const handleNotificationClick = (notification: any) => {
+  const handleNotificationClick = (notification: AppNotification) => {
     if (!notification.isRead) {
       handleMarkAsRead(notification.id);
     }
-    
+
     // Route based on type
     if (notification.type === "room_invite") {
       if (notification.metadata?.gameId) {
-        // Game invite — join the game lobby
-        const gameTypeMap: Record<string, string> = { 'BLUFF': 'bluff', 'MEMORY_MATCH': 'memory-match', 'DOTS_AND_BOXES': 'dots-and-boxes' };
-        const gamePath = gameTypeMap[notification.metadata?.gameType] || 'bluff';
+        const gameTypeMap: Record<string, string> = {
+          BLUFF: "bluff",
+          MEMORY_MATCH: "memory-match",
+          DOTS_AND_BOXES: "dots-and-boxes",
+        };
+        const gameTypeKey = typeof notification.metadata?.gameType === 'string' ? notification.metadata.gameType : '';
+        const gamePath = gameTypeMap[gameTypeKey] || "bluff";
         router.push(`/dashboard/games/${gamePath}?gameId=${notification.metadata.gameId}`);
       } else if (notification.metadata?.roomId) {
         router.push(`/room/${notification.metadata.roomId}`);
@@ -100,7 +122,7 @@ export function NotificationBell() {
     } else if (notification.type === "friend_request" || notification.type === "friend_accepted") {
       router.push("/dashboard/friends");
     }
-    
+
     setIsOpen(false);
   };
 
@@ -120,73 +142,76 @@ export function NotificationBell() {
     }
   };
 
-  const displayNotifs = notifications.slice(0, 5); // show max 5
+  const displayNotifs = notifications.slice(0, 5);
 
   return (
     <div className="relative" ref={dropdownRef}>
       <button
-        onClick={() => {
-          setIsOpen(!isOpen);
-          setLocalUnread(0);
-        }}
-        className="relative p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+        onClick={togglePanel}
+        aria-label="Notifications"
+        aria-expanded={isOpen}
+        className="relative p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50"
       >
         <Bell className="w-5 h-5" />
-        {localUnread > 0 && (
-          <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-[#1a1b1e]"></span>
+        {unreadCount > 0 && (
+          <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-[#1a1b1e] animate-pulse" />
         )}
       </button>
 
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            initial={{ opacity: 0, y: 8, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            transition={{ duration: 0.2 }}
-            className="absolute right-0 md:left-0 md:right-auto mt-2 w-[280px] sm:w-80 max-w-[calc(100vw-32px)] bg-[#121315] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-[60]"
+            exit={{ opacity: 0, y: 8, scale: 0.96 }}
+            transition={{ duration: 0.15, ease: "easeOut" }}
+            className="fixed top-14 left-4 right-4 sm:left-auto sm:right-4 max-w-sm mx-auto md:absolute md:top-full md:left-0 md:right-auto md:mt-2 md:mx-0 w-full md:w-80 bg-[#121315]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-[100]"
           >
-            <div className="flex items-center justify-between p-3 border-b border-white/10 bg-black/20">
-              <h3 className="font-semibold text-white">Notifications</h3>
-              {unreadCount > 0 && (
+            <div className="flex items-center justify-between p-3.5 border-b border-white/10 bg-black/40">
+              <h3 className="font-semibold text-white text-sm">Notifications</h3>
+              {notifications.some((n) => !n.isRead) && (
                 <button
                   onClick={handleMarkAllAsRead}
-                  className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors"
+                  className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors font-medium"
                 >
-                  <Check className="w-3 h-3" />
+                  <Check className="w-3.5 h-3.5" />
                   Mark all read
                 </button>
               )}
             </div>
 
-            <div className="max-h-80 overflow-y-auto">
+            <div className="max-h-[60vh] md:max-h-80 overflow-y-auto divide-y divide-white/5 scrollbar-thin scrollbar-thumb-white/10">
               {displayNotifs.length === 0 ? (
-                <div className="p-6 text-center text-gray-500">
+                <div className="p-8 text-center text-gray-500">
                   <Bell className="w-8 h-8 mx-auto mb-2 opacity-20" />
-                  <p className="text-sm">No notifications yet</p>
+                  <p className="text-sm font-medium">No notifications yet</p>
                 </div>
               ) : (
                 displayNotifs.map((notif) => (
                   <div
                     key={notif.id}
                     onClick={() => handleNotificationClick(notif)}
-                    className={`p-3 border-b border-white/5 cursor-pointer transition-colors flex gap-3 ${
+                    className={`p-3.5 cursor-pointer transition-colors flex gap-3 ${
                       !notif.isRead ? "bg-blue-500/10 hover:bg-blue-500/20" : "hover:bg-white/5"
                     }`}
                   >
-                    <div className="mt-1 flex-shrink-0">
+                    <div className="mt-0.5 flex-shrink-0 p-2 bg-white/5 rounded-xl h-fit">
                       {getIcon(notif.type)}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-white mb-0.5 leading-tight">{notif.title}</p>
-                      <p className="text-xs text-gray-400 leading-snug line-clamp-2">{notif.message}</p>
-                      <p className="text-[10px] text-gray-500 mt-1">
+                      <p className="text-xs font-semibold text-white mb-0.5 leading-snug">
+                        {notif.title}
+                      </p>
+                      <p className="text-xs text-gray-300 leading-normal line-clamp-2">
+                        {notif.message}
+                      </p>
+                      <p className="text-[10px] text-gray-500 mt-1 font-medium">
                         {formatDistanceToNow(new Date(notif.createdAt), { addSuffix: true })}
                       </p>
                     </div>
                     {!notif.isRead && (
                       <div className="flex-shrink-0 self-center">
-                        <div className="w-2 h-2 bg-blue-500 rounded-full" />
+                        <div className="w-2 h-2 bg-blue-500 rounded-full shadow-[0_0_6px_rgba(59,130,246,0.8)]" />
                       </div>
                     )}
                   </div>
@@ -194,13 +219,13 @@ export function NotificationBell() {
               )}
             </div>
 
-            <div className="p-2 border-t border-white/10 bg-black/20">
+            <div className="p-2 border-t border-white/10 bg-black/40">
               <button
                 onClick={() => {
                   setIsOpen(false);
                   router.push("/dashboard/notifications");
                 }}
-                className="w-full py-1.5 text-sm text-center text-gray-400 hover:text-white transition-colors"
+                className="w-full py-2 text-xs font-semibold text-center text-gray-400 hover:text-white transition-colors rounded-xl hover:bg-white/5"
               >
                 View all notifications
               </button>

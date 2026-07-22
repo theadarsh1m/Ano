@@ -8,6 +8,7 @@ import { socketService } from "@/lib/socket";
 import { ConversationList } from "@/components/dm/ConversationList";
 import { UserSearchModal } from "@/components/profile/UserSearchModal";
 import { NotificationBell } from "@/components/layout/NotificationBell";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import {
   MessageSquare,
   Lock,
@@ -142,17 +143,12 @@ export function AppSidebar() {
             onClick={() => userId && navigateTo(`/profile/${userId}`)}
             className="flex-shrink-0"
           >
-            {avatar ? (
-              <img
-                src={avatar}
-                alt={nickname || ""}
-                className="w-9 h-9 rounded-full object-cover ring-2 ring-white/10 hover:ring-blue-500/50 transition-all"
-              />
-            ) : (
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xs ring-2 ring-white/10 hover:ring-blue-500/50 transition-all">
-                {nickname?.substring(0, 2).toUpperCase() || "?"}
-              </div>
-            )}
+            <UserAvatar
+              src={avatar}
+              nickname={nickname}
+              size="w-9 h-9"
+              className="ring-2 ring-white/10 hover:ring-blue-500/50 transition-all"
+            />
           </button>
           <div className="flex-1 min-w-0">
             <p className="text-sm text-white font-medium truncate">{nickname}</p>

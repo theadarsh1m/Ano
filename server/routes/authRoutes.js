@@ -1,6 +1,7 @@
 const express = require('express');
 const { OAuth2Client } = require('google-auth-library');
 const userService = require('../services/userService');
+const ipService = require('../services/ipService');
 
 const router = express.Router();
 
@@ -32,24 +33,31 @@ router.post('/google', async (req, res) => {
     }
 
     let user;
+    let eventType = 'LOGIN';
 
     if (guestId) {
       // Attempt to upgrade existing guest
       try {
         user = await userService.upgradeGuestToGoogle(guestId, payload);
+        eventType = 'REGISTER';
       } catch (err) {
         if (err.message === 'Email is already connected to another account.') {
           // If the email is already in use by a permanent account, log them into that account instead
-          // and let the frontend handle what happens to the guest session.
           user = await userService.findOrCreateGoogleUser(payload);
+          eventType = 'LOGIN';
         } else {
           throw err;
         }
       }
     } else {
       // Standard Google Login
+      const existingUser = await userService.getUserProfileByEmail ? await userService.getUserProfileByEmail(payload.email) : null;
       user = await userService.findOrCreateGoogleUser(payload);
+      eventType = existingUser ? 'LOGIN' : 'REGISTER';
     }
+
+    // Log IP event
+    await ipService.logIpEvent({ userId: user.id, req, eventType });
 
     res.json(user);
   } catch (err) {

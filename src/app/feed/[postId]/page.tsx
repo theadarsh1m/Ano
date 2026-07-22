@@ -9,6 +9,7 @@ import { VoteButtons } from "@/components/feed/VoteButtons";
 import { CommentThread } from "@/components/feed/CommentThread";
 import { CommentInput } from "@/components/feed/CommentInput";
 import { SafeMedia } from "@/components/ui/SafeMedia";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -17,7 +18,6 @@ import {
   Share2,
   Trash2,
   Lock,
-  User,
   Loader2,
   MessageCircle,
   Check,
@@ -42,7 +42,6 @@ export default function PostDetailPage() {
   const params = useParams();
   const postId = params.postId as string;
   const userId = useUserStore((s) => s.id);
-  const [isClient, setIsClient] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const {
@@ -60,14 +59,10 @@ export default function PostDetailPage() {
   } = useFeedStore();
 
   useEffect(() => {
-    setIsClient(true);
-  }, []);
-
-  useEffect(() => {
-    if (isClient && !userId) {
+    if (!userId) {
       router.push("/");
     }
-  }, [isClient, userId, router]);
+  }, [userId, router]);
 
   useEffect(() => {
     if (userId && postId) {
@@ -123,7 +118,7 @@ export default function PostDetailPage() {
     await deleteComment(commentId, userId);
   };
 
-  if (!isClient || !userId) return null;
+  if (!userId) return null;
 
   if (!post) {
     return (
@@ -162,17 +157,11 @@ export default function PostDetailPage() {
             <div className="p-4 min-w-0">
               {/* Author */}
               <div className="flex items-center gap-2 mb-3">
-                {post.author.avatar ? (
-                  <img
-                    src={post.author.avatar}
-                    alt=""
-                    className="w-8 h-8 rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-                    <User className="w-4 h-4 text-white" />
-                  </div>
-                )}
+                <UserAvatar
+                  src={post.author.avatar}
+                  nickname={post.author.nickname}
+                  size="w-8 h-8"
+                />
                 <div>
                   <span className="text-sm font-medium text-white">
                     {post.author.nickname}

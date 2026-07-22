@@ -8,6 +8,7 @@ import { useUserStore } from "@/store/useUserStore";
 import { useDMStore } from "@/store/useDMStore";
 import { usePresenceStore } from "@/store/usePresenceStore";
 import { GlassModal } from "@/components/layout/GlassModal";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 
 
 
@@ -34,27 +35,31 @@ export function UserSearchModal({ isOpen, onClose }: UserSearchModalProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+  if (isOpen !== prevIsOpen) {
+    setPrevIsOpen(isOpen);
+    if (!isOpen) {
+      setQuery("");
+      setResults([]);
+    }
+  }
+
   useEffect(() => {
     if (isOpen) {
       setTimeout(() => inputRef.current?.focus(), 100);
-    } else {
-      setQuery("");
-      setResults([]);
     }
   }, [isOpen]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
-    if (!query.trim()) {
-      setResults([]);
-      return;
-    }
+    const trimmed = query.trim();
+    if (!trimmed) return;
 
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const res = await fetch(`${API_URL}/api/users/search?q=${encodeURIComponent(query.trim())}`);
+        const res = await fetch(`${API_URL}/api/users/search?q=${encodeURIComponent(trimmed)}`);
         if (res.ok) {
           const data = await res.json();
           // Filter out self
@@ -137,17 +142,11 @@ export function UserSearchModal({ isOpen, onClose }: UserSearchModalProps) {
               className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg hover:bg-white/5 transition-colors text-left"
             >
               <div className="relative flex-shrink-0">
-                {user.avatar ? (
-                  <img
-                    src={user.avatar}
-                    alt={user.nickname}
-                    className="w-10 h-10 rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm">
-                    {user.nickname.substring(0, 2).toUpperCase()}
-                  </div>
-                )}
+                <UserAvatar
+                  src={user.avatar}
+                  nickname={user.nickname}
+                  size="w-10 h-10"
+                />
                 <span
                   className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-zinc-900 ${
                     online ? "bg-green-500" : "bg-gray-600"

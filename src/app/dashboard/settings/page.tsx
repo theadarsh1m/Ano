@@ -6,22 +6,45 @@ import { GoogleLogin } from "@react-oauth/google";
 import { GlassCard } from "@/components/layout/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useState, useEffect } from "react";
-import { ShieldCheck, ArrowLeft, MessageSquare } from "lucide-react";
+import { useState } from "react";
+import { ShieldCheck, ArrowLeft, MessageSquare, Star, Camera, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { UserAvatar } from "@/components/ui/UserAvatar";
+import { uploadProfilePicture, validateImageFile } from "@/lib/upload";
 
 export default function SettingsPage() {
-  const { nickname, isAnonymous, email, nsfwMode, updateProfile, loginWithGoogle } = useUserStore();
+  const { id: userId, nickname, avatar, isAnonymous, email, nsfwMode, updateProfile, loginWithGoogle } = useUserStore();
   const [newNickname, setNewNickname] = useState(nickname || "");
+  const [prevNickname, setPrevNickname] = useState(nickname);
   const [isSaving, setIsSaving] = useState(false);
-  const [isClient, setIsClient] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
-  useEffect(() => {
-    setIsClient(true);
+  // Adjust state during render when store nickname updates (React 19 pattern)
+  if (nickname !== prevNickname) {
+    setPrevNickname(nickname);
     setNewNickname(nickname || "");
-  }, [nickname]);
+  }
 
-  if (!isClient) return null;
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !userId) return;
+
+    const error = validateImageFile(file);
+    if (error) {
+      alert(error);
+      return;
+    }
+
+    setUploadingAvatar(true);
+    try {
+      const result = await uploadProfilePicture(file, userId);
+      await updateProfile({ avatar: result.secureUrl });
+    } catch (err: unknown) {
+      console.error("Failed to upload avatar:", err);
+      alert((err as Error).message || "Avatar upload failed");
+    }
+    setUploadingAvatar(false);
+  };
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -63,8 +86,28 @@ export default function SettingsPage() {
       <div className="flex flex-col gap-6">
         <GlassCard>
           <div className="flex items-center gap-4 mb-6">
-            <div className="h-16 w-16 rounded-full bg-white/10 flex items-center justify-center text-2xl">
-              {nickname?.charAt(0).toUpperCase()}
+            <div className="relative group">
+              <UserAvatar
+                src={avatar}
+                nickname={nickname}
+                size="w-16 h-16"
+                textClassName="text-2xl font-bold"
+                className="ring-2 ring-white/10"
+              />
+              <label className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                {uploadingAvatar ? (
+                  <Loader2 className="w-5 h-5 text-white animate-spin" />
+                ) : (
+                  <Camera className="w-5 h-5 text-white" />
+                )}
+                <input
+                  type="file"
+                  className="hidden"
+                  accept=".jpg,.jpeg,.png,.webp,.gif"
+                  onChange={handleAvatarUpload}
+                  disabled={uploadingAvatar}
+                />
+              </label>
             </div>
             <div>
               <h2 className="text-xl font-semibold text-white flex items-center gap-2">
@@ -180,11 +223,14 @@ export default function SettingsPage() {
 
 function FeedbackAndBugsSection({ userId }: { userId: string }) {
   // Review state
-  const [stars, setStars] = useState(5);
+  const [stars, setStars] = useState(0);
+  const [hoverStars, setHoverStars] = useState(0);
   const [reviewContent, setReviewContent] = useState("");
   const [category, setCategory] = useState("UI");
   const [submittingReview, setSubmittingReview] = useState(false);
   const [reviewSuccess, setReviewSuccess] = useState(false);
+
+  const activeRating = hoverStars || stars;
 
   // Bug state
   const [bugDesc, setBugDesc] = useState("");
@@ -194,7 +240,7 @@ function FeedbackAndBugsSection({ userId }: { userId: string }) {
 
   const handleReviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reviewContent.trim() || !userId) return;
+    if (!reviewContent.trim() || !userId || stars === 0) return;
     setSubmittingReview(true);
 
     try {
@@ -211,6 +257,8 @@ function FeedbackAndBugsSection({ userId }: { userId: string }) {
 
       if (res.ok) {
         setReviewContent("");
+        setStars(0);
+        setHoverStars(0);
         setReviewSuccess(true);
         setTimeout(() => setReviewSuccess(false), 4000);
       }
@@ -293,16 +341,28 @@ function FeedbackAndBugsSection({ userId }: { userId: string }) {
               </div>
 
               <div>
-                <label className="block text-white/60 mb-1 font-semibold uppercase text-[9px]">Rating</label>
-                <div className="flex gap-1 items-center bg-black/40 border border-white/10 rounded-xl p-2.5">
+                <label className="block text-white/60 mb-1 font-semibold uppercase text-[9px]">
+                  {stars === 0 ? "Rating (Required)" : `${stars} Out of 5 Stars`}
+                </label>
+                <div 
+                  className="flex gap-1 items-center bg-black/40 border border-white/10 rounded-xl p-2 font-medium"
+                  onMouseLeave={() => setHoverStars(0)}
+                >
                   {[1, 2, 3, 4, 5].map((num) => (
                     <button
                       key={num}
                       type="button"
                       onClick={() => setStars(num)}
-                      className={`text-base leading-none transition-colors ${num <= stars ? "text-yellow-400" : "text-zinc-600"}`}
+                      onMouseEnter={() => setHoverStars(num)}
+                      className="p-1 hover:scale-110 transition-transform focus:outline-none"
                     >
-                      ★
+                      <Star
+                        className={`w-4 h-4 transition-colors ${
+                          num <= activeRating
+                            ? "fill-yellow-400 text-yellow-400"
+                            : "text-zinc-600 hover:text-zinc-500"
+                        }`}
+                      />
                     </button>
                   ))}
                 </div>
@@ -321,8 +381,12 @@ function FeedbackAndBugsSection({ userId }: { userId: string }) {
               />
             </div>
 
-            <Button type="submit" disabled={submittingReview} className="w-full glass-button text-white font-bold h-10 border-none">
-              {submittingReview ? "Submitting..." : "Submit Review"}
+            <Button 
+              type="submit" 
+              disabled={submittingReview || stars === 0} 
+              className="w-full glass-button text-white font-bold h-10 border-none disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {submittingReview ? "Submitting..." : stars === 0 ? "Select Rating to Submit" : "Submit Review"}
             </Button>
           </form>
         )}

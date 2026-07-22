@@ -1,16 +1,99 @@
 "use client";
 
 import { API_URL } from "@/lib/config";
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useUserStore } from "@/store/useUserStore";
 import { GlassCard } from "@/components/layout/GlassCard";
 import { 
-  Users, MessageSquare, ShieldAlert, Bug, BarChart3, Settings, 
-  Megaphone, Gift, FileText, Check, Trash2, Ban, Star, LogOut, Loader2
+  Users, ShieldAlert, Bug, BarChart3, Settings, 
+  Megaphone, Gift, FileText, Check, Trash2, Star, LogOut, Loader2,
+  Shield, Globe, Clock, Laptop, AlertTriangle, X, Eye, Activity
 } from "lucide-react";
 
-type Section = 'dashboard' | 'users' | 'reviews' | 'bugs' | 'reports' | 'games' | 'announcements' | 'rewards' | 'settings' | 'audit_logs' | 'moderation';
+import { UserAvatar } from "@/components/ui/UserAvatar";
+
+type Section = 'dashboard' | 'users' | 'ip_analytics' | 'reviews' | 'bugs' | 'reports' | 'games' | 'announcements' | 'rewards' | 'settings' | 'audit_logs' | 'moderation';
+
+interface IpAccount {
+  id: string;
+  nickname: string;
+  email: string | null;
+  avatar: string | null;
+  role: string;
+  isAnonymous: boolean;
+  isBanned: boolean;
+  createdAt: number;
+  lastSeen: number;
+}
+
+interface IpTimelineItem {
+  id: string;
+  userId: string | null;
+  nickname: string;
+  eventType: string;
+  createdAt: number;
+  parsedUa: { browser: string; os: string; device: string };
+}
+
+interface IpDetailsData {
+  ipAddress: string;
+  totalEvents: number;
+  accountsCount: number;
+  registeredCount: number;
+  anonymousCount: number;
+  firstSeen: number;
+  lastSeen: number;
+  isHighRisk: boolean;
+  linkedAccounts: IpAccount[];
+  userAgents: Record<string, number>;
+  timeline: IpTimelineItem[];
+}
+
+interface SharedAccount {
+  id: string;
+  nickname: string;
+  email: string | null;
+  avatar: string | null;
+  isAnonymous: boolean;
+  isBanned: boolean;
+  role: string;
+  lastSeen: number;
+  sharedIp: string;
+}
+
+interface UserSecurityData {
+  userId: string;
+  lastLoginIp: string | null;
+  ipHistory: Array<{
+    id: string;
+    ipAddress: string;
+    eventType: string;
+    createdAt: number;
+    parsedUa: { browser: string; os: string; device: string };
+  }>;
+  otherAccountsOnSameIp: SharedAccount[];
+}
+
+interface IpListItem {
+  ipAddress: string;
+  accountsCount: number;
+  registeredCount: number;
+  anonymousCount: number;
+  lastSeen: number;
+  firstSeen: number;
+  lastEvent: string;
+  totalEvents: number;
+  isHighRisk: boolean;
+}
+
+interface IpSummaryData {
+  totalLogs: number;
+  totalUniqueIps: number;
+  multiAccountIpsCount: number;
+  highRiskIpsCount: number;
+  mostActiveIp: { ipAddress: string; count: number } | null;
+}
 
 export default function AdminPortal() {
   const router = useRouter();
@@ -18,17 +101,21 @@ export default function AdminPortal() {
   const [activeSection, setActiveSection] = useState<Section>('dashboard');
 
   // Core stats
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [stats, setStats] = useState<any>(null);
   const [loadingStats, setLoadingStats] = useState(true);
 
   // Users data
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [users, setUsers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [userFilter, setUserFilter] = useState("all");
   const [loadingUsers, setLoadingUsers] = useState(false);
 
   // Reviews data
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [reviews, setReviews] = useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [reviewStats, setReviewStats] = useState<any>(null);
   const [reviewStars, setReviewStars] = useState("");
   const [reviewCategory, setReviewCategory] = useState("");
@@ -36,24 +123,28 @@ export default function AdminPortal() {
   const [loadingReviews, setLoadingReviews] = useState(false);
 
   // Bug reports
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [bugs, setBugs] = useState<any[]>([]);
   const [loadingBugs, setLoadingBugs] = useState(false);
 
   // User reports
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [reports, setReports] = useState<any[]>([]);
   const [loadingReports, setLoadingReports] = useState(false);
 
   // Games config
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [games, setGames] = useState<any[]>([]);
   const [loadingGames, setLoadingGames] = useState(false);
 
   // Announcements
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [loadingAnnouncements, setLoadingAnnouncements] = useState(false);
   const [annTitle, setAnnTitle] = useState("");
   const [annDesc, setAnnDesc] = useState("");
   const [annColor, setAnnColor] = useState("red");
-  const [annIcon, setAnnIcon] = useState("📢");
+  const [annIcon] = useState("📢");
   const [annExpiry, setAnnExpiry] = useState("");
 
   // Rewards
@@ -64,6 +155,7 @@ export default function AdminPortal() {
   const [rewarding, setRewarding] = useState(false);
 
   // Audit Logs
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
 
@@ -81,21 +173,28 @@ export default function AdminPortal() {
   const [rewardSuccess, setRewardSuccess] = useState(false);
 
   // Moderation Queue
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [moderationQueue, setModerationQueue] = useState<any[]>([]);
   const [loadingModeration, setLoadingModeration] = useState(false);
+
+  // IP Analytics State
+  const [ipSummary, setIpSummary] = useState<IpSummaryData | null>(null);
+  const [loadingIpSummary, setLoadingIpSummary] = useState(false);
+  const [ipList, setIpList] = useState<IpListItem[]>([]);
+  const [loadingIpList, setLoadingIpList] = useState(false);
+  const [ipSearchQuery, setIpSearchQuery] = useState("");
+  const [ipFilter, setIpFilter] = useState("all");
+  const [ipPage, setIpPage] = useState(1);
+  const [ipTotalPages, setIpTotalPages] = useState(1);
+  const [selectedIpDetails, setSelectedIpDetails] = useState<IpDetailsData | null>(null);
+  const [loadingIpDetails, setLoadingIpDetails] = useState(false);
+  const [selectedUserSecurity, setSelectedUserSecurity] = useState<UserSecurityData | null>(null);
+  const [loadingUserSecurity, setLoadingUserSecurity] = useState(false);
 
   // Debounce timer refs
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reviewSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Verify Admin Role and load initial dashboard stats
-  useEffect(() => {
-    if (role !== 'SUPER_ADMIN') {
-      router.push("/dashboard");
-      return;
-    }
-    fetchStats();
-  }, [role, router]);
+  const ipSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchStats = async () => {
     setLoadingStats(true);
@@ -114,50 +213,66 @@ export default function AdminPortal() {
     }
   };
 
-  // Section specific fetches
-  useEffect(() => {
-    if (role !== 'SUPER_ADMIN') return;
-
-    if (activeSection === 'users') {
-      fetchUsers();
-    } else if (activeSection === 'reviews') {
-      fetchReviews();
-    } else if (activeSection === 'bugs') {
-      fetchBugs();
-    } else if (activeSection === 'reports') {
-      fetchReports();
-    } else if (activeSection === 'games') {
-      fetchGames();
-    } else if (activeSection === 'announcements') {
-      fetchAnnouncements();
-    } else if (activeSection === 'audit_logs') {
-      fetchLogs();
-    } else if (activeSection === 'settings') {
-      fetchSettings();
-    } else if (activeSection === 'moderation') {
-      fetchModerationQueue();
+  const fetchIpSummary = async () => {
+    setLoadingIpSummary(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/ip-analytics/summary`, {
+        headers: { 'x-user-id': userId || '' }
+      });
+      if (res.ok) setIpSummary(await res.json());
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingIpSummary(false);
     }
-  }, [activeSection, role, userFilter]);
+  };
 
-  // Debounced search for users
-  useEffect(() => {
-    if (activeSection !== 'users') return;
-    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    searchTimerRef.current = setTimeout(() => {
-      fetchUsers();
-    }, 300);
-    return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); };
-  }, [searchQuery]);
+  const fetchIpList = async (page = 1) => {
+    setLoadingIpList(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/ip-analytics/list?search=${encodeURIComponent(ipSearchQuery)}&filter=${ipFilter}&page=${page}&limit=15`, {
+        headers: { 'x-user-id': userId || '' }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setIpList(data.data || []);
+        setIpPage(data.page || 1);
+        setIpTotalPages(data.totalPages || 1);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingIpList(false);
+    }
+  };
 
-  // Debounced search for reviews
-  useEffect(() => {
-    if (activeSection !== 'reviews') return;
-    if (reviewSearchTimerRef.current) clearTimeout(reviewSearchTimerRef.current);
-    reviewSearchTimerRef.current = setTimeout(() => {
-      fetchReviews();
-    }, 300);
-    return () => { if (reviewSearchTimerRef.current) clearTimeout(reviewSearchTimerRef.current); };
-  }, [reviewStars, reviewCategory, reviewSearch]);
+  const fetchIpDetails = async (ipAddress: string) => {
+    setLoadingIpDetails(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/ip-analytics/details/${encodeURIComponent(ipAddress)}`, {
+        headers: { 'x-user-id': userId || '' }
+      });
+      if (res.ok) setSelectedIpDetails(await res.json());
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingIpDetails(false);
+    }
+  };
+
+  const fetchUserSecurity = async (targetUserId: string) => {
+    setLoadingUserSecurity(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/ip-analytics/user/${targetUserId}`, {
+        headers: { 'x-user-id': userId || '' }
+      });
+      if (res.ok) setSelectedUserSecurity(await res.json());
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingUserSecurity(false);
+    }
+  };
 
   const fetchUsers = async () => {
     setLoadingUsers(true);
@@ -289,6 +404,101 @@ export default function AdminPortal() {
       setLoadingLogs(false);
     }
   };
+
+  const fetchSettings = async () => {
+    setLoadingSettings(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/settings`, {
+        headers: { 'x-user-id': userId || '' }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSettings({
+          registration: data.registrationOpen,
+          googleLogin: data.googleLoginEnabled,
+          maintenanceMode: data.maintenanceMode,
+          ratingsEnabled: data.ratingsEnabled
+        });
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingSettings(false);
+    }
+  };
+
+  // Verify Admin Role and load initial dashboard stats
+  useEffect(() => {
+    if (role !== 'SUPER_ADMIN') {
+      router.push("/dashboard");
+      return;
+    }
+    const timer = setTimeout(() => {
+      fetchStats();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [role, router]);
+
+  // Section specific fetches
+  useEffect(() => {
+    if (role !== 'SUPER_ADMIN') return;
+
+    const timer = setTimeout(() => {
+      if (activeSection === 'users') {
+        fetchUsers();
+      } else if (activeSection === 'ip_analytics') {
+        fetchIpSummary();
+        fetchIpList(1);
+      } else if (activeSection === 'reviews') {
+        fetchReviews();
+      } else if (activeSection === 'bugs') {
+        fetchBugs();
+      } else if (activeSection === 'reports') {
+        fetchReports();
+      } else if (activeSection === 'games') {
+        fetchGames();
+      } else if (activeSection === 'announcements') {
+        fetchAnnouncements();
+      } else if (activeSection === 'audit_logs') {
+        fetchLogs();
+      } else if (activeSection === 'settings') {
+        fetchSettings();
+      } else if (activeSection === 'moderation') {
+        fetchModerationQueue();
+      }
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [activeSection, role, userFilter]);
+
+  // Debounced search for IP analytics
+  useEffect(() => {
+    if (activeSection !== 'ip_analytics') return;
+    if (ipSearchTimerRef.current) clearTimeout(ipSearchTimerRef.current);
+    ipSearchTimerRef.current = setTimeout(() => {
+      fetchIpList(1);
+    }, 300);
+    return () => { if (ipSearchTimerRef.current) clearTimeout(ipSearchTimerRef.current); };
+  }, [ipSearchQuery, ipFilter]);
+
+  // Debounced search for users
+  useEffect(() => {
+    if (activeSection !== 'users') return;
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      fetchUsers();
+    }, 300);
+    return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); };
+  }, [searchQuery]);
+
+  // Debounced search for reviews
+  useEffect(() => {
+    if (activeSection !== 'reviews') return;
+    if (reviewSearchTimerRef.current) clearTimeout(reviewSearchTimerRef.current);
+    reviewSearchTimerRef.current = setTimeout(() => {
+      fetchReviews();
+    }, 300);
+    return () => { if (reviewSearchTimerRef.current) clearTimeout(reviewSearchTimerRef.current); };
+  }, [reviewStars, reviewCategory, reviewSearch]);
 
   // User Actions
   const handleBanUser = async (targetId: string, ban: boolean) => {
@@ -496,29 +706,6 @@ export default function AdminPortal() {
     }
   };
 
-  // Settings fetch/save
-  const fetchSettings = async () => {
-    setLoadingSettings(true);
-    try {
-      const res = await fetch(`${API_URL}/api/admin/settings`, {
-        headers: { 'x-user-id': userId || '' }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setSettings({
-          registration: data.registrationOpen,
-          googleLogin: data.googleLoginEnabled,
-          maintenanceMode: data.maintenanceMode,
-          ratingsEnabled: data.ratingsEnabled
-        });
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoadingSettings(false);
-    }
-  };
-
   const handleSaveSettings = async () => {
     try {
       const res = await fetch(`${API_URL}/api/admin/settings`, {
@@ -566,6 +753,7 @@ export default function AdminPortal() {
             {[
               { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
               { id: 'users', label: 'Users', icon: Users },
+              { id: 'ip_analytics', label: 'IP Analytics', icon: Shield },
               { id: 'reviews', label: 'Ratings & Reviews', icon: Star },
               { id: 'bugs', label: 'Bug Reports', icon: Bug },
               { id: 'reports', label: 'User Reports', icon: ShieldAlert },
@@ -665,7 +853,7 @@ export default function AdminPortal() {
                 <GlassCard className="p-6 border-zinc-800 flex flex-col gap-4">
                   <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-300">System Logs</h3>
                   <div className="text-xs text-zinc-500 font-mono flex items-center justify-center py-8">
-                    Select "Audit Logs" to view complete system actions track history.
+                    Select &quot;Audit Logs&quot; to view complete system actions track history.
                   </div>
                 </GlassCard>
               </div>
@@ -715,11 +903,11 @@ export default function AdminPortal() {
                       {users.map(u => (
                         <tr key={u.id} className="hover:bg-zinc-900/20 transition-colors">
                           <td className="p-4 flex items-center gap-3">
-                            {u.avatar ? (
-                              <img src={u.avatar} alt="" className="w-8 h-8 rounded-full object-cover" />
-                            ) : (
-                              <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center font-bold text-zinc-400">{u.nickname.substring(0,2).toUpperCase()}</div>
-                            )}
+                            <UserAvatar
+                              src={u.avatar}
+                              nickname={u.nickname}
+                              size="w-8 h-8"
+                            />
                             <span className="font-bold text-zinc-200">{u.nickname}</span>
                           </td>
                           <td className="p-4 text-zinc-400 font-medium">{u.email || 'N/A'}</td>
@@ -731,6 +919,14 @@ export default function AdminPortal() {
                           <td className="p-4 text-zinc-500">{new Date(u.createdAt).toLocaleDateString()}</td>
                           <td className="p-4 text-zinc-500">{new Date(u.lastSeen).toLocaleString()}</td>
                           <td className="p-4 text-right flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => fetchUserSecurity(u.id)}
+                              className="px-2 py-1.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 rounded-lg font-bold transition-colors flex items-center gap-1"
+                              title="View User IP History & Linked Accounts"
+                            >
+                              <Shield className="w-3.5 h-3.5" />
+                              <span className="text-[10px]">IP History</span>
+                            </button>
                             {u.isBanned ? (
                               <button onClick={() => handleBanUser(u.id, false)} className="px-2.5 py-1.5 bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20 rounded-lg font-bold transition-colors">Unban</button>
                             ) : (
@@ -743,6 +939,196 @@ export default function AdminPortal() {
                     </tbody>
                   </table>
                   {users.length === 0 && <div className="text-center py-10 text-zinc-600 font-bold uppercase tracking-widest">No users found</div>}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ──── VIEW: IP ANALYTICS ──── */}
+          {activeSection === 'ip_analytics' && (
+            <div className="space-y-6">
+              {/* Summary Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <GlassCard className="p-5 border-zinc-800 flex flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider">Total Unique IPs</span>
+                    <Globe className="w-4 h-4 text-blue-400" />
+                  </div>
+                  <h4 className="text-2xl font-black text-white mt-2">
+                    {loadingIpSummary ? <Loader2 className="w-5 h-5 animate-spin" /> : ipSummary?.totalUniqueIps || 0}
+                  </h4>
+                  <span className="text-[10px] text-zinc-600 mt-1">Unique client IP addresses logged</span>
+                </GlassCard>
+
+                <GlassCard className="p-5 border-zinc-800 flex flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider">Multi-Account IPs</span>
+                    <Users className="w-4 h-4 text-purple-400" />
+                  </div>
+                  <h4 className="text-2xl font-black text-purple-300 mt-2">
+                    {loadingIpSummary ? <Loader2 className="w-5 h-5 animate-spin" /> : ipSummary?.multiAccountIpsCount || 0}
+                  </h4>
+                  <span className="text-[10px] text-zinc-600 mt-1">IPs shared by &gt; 1 account</span>
+                </GlassCard>
+
+                <GlassCard className="p-5 border-zinc-800 flex flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider">High Risk (&gt;5 Accounts)</span>
+                    <AlertTriangle className="w-4 h-4 text-amber-400" />
+                  </div>
+                  <h4 className="text-2xl font-black text-amber-400 mt-2">
+                    {loadingIpSummary ? <Loader2 className="w-5 h-5 animate-spin" /> : ipSummary?.highRiskIpsCount || 0}
+                  </h4>
+                  <span className="text-[10px] text-zinc-600 mt-1">IPs with &gt; 5 linked accounts</span>
+                </GlassCard>
+
+                <GlassCard className="p-5 border-zinc-800 flex flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider">Total IP Log Events</span>
+                    <Activity className="w-4 h-4 text-emerald-400" />
+                  </div>
+                  <h4 className="text-2xl font-black text-emerald-400 mt-2">
+                    {loadingIpSummary ? <Loader2 className="w-5 h-5 animate-spin" /> : ipSummary?.totalLogs || 0}
+                  </h4>
+                  <span className="text-[10px] text-zinc-600 mt-1">Security &amp; auth events recorded</span>
+                </GlassCard>
+              </div>
+
+              {/* Search & Filter Toolbar */}
+              <div className="flex flex-col sm:flex-row gap-4 items-center justify-between bg-zinc-950 p-4 border border-zinc-800 rounded-xl">
+                <div className="flex items-center gap-3 w-full sm:w-auto">
+                  <input
+                    type="text"
+                    placeholder="Search by IP, username, email, ID..."
+                    value={ipSearchQuery}
+                    onChange={(e) => setIpSearchQuery(e.target.value)}
+                    className="bg-zinc-900 border border-zinc-800 px-4 py-2 rounded-xl text-sm w-full sm:w-80 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-700"
+                  />
+                  {ipSearchQuery && (
+                    <button
+                      onClick={() => setIpSearchQuery('')}
+                      className="text-zinc-500 hover:text-zinc-300 text-xs"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                  <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Filter:</span>
+                  <select
+                    value={ipFilter}
+                    onChange={(e) => setIpFilter(e.target.value)}
+                    className="bg-zinc-900 border border-zinc-800 px-3 py-2 rounded-xl text-sm text-zinc-300 focus:outline-none"
+                  >
+                    <option value="all">All IP Addresses</option>
+                    <option value="multiple_accounts">Multiple Accounts (&gt; 1)</option>
+                    <option value="high_risk">⚠️ High Risk / Multi-Account (&gt; 5)</option>
+                    <option value="registered_only">Registered Accounts Only</option>
+                    <option value="anonymous_only">Anonymous Sessions Only</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* IP Table */}
+              {loadingIpList ? (
+                <div className="flex justify-center py-20 text-zinc-500">
+                  <Loader2 className="w-8 h-8 animate-spin" />
+                </div>
+              ) : (
+                <div className="overflow-x-auto border border-zinc-800/80 rounded-xl bg-zinc-950">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-zinc-800 text-zinc-500 uppercase tracking-widest text-[9px] font-bold bg-zinc-900/25">
+                        <th className="p-4">IP Address</th>
+                        <th className="p-4">Accounts Linked</th>
+                        <th className="p-4">Account Types</th>
+                        <th className="p-4">Last Event</th>
+                        <th className="p-4">Last Seen</th>
+                        <th className="p-4">Risk Status</th>
+                        <th className="p-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-900">
+                      {ipList.map((item) => (
+                        <tr key={item.ipAddress} className="hover:bg-zinc-900/20 transition-colors">
+                          <td className="p-4 font-mono font-bold text-blue-400">
+                            {item.ipAddress}
+                          </td>
+                          <td className="p-4 font-bold text-zinc-200">
+                            {item.accountsCount} {item.accountsCount === 1 ? 'account' : 'accounts'}
+                          </td>
+                          <td className="p-4">
+                            <span className="text-zinc-400">{item.registeredCount} Reg</span>
+                            <span className="text-zinc-600 mx-1">•</span>
+                            <span className="text-zinc-500">{item.anonymousCount} Guest</span>
+                          </td>
+                          <td className="p-4 font-semibold text-zinc-300">
+                            <span className="px-2 py-0.5 rounded bg-zinc-800 text-[10px] text-zinc-300 font-mono">
+                              {item.lastEvent}
+                            </span>
+                          </td>
+                          <td className="p-4 text-zinc-500">
+                            {new Date(item.lastSeen).toLocaleString()}
+                          </td>
+                          <td className="p-4">
+                            {item.isHighRisk ? (
+                              <span className="px-2.5 py-1 rounded-full font-bold uppercase text-[9px] bg-red-500/20 text-red-400 border border-red-500/30 flex items-center gap-1 w-max animate-pulse">
+                                <AlertTriangle className="w-3 h-3" />
+                                WARNING: &gt;5 ACCOUNTS
+                              </span>
+                            ) : item.accountsCount > 1 ? (
+                              <span className="px-2.5 py-1 rounded-full font-bold uppercase text-[9px] bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                MULTI-ACCOUNT ({item.accountsCount})
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-1 rounded-full font-bold uppercase text-[9px] bg-green-500/10 text-green-400 border border-green-500/20">
+                                SINGLE ACCOUNT
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-4 text-right">
+                            <button
+                              onClick={() => fetchIpDetails(item.ipAddress)}
+                              className="px-3 py-1.5 bg-blue-600/20 text-blue-400 border border-blue-500/30 hover:bg-blue-600/30 rounded-lg font-bold transition-colors text-xs flex items-center gap-1 ml-auto"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              View Details
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  {ipList.length === 0 && (
+                    <div className="text-center py-12 text-zinc-600 font-bold uppercase tracking-widest">
+                      No IP logs match your filter criteria
+                    </div>
+                  )}
+
+                  {/* Pagination Footer */}
+                  {ipTotalPages > 1 && (
+                    <div className="p-4 border-t border-zinc-900 flex items-center justify-between text-xs text-zinc-400">
+                      <span>Page {ipPage} of {ipTotalPages}</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          disabled={ipPage <= 1}
+                          onClick={() => fetchIpList(ipPage - 1)}
+                          className="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg font-bold disabled:opacity-40"
+                        >
+                          Previous
+                        </button>
+                        <button
+                          disabled={ipPage >= ipTotalPages}
+                          onClick={() => fetchIpList(ipPage + 1)}
+                          className="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg font-bold disabled:opacity-40"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1070,14 +1456,6 @@ export default function AdminPortal() {
                         <label className="flex items-center gap-2 text-[10px] text-zinc-400 font-bold uppercase">
                           <input 
                             type="checkbox" 
-                            checked={g.isFeatured}
-                            onChange={e => handleToggleGame(g.id, 'isFeatured', e.target.checked)}
-                            className="accent-yellow-500" 
-                          /> Featured
-                        </label>
-                        <label className="flex items-center gap-2 text-[10px] text-zinc-400 font-bold uppercase">
-                          <input 
-                            type="checkbox" 
                             checked={g.isMaintenance}
                             onChange={e => handleToggleGame(g.id, 'isMaintenance', e.target.checked)}
                             className="accent-orange-500" 
@@ -1376,6 +1754,283 @@ export default function AdminPortal() {
         </div>
       </main>
 
+      {/* ── IP DETAILS MODAL ── */}
+      {selectedIpDetails && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 space-y-6 shadow-2xl text-xs">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+                  <Globe className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black font-mono text-white flex items-center gap-2">
+                    {selectedIpDetails.ipAddress}
+                    {selectedIpDetails.isHighRisk && (
+                      <span className="px-2 py-0.5 rounded-full text-[9px] bg-red-500/20 text-red-400 border border-red-500/30">
+                        ⚠️ HIGH RISK (&gt;5 ACCOUNTS)
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-zinc-500 text-[11px]">
+                    First seen: {new Date(selectedIpDetails.firstSeen).toLocaleDateString()} • Last active: {new Date(selectedIpDetails.lastSeen).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedIpDetails(null)}
+                className="p-2 text-zinc-500 hover:text-white hover:bg-zinc-900 rounded-xl transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Quick Metrics */}
+            <div className="grid grid-cols-4 gap-3">
+              <div className="bg-zinc-900/50 border border-zinc-800/60 p-3 rounded-xl">
+                <span className="text-[9px] text-zinc-500 font-bold uppercase">Total Accounts</span>
+                <p className="text-xl font-bold text-white mt-1">{selectedIpDetails.accountsCount}</p>
+              </div>
+              <div className="bg-zinc-900/50 border border-zinc-800/60 p-3 rounded-xl">
+                <span className="text-[9px] text-zinc-500 font-bold uppercase">Registered</span>
+                <p className="text-xl font-bold text-blue-400 mt-1">{selectedIpDetails.registeredCount}</p>
+              </div>
+              <div className="bg-zinc-900/50 border border-zinc-800/60 p-3 rounded-xl">
+                <span className="text-[9px] text-zinc-500 font-bold uppercase">Guest / Anonymous</span>
+                <p className="text-xl font-bold text-zinc-400 mt-1">{selectedIpDetails.anonymousCount}</p>
+              </div>
+              <div className="bg-zinc-900/50 border border-zinc-800/60 p-3 rounded-xl">
+                <span className="text-[9px] text-zinc-500 font-bold uppercase">Total Events</span>
+                <p className="text-xl font-bold text-emerald-400 mt-1">{selectedIpDetails.totalEvents}</p>
+              </div>
+            </div>
+
+            {/* Linked Accounts List */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-2">
+                <Users className="w-4 h-4 text-blue-400" />
+                Linked Accounts ({selectedIpDetails.linkedAccounts.length})
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-60 overflow-y-auto pr-1">
+                {selectedIpDetails.linkedAccounts.map((acc: IpAccount) => (
+                  <div
+                    key={acc.id}
+                    className="p-3 bg-zinc-900/40 border border-zinc-800/80 rounded-xl flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <UserAvatar
+                        src={acc.avatar}
+                        nickname={acc.nickname}
+                        size="w-7 h-7"
+                        textClassName="text-[10px] font-bold"
+                      />
+                      <div className="min-w-0">
+                        <p className="font-bold text-zinc-200 truncate text-xs flex items-center gap-1.5">
+                          {acc.nickname}
+                          {acc.isAnonymous ? (
+                            <span className="text-[8px] px-1.5 py-0.2 bg-zinc-800 text-zinc-500 rounded">Guest</span>
+                          ) : (
+                            <span className="text-[8px] px-1.5 py-0.2 bg-green-500/10 text-green-400 rounded border border-green-500/20">Verified</span>
+                          )}
+                        </p>
+                        <p className="text-[10px] text-zinc-500 truncate">{acc.email || acc.id}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setSelectedIpDetails(null);
+                        fetchUserSecurity(acc.id);
+                      }}
+                      className="p-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg transition-colors flex-shrink-0"
+                      title="View User Security Log"
+                    >
+                      <Shield className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* User Agents Breakdown */}
+            {Object.keys(selectedIpDetails.userAgents || {}).length > 0 && (
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-2">
+                  <Laptop className="w-4 h-4 text-purple-400" />
+                  Devices &amp; Browsers Seen
+                </h4>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(selectedIpDetails.userAgents).map(([ua, cnt]: [string, number]) => (
+                    <span
+                      key={ua}
+                      className="px-3 py-1 bg-zinc-900 border border-zinc-800 rounded-full text-[10px] text-zinc-300 font-mono"
+                    >
+                      {ua} <strong className="text-purple-400 font-bold ml-1">({cnt}x)</strong>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Timeline Logs */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-2">
+                <Clock className="w-4 h-4 text-emerald-400" />
+                Recent Security Events Log (Last {selectedIpDetails.timeline.length})
+              </h4>
+              <div className="border border-zinc-800 rounded-xl bg-zinc-950 max-h-48 overflow-y-auto">
+                <table className="w-full text-left text-[11px]">
+                  <thead>
+                    <tr className="border-b border-zinc-800 text-zinc-500 font-bold uppercase text-[9px] bg-zinc-900/30">
+                      <th className="p-2.5">Time</th>
+                      <th className="p-2.5">User</th>
+                      <th className="p-2.5">Event</th>
+                      <th className="p-2.5">Browser/Device</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-900">
+                    {selectedIpDetails.timeline.map((item: IpTimelineItem) => (
+                      <tr key={item.id} className="hover:bg-zinc-900/30">
+                        <td className="p-2.5 text-zinc-500">{new Date(item.createdAt).toLocaleString()}</td>
+                        <td className="p-2.5 font-bold text-zinc-300">{item.nickname}</td>
+                        <td className="p-2.5 font-mono">
+                          <span className="px-2 py-0.5 rounded bg-zinc-800 text-[9px] text-blue-400">
+                            {item.eventType}
+                          </span>
+                        </td>
+                        <td className="p-2.5 text-zinc-500 font-mono text-[10px]">
+                          {item.parsedUa.browser} on {item.parsedUa.os}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-zinc-800">
+              <button
+                onClick={() => setSelectedIpDetails(null)}
+                className="px-5 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── USER SECURITY MODAL ── */}
+      {selectedUserSecurity && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 space-y-6 shadow-2xl text-xs">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
+                  <Shield className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-white">User Security Profile</h3>
+                  <p className="text-zinc-500 text-[11px]">
+                    Last Known Login IP:{' '}
+                    <span className="font-mono font-bold text-blue-400">
+                      {selectedUserSecurity.lastLoginIp || 'None Recorded'}
+                    </span>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedUserSecurity(null)}
+                className="p-2 text-zinc-500 hover:text-white hover:bg-zinc-900 rounded-xl transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Other Accounts on Same IP */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" />
+                Other Accounts Seen on Same IP ({selectedUserSecurity.otherAccountsOnSameIp.length})
+              </h4>
+              {selectedUserSecurity.otherAccountsOnSameIp.length === 0 ? (
+                <div className="p-3 bg-zinc-900/30 border border-zinc-800/60 rounded-xl text-zinc-500 italic">
+                  No other accounts have shared this user&apos;s IP address.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-48 overflow-y-auto pr-1">
+                  {selectedUserSecurity.otherAccountsOnSameIp.map((co: SharedAccount) => (
+                    <div
+                      key={co.id}
+                      className="p-3 bg-zinc-900/40 border border-zinc-800/80 rounded-xl flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <UserAvatar
+                          src={co.avatar}
+                          nickname={co.nickname}
+                          size="w-7 h-7"
+                          textClassName="text-[10px] font-bold"
+                        />
+                        <div className="min-w-0">
+                          <p className="font-bold text-zinc-200 truncate text-xs">{co.nickname}</p>
+                          <p className="text-[10px] text-zinc-500 truncate font-mono">IP: {co.sharedIp}</p>
+                        </div>
+                      </div>
+                      <span className="text-[9px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 font-mono">
+                        {co.isAnonymous ? 'Guest' : 'Reg'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* User's IP History Timeline */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-2">
+                <Clock className="w-4 h-4 text-blue-400" />
+                IP Login &amp; Event History ({selectedUserSecurity.ipHistory.length})
+              </h4>
+              <div className="border border-zinc-800 rounded-xl bg-zinc-950 max-h-56 overflow-y-auto">
+                <table className="w-full text-left text-[11px]">
+                  <thead>
+                    <tr className="border-b border-zinc-800 text-zinc-500 font-bold uppercase text-[9px] bg-zinc-900/30">
+                      <th className="p-2.5">Time</th>
+                      <th className="p-2.5">IP Address</th>
+                      <th className="p-2.5">Event</th>
+                      <th className="p-2.5">Browser/Device</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-900">
+                    {selectedUserSecurity.ipHistory.map((item) => (
+                      <tr key={item.id} className="hover:bg-zinc-900/30">
+                        <td className="p-2.5 text-zinc-500">{new Date(item.createdAt).toLocaleString()}</td>
+                        <td className="p-2.5 font-mono text-blue-400 font-bold">{item.ipAddress}</td>
+                        <td className="p-2.5 font-mono">
+                          <span className="px-2 py-0.5 rounded bg-zinc-800 text-[9px] text-emerald-400">
+                            {item.eventType}
+                          </span>
+                        </td>
+                        <td className="p-2.5 text-zinc-500 font-mono text-[10px]">
+                          {item.parsedUa.browser} on {item.parsedUa.os}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-zinc-800">
+              <button
+                onClick={() => setSelectedUserSecurity(null)}
+                className="px-5 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
