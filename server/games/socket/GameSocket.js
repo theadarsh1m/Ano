@@ -241,6 +241,10 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
       });
     });
 
+    engine._broadcastCallback = () => {
+      broadcastGameStates(gameId, engine);
+    };
+
     engine.startGame();
     activeGames.set(gameId, engine);
     LobbyService.lobbies.delete(gameId);

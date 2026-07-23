@@ -14,10 +14,14 @@ export const GuessChat: React.FC<GuessChatProps> = ({ gameId, isDrawer }) => {
   const [guessInput, setGuessInput] = useState('');
   const { guessLogs, sendGuess } = useScribbleStore();
   const { id: userId } = useUserStore();
-  const logsEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Scroll only the internal chat container to bottom, NEVER scroll window/viewport
+    const container = chatContainerRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
   }, [guessLogs]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -36,7 +40,7 @@ export const GuessChat: React.FC<GuessChatProps> = ({ gameId, isDrawer }) => {
         </h3>
       </div>
       
-      <div className="flex-1 p-3 overflow-y-auto custom-scrollbar flex flex-col gap-2 min-h-[200px] max-h-[300px] lg:max-h-full">
+      <div ref={chatContainerRef} className="flex-1 p-3 overflow-y-auto custom-scrollbar flex flex-col gap-2 min-h-[200px] max-h-[300px] lg:max-h-full">
         {guessLogs.map((log) => {
           let content = null;
           
@@ -77,7 +81,6 @@ export const GuessChat: React.FC<GuessChatProps> = ({ gameId, isDrawer }) => {
             </div>
           );
         })}
-        <div ref={logsEndRef} />
       </div>
 
       <div className="p-3 bg-black/20 border-t border-white/10">

@@ -14,7 +14,7 @@ export interface StrokeData {
   points: Point[];
   color: string;
   size: number;
-  type: 'brush' | 'eraser';
+  type: 'brush' | 'eraser' | 'fill';
 }
 
 interface ScribbleCanvasProps {
@@ -22,13 +22,131 @@ interface ScribbleCanvasProps {
   gameId: string;
   selectedColor: string;
   selectedSize: number;
-  selectedTool: 'brush' | 'eraser';
+  selectedTool: 'brush' | 'eraser' | 'fill';
   onClear: () => void;
   clearTrigger: number;
   undoTrigger: number;
   redoTrigger: number;
   setCanUndo: (val: boolean) => void;
   setCanRedo: (val: boolean) => void;
+}
+
+// Custom SVG Cursors for maximum visibility on white backgrounds
+const PENCIL_CURSOR = `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 24 24' fill='%2310b981' stroke='%23000000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z'/></svg>") 0 24, crosshair`;
+const BUCKET_CURSOR = `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 24 24' fill='%230284c7' stroke='%23000000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m19 11-8-8-8.6 8.6a2 2 0 0 0 0 2.8l5.2 5.2a2 2 0 0 0 2.8 0L19 11Z'/><path d='m5 2 5 5'/><path d='M2 13h15'/></svg>") 2 22, pointer`;
+const ERASER_CURSOR = `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 24 24' fill='%23f43f5e' stroke='%23000000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21'/><path d='M22 21H7'/></svg>") 4 20, pointer`;
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  let c = hex.replace('#', '');
+  if (c.length === 3) {
+    c = c.split('').map(x => x + x).join('');
+  }
+  if (c.length !== 6) return null;
+  const num = parseInt(c, 16);
+  return {
+    r: (num >> 16) & 255,
+    g: (num >> 8) & 255,
+    b: num & 255
+  };
+}
+
+function floodFill(
+  ctx: CanvasRenderingContext2D,
+  canvas: HTMLCanvasElement,
+  startX: number,
+  startY: number,
+  fillColorHex: string
+) {
+  const width = canvas.width;
+  const height = canvas.height;
+  if (width === 0 || height === 0) return;
+
+  const x = Math.floor(startX);
+  const y = Math.floor(startY);
+  if (x < 0 || x >= width || y < 0 || y >= height) return;
+
+  const fillRGB = hexToRgb(fillColorHex);
+  if (!fillRGB) return;
+
+  const imgData = ctx.getImageData(0, 0, width, height);
+  const data = imgData.data;
+
+  const targetIdx = (y * width + x) * 4;
+  const targetR = data[targetIdx];
+  const targetG = data[targetIdx + 1];
+  const targetB = data[targetIdx + 2];
+  const targetA = data[targetIdx + 3];
+
+  if (
+    targetR === fillRGB.r &&
+    targetG === fillRGB.g &&
+    targetB === fillRGB.b &&
+    targetA === 255
+  ) {
+    return;
+  }
+
+  const colorMatch = (idx: number) => {
+    const r = data[idx];
+    const g = data[idx + 1];
+    const b = data[idx + 2];
+    const a = data[idx + 3];
+
+    const diff = Math.abs(r - targetR) + Math.abs(g - targetG) + Math.abs(b - targetB) + Math.abs(a - targetA);
+    return diff < 64;
+  };
+
+  const pixelStack: [number, number][] = [[x, y]];
+
+  while (pixelStack.length > 0) {
+    const [px, py] = pixelStack.pop()!;
+    let currentIdx = (py * width + px) * 4;
+
+    let currentY = py;
+    while (currentY >= 0 && colorMatch(currentIdx)) {
+      currentY--;
+      currentIdx -= width * 4;
+    }
+    currentY++;
+    currentIdx += width * 4;
+
+    let reachLeft = false;
+    let reachRight = false;
+
+    while (currentY < height && colorMatch(currentIdx)) {
+      data[currentIdx] = fillRGB.r;
+      data[currentIdx + 1] = fillRGB.g;
+      data[currentIdx + 2] = fillRGB.b;
+      data[currentIdx + 3] = 255;
+
+      if (px > 0) {
+        if (colorMatch(currentIdx - 4)) {
+          if (!reachLeft) {
+            pixelStack.push([px - 1, currentY]);
+            reachLeft = true;
+          }
+        } else if (reachLeft) {
+          reachLeft = false;
+        }
+      }
+
+      if (px < width - 1) {
+        if (colorMatch(currentIdx + 4)) {
+          if (!reachRight) {
+            pixelStack.push([px + 1, currentY]);
+            reachRight = true;
+          }
+        } else if (reachRight) {
+          reachRight = false;
+        }
+      }
+
+      currentY++;
+      currentIdx += width * 4;
+    }
+  }
+
+  ctx.putImageData(imgData, 0, 0);
 }
 
 export const ScribbleCanvas: React.FC<ScribbleCanvasProps> = ({ 
@@ -70,7 +188,6 @@ export const ScribbleCanvas: React.FC<ScribbleCanvasProps> = ({
     if (!canvas || !container) return;
 
     const resizeCanvas = () => {
-      // Save current content
       const tempCanvas = document.createElement('canvas');
       tempCanvas.width = canvas.width;
       tempCanvas.height = canvas.height;
@@ -87,7 +204,6 @@ export const ScribbleCanvas: React.FC<ScribbleCanvasProps> = ({
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctxRef.current = ctx;
-        // Fill white background initially
         if (canvas.width > 0 && tempCanvas.width === 0) {
            ctx.fillStyle = '#ffffff';
            ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -174,7 +290,14 @@ export const ScribbleCanvas: React.FC<ScribbleCanvasProps> = ({
   const drawStroke = (stroke: StrokeData, ctx?: CanvasRenderingContext2D | null, canvas?: HTMLCanvasElement | null) => {
     const targetCtx = ctx || ctxRef.current;
     const targetCanvas = canvas || canvasRef.current;
-    if (!targetCtx || !targetCanvas || stroke.points.length < 2) return;
+    if (!targetCtx || !targetCanvas || stroke.points.length === 0) return;
+
+    if (stroke.type === 'fill') {
+      floodFill(targetCtx, targetCanvas, stroke.points[0].x * targetCanvas.width, stroke.points[0].y * targetCanvas.height, stroke.color);
+      return;
+    }
+
+    if (stroke.points.length < 2) return;
 
     targetCtx.beginPath();
     targetCtx.strokeStyle = stroke.type === 'eraser' ? '#ffffff' : stroke.color;
@@ -215,13 +338,45 @@ export const ScribbleCanvas: React.FC<ScribbleCanvasProps> = ({
     const coords = getCoordinates(e);
     if (!coords) return;
 
+    const ctx = ctxRef.current;
+    const canvas = canvasRef.current;
+
+    // Handle Bucket Fill Tool
+    if (selectedTool === 'fill') {
+      if (ctx && canvas) {
+        floodFill(ctx, canvas, coords.x * canvas.width, coords.y * canvas.height, selectedColor);
+
+        const strokeData: StrokeData = {
+          points: [coords],
+          color: selectedColor,
+          size: selectedSize,
+          type: 'fill'
+        };
+
+        const newStrokes = strokesRef.current.slice(0, historyIndexRef.current + 1);
+        newStrokes.push(strokeData);
+        strokesRef.current = newStrokes;
+        historyIndexRef.current = newStrokes.length - 1;
+        updateUndoRedoState();
+
+        const socket = socketService.getSocket();
+        socket.emit('scribble_canvas_event', {
+          gameId,
+          userId,
+          action: 'stroke',
+          data: strokeData
+        });
+      }
+      return;
+    }
+
     setIsDrawing(true);
     setCurrentStroke([coords]);
   };
 
   const draw = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!isDrawing || !isDrawer) return;
-    e.preventDefault(); // prevent scrolling on touch
+    if (!isDrawing || !isDrawer || selectedTool === 'fill') return;
+    e.preventDefault();
     
     const coords = getCoordinates(e);
     if (!coords) return;
@@ -229,7 +384,6 @@ export const ScribbleCanvas: React.FC<ScribbleCanvasProps> = ({
     const newStroke = [...currentStroke, coords];
     setCurrentStroke(newStroke);
 
-    // Draw locally immediately
     const ctx = ctxRef.current;
     const canvas = canvasRef.current;
     if (ctx && canvas) {
@@ -244,7 +398,7 @@ export const ScribbleCanvas: React.FC<ScribbleCanvasProps> = ({
   };
 
   const stopDrawing = () => {
-    if (!isDrawing || !isDrawer) return;
+    if (!isDrawing || !isDrawer || selectedTool === 'fill') return;
     setIsDrawing(false);
 
     if (currentStroke.length > 1) {
@@ -272,10 +426,19 @@ export const ScribbleCanvas: React.FC<ScribbleCanvasProps> = ({
     setCurrentStroke([]);
   };
 
+  // Determine active custom cursor for drawer
+  let activeCursor = 'default';
+  if (isDrawer) {
+    if (selectedTool === 'fill') activeCursor = BUCKET_CURSOR;
+    else if (selectedTool === 'eraser') activeCursor = ERASER_CURSOR;
+    else activeCursor = PENCIL_CURSOR;
+  }
+
   return (
     <div 
       ref={containerRef} 
-      className="w-full h-full bg-white rounded-xl shadow-inner relative overflow-hidden cursor-crosshair touch-none"
+      className="w-full h-full bg-white rounded-xl shadow-inner relative overflow-hidden touch-none"
+      style={{ cursor: activeCursor }}
     >
       {!isDrawer && (
         <div className="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded backdrop-blur-sm z-10">

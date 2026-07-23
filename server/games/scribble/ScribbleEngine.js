@@ -75,7 +75,7 @@ class ScribbleEngine extends BaseGameEngine {
   }
 
   generateDrawerQueue() {
-    // Randomize turn order for the round
+    // Establish initial turn order for the game session
     const playerIds = Array.from(this.players.keys());
     this.drawerQueue = playerIds.sort(() => 0.5 - Math.random());
     this.currentDrawerIndex = 0;
@@ -88,7 +88,8 @@ class ScribbleEngine extends BaseGameEngine {
       if (this.currentRound > this.totalRounds) {
         return this.finishGame();
       }
-      this.generateDrawerQueue();
+      // Keep clockwise / consistent turn order across rounds
+      this.currentDrawerIndex = 0;
       this.historyLogs.push(`Round ${this.currentRound} started!`);
     }
 
@@ -114,6 +115,8 @@ class ScribbleEngine extends BaseGameEngine {
         // Auto pick a random word from choices
         const randomIndex = Math.floor(Math.random() * this.wordChoices.length);
         this.selectWord(this.wordChoices[randomIndex]);
+      } else {
+        this._broadcast();
       }
     }, 1000);
     
@@ -132,11 +135,13 @@ class ScribbleEngine extends BaseGameEngine {
     this.drawingTimeLeft = this.settings.drawingTime || 60;
     this.clearTimers();
     
-    // Start drawing timer
+    // Start drawing timer with continuous broadcast every second
     this.timerIntervalId = setInterval(() => {
       this.drawingTimeLeft--;
       if (this.drawingTimeLeft <= 0) {
         this.endTurn();
+      } else {
+        this._broadcast();
       }
     }, 1000);
     

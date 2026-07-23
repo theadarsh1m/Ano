@@ -54,7 +54,7 @@ function ScribbleGameContent() {
 
   const [selectedColor, setSelectedColor] = useState('#000000');
   const [selectedSize, setSelectedSize] = useState(5);
-  const [selectedTool, setSelectedTool] = useState<'brush' | 'eraser'>('brush');
+  const [selectedTool, setSelectedTool] = useState<'brush' | 'eraser' | 'fill'>('brush');
   const [clearTrigger, setClearTrigger] = useState(0);
   const [undoTrigger, setUndoTrigger] = useState(0);
   const [redoTrigger, setRedoTrigger] = useState(0);
@@ -512,13 +512,8 @@ function ScribbleGameContent() {
         {/* Main Game Area */}
         <div className="flex flex-col lg:flex-row gap-4 h-auto lg:h-[calc(100vh-200px)] min-h-0 lg:min-h-[600px]">
           
-          {/* Left: Player List */}
-          <div className="w-full lg:w-64 flex flex-col gap-4 flex-shrink-0">
-            <PlayerList />
-          </div>
-
-          {/* Center: Canvas & Tools */}
-          <div className="flex-1 flex flex-col gap-4 relative min-w-0">
+          {/* Center/Top: Canvas & Tools */}
+          <div className="flex-1 flex flex-col gap-4 relative min-w-0 order-1 lg:order-none">
              <WordSelectionModal />
              
              <div className="h-[320px] lg:h-auto lg:flex-1 border-4 border-white/10 rounded-2xl overflow-hidden relative shadow-2xl flex-shrink-0">
@@ -567,9 +562,14 @@ function ScribbleGameContent() {
              </div>
           </div>
 
-          {/* Right: Guess Chat */}
-          <div className="w-full lg:w-80 flex flex-col h-full">
+          {/* Guess Chat */}
+          <div className="w-full lg:w-80 flex flex-col h-full order-2 lg:order-none">
             <GuessChat gameId={gameState.gameId} isDrawer={isDrawer} />
+          </div>
+
+          {/* Player List */}
+          <div className="w-full lg:w-64 flex flex-col gap-4 flex-shrink-0 order-3 lg:order-none">
+            <PlayerList />
           </div>
 
         </div>
