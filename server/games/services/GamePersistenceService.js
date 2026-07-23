@@ -51,6 +51,17 @@ class GamePersistenceService {
 
   static async addPlayer(sessionId, userId, nickname, role = 'PLAYER') {
     try {
+      // Ensure user record exists first so foreign key constraint succeeds
+      await prisma.user.upsert({
+        where: { id: userId },
+        update: { nickname: nickname || undefined },
+        create: {
+          id: userId,
+          nickname: nickname || (userId.startsWith('guest_') ? `Guest (${userId.slice(-6)})` : 'User'),
+          isAnonymous: true
+        }
+      }).catch(e => console.warn(`Could not ensure user ${userId} before adding to game:`, e.message));
+
       return await prisma.gamePlayer.upsert({
         where: {
           gameSessionId_userId: {

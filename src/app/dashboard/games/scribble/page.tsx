@@ -63,6 +63,7 @@ function ScribbleGameContent() {
   const [hideWord, setHideWord] = useState(false);
   const [inviteCopied, setInviteCopied] = useState(false);
   const [showRulesModal, setShowRulesModal] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
 
   // Settings state (only host can change)
   const [rounds, setRounds] = useState(3);
@@ -466,45 +467,45 @@ function ScribbleGameContent() {
       <div className="flex flex-col h-auto lg:h-screen w-full p-2 md:p-4 pb-4 lg:pb-6 max-w-[1600px] mx-auto gap-4 overflow-y-auto lg:overflow-hidden relative">
         <TurnIndicator isMyTurn={isMyTurn} />
         {/* Top Header */}
-        <div className="flex flex-col md:flex-row justify-between items-center bg-white/5 border border-white/10 rounded-2xl p-3 backdrop-blur-md gap-4">
-          <div className="flex items-center gap-4">
-             <div className="text-center px-4 py-1 bg-black/20 rounded-lg border border-white/5">
-                <div className="text-xs text-gray-400 uppercase tracking-wider">Round</div>
-                <div className="font-bold text-white">{gameState.currentRound} / {gameState.totalRounds}</div>
+        <div className="flex flex-wrap md:flex-nowrap justify-between items-center bg-white/5 border border-white/10 rounded-2xl p-2.5 sm:p-3 backdrop-blur-md gap-2 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 flex-wrap shrink-0">
+             <div className="text-center px-2 sm:px-4 py-1 bg-black/20 rounded-lg border border-white/5 flex flex-col items-center">
+                <div className="text-[10px] sm:text-xs text-gray-400 uppercase tracking-wider">Round</div>
+                <div className="font-bold text-white text-xs sm:text-base leading-tight">{gameState.currentRound} / {gameState.totalRounds}</div>
              </div>
-             <div className="text-center px-4 py-1 bg-black/20 rounded-lg border border-white/5 flex items-center gap-2">
-                <Clock className="w-4 h-4 text-sky-400" />
-                <div className="font-bold text-white text-xl w-8">{gameState.drawingTimeLeft}</div>
+             <div className="text-center px-2 sm:px-4 py-1.5 sm:py-2 bg-black/20 rounded-lg border border-white/5 flex items-center gap-1.5 sm:gap-2">
+                <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-sky-400 shrink-0" />
+                <div className="font-bold text-white text-base sm:text-xl w-6 sm:w-8 text-center">{gameState.drawingTimeLeft}</div>
              </div>
           </div>
           
-          <div className="flex-1 flex justify-center">
+          <div className="flex-1 flex justify-center min-w-[120px] order-3 md:order-none w-full md:w-auto mt-2 md:mt-0">
             {gameState.turnState === 'ROUND_END' ? (
-              <div className="text-2xl font-bold text-emerald-400 tracking-[0.2em] uppercase bg-emerald-500/20 px-6 py-2 rounded-xl">
+              <div className="text-sm sm:text-2xl font-bold text-emerald-400 tracking-[0.1em] sm:tracking-[0.2em] uppercase bg-emerald-500/20 px-4 sm:px-6 py-1.5 sm:py-2 rounded-xl text-center w-full md:w-auto truncate">
                  {gameState.word}
               </div>
             ) : (
-              <div className="text-3xl font-mono font-bold tracking-[0.3em] text-white flex items-center gap-4">
+              <div className="text-lg sm:text-3xl font-mono font-bold tracking-[0.1em] sm:tracking-[0.3em] text-white flex items-center justify-center gap-2 sm:gap-4 w-full md:w-auto">
                 {isDrawer && hideWord ? (
-                  <span className="opacity-30 tracking-[0.5em]">{(gameState.word || '').replace(/[a-zA-Z]/g, '*')}</span>
+                  <span className="opacity-30 tracking-[0.2em] sm:tracking-[0.5em] truncate">{(gameState.word || '').replace(/[a-zA-Z]/g, '*')}</span>
                 ) : (
-                  <span>{gameState.word}</span>
+                  <span className="truncate">{gameState.word}</span>
                 )}
                 {isDrawer && gameState.turnState === 'DRAWING' && (
                   <button 
                     onClick={() => setHideWord(!hideWord)} 
-                    className="p-2 bg-white/5 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white"
+                    className="p-1.5 sm:p-2 bg-white/5 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white shrink-0"
                     title={hideWord ? "Show word" : "Hide word"}
                   >
-                    {hideWord ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    {hideWord ? <EyeOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Eye className="w-4 h-4 sm:w-5 sm:h-5" />}
                   </button>
                 )}
               </div>
             )}
           </div>
           
-          <button onClick={handleLeave} className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/40 text-red-400 rounded-lg transition-colors text-sm">
-            Leave Game
+          <button onClick={handleLeave} className="px-2.5 sm:px-3 py-1.5 bg-red-500/20 hover:bg-red-500/40 text-red-400 rounded-lg transition-colors text-xs sm:text-sm font-bold flex items-center gap-1.5 shrink-0 whitespace-nowrap">
+            <LogOut className="w-3.5 h-3.5 sm:hidden shrink-0" /> <span className="hidden sm:inline">Leave Game</span>
           </button>
         </div>
 

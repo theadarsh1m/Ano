@@ -17,12 +17,32 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     if (typeof document !== "undefined") {
       const textarea = document.createElement("textarea");
       textarea.value = text;
+      
+      // Prevent scrolling to bottom of page in MS Edge.
       textarea.style.position = "fixed";
-      textarea.style.left = "-999999px";
-      textarea.style.top = "-999999px";
+      textarea.style.left = "0";
+      textarea.style.top = "0";
+      textarea.style.opacity = "0";
+      textarea.style.pointerEvents = "none";
+      
+      // iOS requires these for execCommand('copy') to work
+      textarea.contentEditable = 'true';
+      textarea.readOnly = false;
+
       document.body.appendChild(textarea);
-      textarea.focus();
-      textarea.select();
+      
+      // iOS specific selection
+      if (navigator.userAgent.match(/ipad|iphone/i)) {
+        const range = document.createRange();
+        range.selectNodeContents(textarea);
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+        textarea.setSelectionRange(0, 999999);
+      } else {
+        textarea.select();
+      }
+
       const successful = document.execCommand("copy");
       document.body.removeChild(textarea);
       return successful;

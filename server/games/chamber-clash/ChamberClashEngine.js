@@ -241,6 +241,18 @@ class ChamberClashEngine extends BaseGameEngine {
       result.broadcastEvents = events.public;
       result.privateEvents = events.private;
       result.forceStateSync = true;
+      
+      // Advance turn if the item effect explicitly requests it
+      if (action === 'use_item' && result.effectResult && result.effectResult.advanceTurn) {
+        this.advanceTurn();
+        const finalEvents = this.getPendingEvents();
+        if (finalEvents.public.length > 0) {
+          result.broadcastEvents = result.broadcastEvents.concat(finalEvents.public);
+        }
+        if (finalEvents.private.length > 0) {
+          result.privateEvents = result.privateEvents.concat(finalEvents.private);
+        }
+      }
     }
 
     return result;
@@ -327,9 +339,14 @@ class ChamberClashEngine extends BaseGameEngine {
     this.emitPublicEvent('item_used', {
       playerId,
       itemId,
-      targetId
+      targetId,
+      stolenItemId: data.stolenItemId // Include stolen item ID if present
     });
 
+    // Reset turn timer to give player time to act after item animation
+    this.startTurnTimer(playerId);
+
+    // APPLY item effect
     const effectResult = itemDef.serverEffect(this, playerId, targetId, data);
     
     return { success: true, effectResult };
@@ -375,6 +392,16 @@ class ChamberClashEngine extends BaseGameEngine {
     return false;
   }
 
+  getRemainingShellCounts() {
+    const remaining = this.chamber ? this.chamber.slice(this.currentChamberIndex) : [];
+    const liveCount = remaining.filter(s => s === 'LIVE').length;
+    const blankCount = remaining.length - liveCount;
+    return {
+      remainingLive: liveCount,
+      remainingBlank: blankCount
+    };
+  }
+
   serializeState(privatePlayerId) {
     const playersList = [];
     this.players.forEach((p, id) => {
@@ -392,9 +419,7 @@ class ChamberClashEngine extends BaseGameEngine {
     });
     
     // Only count REMAINING shells (from currentChamberIndex onward)
-    const remaining = this.chamber ? this.chamber.slice(this.currentChamberIndex) : [];
-    const liveCount = remaining.filter(s => s === 'LIVE').length;
-    const blankCount = remaining.length - liveCount;
+    const counts = this.getRemainingShellCounts();
 
     return {
       gameId: this.gameId,
@@ -404,9 +429,9 @@ class ChamberClashEngine extends BaseGameEngine {
       roundNumber: this.roundNumber,
       players: playersList,
       currentTurnPlayerId: this.turnOrder[this.currentTurnIndex] || null,
-      totalShells: remaining.length,
-      liveShells: liveCount,
-      blankShells: blankCount,
+      totalShells: counts.remainingLive + counts.remainingBlank,
+      liveShells: counts.remainingLive,
+      blankShells: counts.remainingBlank,
       currentChamberIndex: this.currentChamberIndex,
       winnerId: this.winnerId
     };
