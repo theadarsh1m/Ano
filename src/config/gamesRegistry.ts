@@ -2,6 +2,7 @@ import React from 'react';
 import { FlappyGameHub } from '@/components/games/flappy-bird/FlappyGameHub';
 import { Game2048 } from '@/components/games/Game2048';
 import { Minesweeper } from '@/components/games/Minesweeper';
+import { SlitherGameHub } from '@/components/games/slither/SlitherGameHub';
 
 export type GameSupportedMode = 'SOLO' | 'MULTIPLAYER' | 'BOTH';
 
@@ -170,6 +171,21 @@ export const GAMES_REGISTRY: Record<string, GameDefinition> = {
     type: 'singleplayer',
     href: '/dashboard/games/minesweeper',
     component: Minesweeper
+  },
+  'slither': {
+    id: 'slither',
+    name: 'Slither.io',
+    title: 'Slither.io',
+    slug: 'slither',
+    description: 'Grow as long as possible by eating colorful food and outsmarting other players and bots. Don\'t run into their bodies!',
+    icon: '🐍',
+    color: 'from-green-400 to-emerald-600',
+    supportedModes: 'BOTH',
+    enabled: true,
+    displayOrder: 11,
+    type: 'singleplayer',
+    href: '/dashboard/games/slither',
+    component: SlitherGameHub
   }
 };
 

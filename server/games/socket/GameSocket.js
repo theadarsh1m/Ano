@@ -7,6 +7,7 @@ const ScribbleEngine = require('../scribble/ScribbleEngine');
 const InkDeceptionEngine = require('../ink-deception/InkDeceptionEngine');
 const ChamberClashEngine = require('../chamber-clash/ChamberClashEngine');
 const FlappyBirdEngine = require('../flappy-bird/FlappyBirdEngine');
+const SlitherEngine = require('../slither/SlitherEngine');
 const userService = require('../../services/userService');
 
 const ENGINE_MAP = {
@@ -18,6 +19,7 @@ const ENGINE_MAP = {
   'INK_DECEPTION': InkDeceptionEngine,
   'CHAMBER_CLASH': ChamberClashEngine,
   'FLAPPY_BIRD': FlappyBirdEngine,
+  'SLITHER': SlitherEngine,
 };
 
 const GAME_DISPLAY_NAMES = {
@@ -29,6 +31,7 @@ const GAME_DISPLAY_NAMES = {
   'INK_DECEPTION': 'Ink & Deception',
   'CHAMBER_CLASH': 'Chamber Clash',
   'FLAPPY_BIRD': 'Flappy Bird',
+  'SLITHER': 'Slither.io',
 };
 
 function registerGameSockets(io, socket, onlineUsers, activeGames) {
@@ -89,6 +92,67 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
 
   socket.on('lobby_join', async ({ gameId, userId, nickname }) => {
     console.log(`Player ${nickname} joined lobby ${gameId}`);
+    
+    if (gameId === 'slither_global') {
+      let engine = activeGames.get('slither_global');
+      if (!engine) {
+        const SlitherEngine = require('../slither/SlitherEngine');
+        engine = new SlitherEngine('slither_global');
+        engine.onEvent = (type, data) => {
+          io.to('slither_global').emit(type, data);
+          if (type === 'round_started') {
+            engine.players.forEach((p, id) => {
+              const sockets = onlineUsers.get(id);
+              if (sockets) {
+                sockets.forEach(sId => {
+                  io.to(sId).emit('game_state', engine.serializeState(id));
+                });
+              }
+            });
+          }
+        };
+        engine.onPrivateEvent = (targetUserId, type, data) => {
+          const targetSockets = onlineUsers.get(targetUserId);
+          if (targetSockets) {
+            targetSockets.forEach(sId => io.to(sId).emit(type, data));
+          }
+        };
+        engine.startGame();
+        activeGames.set('slither_global', engine);
+      }
+
+      engine.players.set(userId, {
+        userId,
+        nickname,
+        role: 'PLAYER',
+        isReady: true,
+        isOnline: true
+      });
+
+      const pos = engine.getSafeSpawnPosition();
+      engine.snakes.set(userId, engine.createSnake(userId, nickname, 'CLASSIC', false, pos.x, pos.y));
+      engine.kills.set(userId, 0);
+
+      socket.join('slither_global');
+
+      const fakeLobby = {
+        id: 'slither_global',
+        hostId: 'system',
+        gameType: 'SLITHER',
+        players: Array.from(engine.players.values()).map(p => ({
+          userId: p.userId,
+          nickname: p.nickname,
+          isReady: true,
+          role: 'PLAYER'
+        })),
+        status: 'PLAYING',
+        settings: { maxPlayers: 100 }
+      };
+      socket.emit('lobby_state', fakeLobby);
+      io.to('slither_global').emit('lobby_state', fakeLobby);
+      return;
+    }
+
     const lobby = await LobbyService.joinLobby(gameId, userId, nickname);
     if (!lobby) {
       return socket.emit('game_error', { message: 'Lobby full or does not exist.' });
@@ -134,7 +198,7 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
       const removed = engine.removePlayer(userId);
       if (removed) {
         broadcastGameStates(gameId, engine);
-        if (engine.players.size === 0) {
+        if (engine.players.size === 0 && gameId !== 'slither_global') {
           activeGames.delete(gameId);
         }
       }
@@ -467,7 +531,7 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
               const removed = engine.removePlayer(disconnectedUserId);
               if (removed) {
                 broadcastGameStates(gameId, engine);
-                if (engine.players.size === 0) activeGames.delete(gameId);
+                if (engine.players.size === 0 && gameId !== 'slither_global') activeGames.delete(gameId);
               }
             }
           }

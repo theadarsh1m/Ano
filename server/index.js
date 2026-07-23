@@ -19,6 +19,7 @@ const feedRoutes = require('./routes/feedRoutes');
 const createAdminRoutes = require('./routes/adminRoutes');
 const feedbackRoutes = require('./routes/feedbackRoutes');
 const flappyRoutes = require('./routes/flappyRoutes');
+const slitherRoutes = require('./routes/slitherRoutes');
 const notificationService = require('./services/notificationService');
 const voiceService = require('./services/voiceService');
 const ipService = require('./services/ipService');
@@ -37,6 +38,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/games', gameRoutes);
 app.use('/api/games/flappy', flappyRoutes);
 app.use('/api/games/flappy-bird', flappyRoutes);
+app.use('/api/games/slither', slitherRoutes);
 app.use('/api/feed', feedRoutes);
 // adminRoutes is initialized after in-memory Maps are created (see below)
 app.use('/api/feedback', feedbackRoutes);

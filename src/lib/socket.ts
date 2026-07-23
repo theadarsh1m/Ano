@@ -10,9 +10,13 @@ const SOCKET_URL = getSocketUrl();
 class SocketService {
   private socket: Socket | null = null;
 
-  connect() {
-    if (!this.socket) {
-      this.socket = io(SOCKET_URL, {
+  connect(customUrl?: string) {
+    if (customUrl || !this.socket) {
+      if (this.socket) {
+        this.socket.disconnect();
+      }
+      const targetUrl = customUrl || SOCKET_URL;
+      this.socket = io(targetUrl, {
         reconnection: true,
         reconnectionAttempts: Infinity,
         reconnectionDelay: 1000,
@@ -20,7 +24,7 @@ class SocketService {
       });
 
       this.socket.on('connect', () => {
-        console.log('Socket connected:', this.socket?.id);
+        console.log('Socket connected:', this.socket?.id, 'to:', targetUrl);
       });
 
       this.socket.on('disconnect', (reason) => {
