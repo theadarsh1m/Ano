@@ -20,6 +20,9 @@ interface InkCanvasProps {
   onStrokeComplete: (points: Point[]) => void;
 }
 
+// Custom SVG Pen/Brush Cursor for high contrast on parchment canvas
+const PENCIL_CURSOR = `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 24 24' fill='%2310b981' stroke='%23000000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z'/></svg>") 0 24, crosshair`;
+
 export const InkCanvas: React.FC<InkCanvasProps> = ({
   isDrawer,
   gameId,
@@ -390,9 +393,8 @@ export const InkCanvas: React.FC<InkCanvasProps> = ({
         onPointerMove={draw}
         onPointerUp={stopDrawing}
         onPointerCancel={stopDrawing}
-        className={`w-full h-full touch-none block ${
-          isActiveTurn && !hasDrawn ? "cursor-crosshair" : "cursor-not-allowed"
-        }`}
+        style={{ cursor: isActiveTurn && !hasDrawn ? PENCIL_CURSOR : "not-allowed" }}
+        className="w-full h-full touch-none block"
       />
     </div>
   );

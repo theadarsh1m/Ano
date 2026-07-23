@@ -49,6 +49,7 @@ function ChamberClashGameContent() {
   // ─── Local UI State ───
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   const [stealModeActive, setStealModeActive] = useState(false);
+  const [handcuffModeActive, setHandcuffModeActive] = useState(false);
   const [stealingFromPlayerId, setStealingFromPlayerId] = useState<string | null>(null);
   const [stealingAnimation, setStealingAnimation] = useState<{ icon: string; from: { left: string; top: string }; to: { left: string; top: string } } | null>(null);
   const [visualTurnPlayerId, setVisualTurnPlayerId] = useState<string | null>(null);
@@ -118,8 +119,12 @@ function ChamberClashGameContent() {
   useEffect(() => {
     if (!isAnimating && eventQueue.length === 0 && gameState?.currentTurnPlayerId) {
       setVisualTurnPlayerId(gameState.currentTurnPlayerId);
+      if (gameState.currentTurnPlayerId !== userId) {
+        setStealModeActive(false);
+        setHandcuffModeActive(false);
+      }
     }
-  }, [isAnimating, eventQueue.length, gameState?.currentTurnPlayerId]);
+  }, [isAnimating, eventQueue.length, gameState?.currentTurnPlayerId, userId]);
 
   // ─── Heartbeat for low HP ───
   const me = useMemo(() => gameState?.players.find((p) => p.userId === userId), [gameState?.players, userId]);
@@ -992,13 +997,19 @@ function ChamberClashGameContent() {
                 const itemAnim = activeItemAnim?.targetId === p.userId ? activeItemAnim.itemId : null;
                 const isMe = p.userId === userId;
                 const canSteal = stealModeActive && p.isAlive && !isMe && p.inventory?.length > 0;
-                const canSelect = !stealModeActive && isMyTurn && p.isAlive && !isMe;
+                const canHandcuff = handcuffModeActive && p.isAlive && !isMe && !p.statusEffects?.some((e: any) => e.type === 'SKIP_TURN');
+                const canSelect = !stealModeActive && !handcuffModeActive && isMyTurn && p.isAlive && !isMe;
 
                 return (
                   <motion.div key={p.userId}
                     onClick={() => {
                       if (stealModeActive) {
                         if (canSteal) setStealingFromPlayerId(p.userId);
+                      } else if (handcuffModeActive) {
+                        if (canHandcuff) {
+                          useItem(gameState.gameId, userId, 'handcuffs', p.userId);
+                          setHandcuffModeActive(false);
+                        }
                       } else {
                         if (canSelect) setSelectedTargetId(p.userId === selectedTargetId ? null : p.userId);
                       }
@@ -1016,6 +1027,10 @@ function ChamberClashGameContent() {
                       stealModeActive ? (
                         canSteal 
                           ? 'border-amber-500/40 bg-amber-950/10 cursor-pointer shadow-[0_0_15px_rgba(245,158,11,0.2)] hover:border-amber-500/80 hover:scale-[1.03]'
+                          : 'opacity-40 border-white/[0.02] bg-[#111318]/90 cursor-default'
+                      ) : handcuffModeActive ? (
+                        canHandcuff
+                          ? 'border-zinc-300/50 bg-zinc-900/40 cursor-pointer shadow-[0_0_15px_rgba(255,255,255,0.2)] hover:border-white hover:scale-[1.03]'
                           : 'opacity-40 border-white/[0.02] bg-[#111318]/90 cursor-default'
                       ) : (
                         isTurn ? 'border-red-500/60 bg-red-950/15 shadow-[0_0_25px_rgba(239,68,68,0.2)] cursor-default' :
@@ -1124,6 +1139,19 @@ function ChamberClashGameContent() {
                     Cancel
                   </button>
                 </div>
+              ) : handcuffModeActive ? (
+                <div className="flex items-center justify-between w-full bg-zinc-900/90 border border-zinc-500/30 rounded-xl p-3 shadow-[0_0_20px_rgba(255,255,255,0.05)]">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl animate-pulse">⛓️</span>
+                    <div className="text-left">
+                      <div className="text-xs font-bold text-zinc-200 uppercase tracking-widest leading-normal">Handcuffs Active</div>
+                      <p className="text-[10px] text-zinc-400">Select any living opponent to skip their next turn.</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setHandcuffModeActive(false)} className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors">
+                    Cancel
+                  </button>
+                </div>
               ) : (
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 w-full">
                   {/* Shoot buttons */}
@@ -1150,22 +1178,20 @@ function ChamberClashGameContent() {
                   <div className="flex gap-2 overflow-x-auto w-full sm:flex-1 py-1">
                     {me?.inventory.map((itemId, i) => {
                       const meta = ITEM_META[itemId] || { name: itemId, icon: "📦", desc: "", color: "text-zinc-400", sound: () => {} };
-                      const needsTarget = itemId === 'handcuffs';
-                      const canUseOnTarget = needsTarget ? !!selectedTargetId : true;
                       return (
-                        <button key={i} disabled={!canUseOnTarget}
+                        <button key={i}
                           onClick={() => {
                             if (itemId === 'adrenaline') {
                               setStealModeActive(true);
+                              setHandcuffModeActive(false);
+                            } else if (itemId === 'handcuffs') {
+                              setHandcuffModeActive(true);
+                              setStealModeActive(false);
                             } else {
-                              useItem(gameState.gameId, userId, itemId, needsTarget ? (selectedTargetId || undefined) : userId);
+                              useItem(gameState.gameId, userId, itemId, userId);
                             }
                           }}
-                          className={`min-w-[70px] h-[70px] rounded-xl border flex flex-col items-center justify-center gap-0.5 transition-all ${
-                            canUseOnTarget
-                              ? 'bg-zinc-950/80 border-white/[0.06] hover:border-red-500/30 hover:bg-[#141518] cursor-pointer hover:shadow-[0_0_12px_rgba(239,68,68,0.1)]'
-                              : 'bg-zinc-950/40 border-white/[0.03] opacity-40 cursor-not-allowed'
-                          }`}
+                          className="min-w-[70px] h-[70px] rounded-xl border flex flex-col items-center justify-center gap-0.5 transition-all bg-zinc-950/80 border-white/[0.06] hover:border-red-500/30 hover:bg-[#141518] cursor-pointer hover:shadow-[0_0_12px_rgba(239,68,68,0.1)]"
                           title={meta.desc}>
                           <span className="text-lg">{meta.icon}</span>
                           <span className={`text-[8px] font-bold ${meta.color}`}>{meta.name}</span>

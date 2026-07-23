@@ -67,7 +67,17 @@ export function resolveGameRoute(gameType?: string, gameId?: string): string {
  * Resolves destination URL, icon, title, and formatted description from an AppNotification object.
  */
 export function getNotificationDetails(notification: AppNotification): NotificationDetails {
-  const { type, title, message, sender, metadata } = notification;
+  let { type, title, message, sender, metadata } = notification;
+
+  // If metadata is a string, it may have arrived stringified over websocket
+  if (typeof metadata === 'string') {
+    try {
+      metadata = JSON.parse(metadata);
+    } catch (e) {
+      metadata = {};
+    }
+  }
+
   const senderName = sender?.nickname || (metadata?.senderName as string) || 'Someone';
   const metaPostId = metadata?.postId as string | undefined;
   const metaConvId = (metadata?.conversationId as string) || (metadata?.conversation_id as string) || (metadata?.convId as string) || (metadata?.id as string) || undefined;

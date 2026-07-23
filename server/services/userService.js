@@ -24,13 +24,20 @@ const userService = {
    */
   async updateLastSeen(userId) {
     try {
-      return await prisma.user.update({
+      const defaultNickname = userId.startsWith('guest_') ? `Guest (${userId.slice(-6)})` : 'User';
+      return await prisma.user.upsert({
         where: { id: userId },
-        data: { lastSeen: new Date(), isOnline: false, presenceStatus: null },
+        update: { lastSeen: new Date(), isOnline: false, presenceStatus: null },
+        create: {
+          id: userId,
+          nickname: defaultNickname,
+          isAnonymous: true,
+          lastSeen: new Date(),
+          isOnline: false
+        }
       });
     } catch (err) {
-      // User might not exist yet if they never fully joined
-      console.log(`Could not update lastSeen for user ${userId}`);
+      console.log(`Could not update lastSeen for user ${userId}:`, err.message);
     }
   },
 
@@ -39,27 +46,42 @@ const userService = {
    */
   async setOnlineStatus(userId, isOnline) {
     try {
-      return await prisma.user.update({
+      const defaultNickname = userId.startsWith('guest_') ? `Guest (${userId.slice(-6)})` : 'User';
+      return await prisma.user.upsert({
         where: { id: userId },
-        data: { 
+        update: { 
           isOnline,
           ...(isOnline ? {} : { lastSeen: new Date() }),
           ...(isOnline ? {} : { presenceStatus: null }) // Clear status when offline
         },
+        create: {
+          id: userId,
+          nickname: defaultNickname,
+          isAnonymous: true,
+          isOnline,
+          lastSeen: new Date()
+        }
       });
     } catch (err) {
-      console.log(`Could not update online status for user ${userId}`);
+      console.log(`Could not update online status for user ${userId}:`, err.message);
     }
   },
 
   async updatePresenceStatus(userId, presenceStatus) {
     try {
-      return await prisma.user.update({
+      const defaultNickname = userId.startsWith('guest_') ? `Guest (${userId.slice(-6)})` : 'User';
+      return await prisma.user.upsert({
         where: { id: userId },
-        data: { presenceStatus }
+        update: { presenceStatus },
+        create: {
+          id: userId,
+          nickname: defaultNickname,
+          isAnonymous: true,
+          presenceStatus
+        }
       });
     } catch (err) {
-      console.log(`Could not update presence status for user ${userId}`);
+      console.log(`Could not update presence status for user ${userId}:`, err.message);
     }
   },
 

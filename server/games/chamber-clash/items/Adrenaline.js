@@ -1,7 +1,7 @@
 const BaseItem = {
   id: 'adrenaline',
   name: 'Adrenaline',
-  description: 'Steal and immediately use an opponent\'s item.',
+  description: 'Steal an opponent\'s item.',
   icon: '💉',
   rarity: 'rare',
   cooldown: 0,
@@ -20,8 +20,6 @@ const BaseItem = {
   },
   
   serverEffect: (engine, playerId, targetId, data) => {
-    const ItemRegistry = require('./ItemRegistry');
-
     if (!targetId) {
       return { success: false, error: 'No target specified' };
     }
@@ -44,6 +42,11 @@ const BaseItem = {
     // Perform the steal
     target.inventory.splice(itemIndex, 1);
     
+    const stealer = engine.players.get(playerId);
+    if (stealer.inventory.length < engine.settings.maxInventory) {
+      stealer.inventory.push(stolenItemId);
+    }
+    
     // Broadcast steal event
     engine.emitPublicEvent('item_stolen', {
       stealerId: playerId,
@@ -51,23 +54,7 @@ const BaseItem = {
       itemId: stolenItemId
     });
 
-    // Immediately execute stolen item effect
-    const stolenItemDef = ItemRegistry.getItem(stolenItemId);
-    if (stolenItemDef) {
-      // For handcuffs, target is the victim (targetId). For self rules, target is self (playerId).
-      const targetForEffect = stolenItemDef.targetRules === 'other' ? targetId : playerId;
-      
-      // Emit item_used for the stolen item to trigger client animations
-      engine.emitPublicEvent('item_used', {
-        playerId,
-        itemId: stolenItemId,
-        targetId: targetForEffect
-      });
-
-      stolenItemDef.serverEffect(engine, playerId, targetForEffect, data);
-    }
-    
-    return { success: true, message: `Stole and used ${stolenItemId} from ${target.nickname}` };
+    return { success: true, message: `Stole ${stolenItemId} from ${target.nickname}` };
   }
 };
 

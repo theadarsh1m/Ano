@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { Trash2, Eraser, Pen, Undo2, Redo2 } from 'lucide-react';
+import { Trash2, Eraser, Pen, Undo2, Redo2, PaintBucket } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface DrawingToolsProps {
@@ -10,8 +10,8 @@ interface DrawingToolsProps {
   setSelectedColor: (c: string) => void;
   selectedSize: number;
   setSelectedSize: (s: number) => void;
-  selectedTool: 'brush' | 'eraser';
-  setSelectedTool: (t: 'brush' | 'eraser') => void;
+  selectedTool: 'brush' | 'eraser' | 'fill';
+  setSelectedTool: (t: 'brush' | 'eraser' | 'fill') => void;
   onClear: () => void;
   onUndo?: () => void;
   onRedo?: () => void;
@@ -76,14 +76,25 @@ export const DrawingTools: React.FC<DrawingToolsProps> = ({
           size="icon"
           onClick={() => setSelectedTool('brush')}
           className={`${selectedTool === 'brush' ? 'bg-white/20 text-emerald-400' : 'text-gray-400 hover:text-white'}`}
+          title="Pencil / Brush"
         >
           <Pen className="w-5 h-5" />
         </Button>
         <Button
           variant="ghost"
           size="icon"
+          onClick={() => setSelectedTool('fill')}
+          className={`${selectedTool === 'fill' ? 'bg-white/20 text-emerald-400' : 'text-gray-400 hover:text-white'}`}
+          title="Bucket Fill"
+        >
+          <PaintBucket className="w-5 h-5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={() => setSelectedTool('eraser')}
           className={`${selectedTool === 'eraser' ? 'bg-white/20 text-emerald-400' : 'text-gray-400 hover:text-white'}`}
+          title="Eraser"
         >
           <Eraser className="w-5 h-5" />
         </Button>

@@ -421,31 +421,34 @@ function ColorWarsPageContent() {
 
     return (
       <div className="flex flex-col h-screen bg-black text-white p-4 space-y-6 overflow-y-auto">
-        <div className="flex flex-wrap items-center justify-between bg-white/5 border border-white/10 rounded-2xl p-3 sm:p-4 backdrop-blur-md max-w-4xl mx-auto w-full gap-2">
-          <div className="flex items-center gap-2 sm:gap-4">
-            <button onClick={handleLeave} className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer">
-              <ArrowLeft className="w-5 h-5" />
+        <div className="flex flex-wrap items-center justify-between bg-white/5 border border-white/10 rounded-2xl p-3 sm:p-4 backdrop-blur-md max-w-4xl mx-auto w-full gap-2 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-[200px]">
+            <button onClick={handleLeave} className="p-1.5 sm:p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer shrink-0">
+              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
-            <h1 className="text-base sm:text-xl font-bold flex items-center gap-2">💥 Color Wars Lobby</h1>
+            <h1 className="text-sm sm:text-xl font-bold flex items-center gap-1.5 sm:gap-2 truncate">
+              <span className="shrink-0">💥</span>
+              <span className="truncate">Color Wars Lobby</span>
+            </h1>
           </div>
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <button 
               onClick={() => setShowRulesModal(true)}
-              className="px-2.5 sm:px-4 py-2 bg-white/5 border border-white/10 text-gray-300 hover:text-white rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-colors hover:bg-white/10 cursor-pointer"
+              className="px-2 sm:px-4 py-1.5 sm:py-2 bg-white/5 border border-white/10 text-gray-300 hover:text-white rounded-xl text-[11px] sm:text-sm font-bold flex items-center gap-1.5 transition-colors hover:bg-white/10 cursor-pointer whitespace-nowrap"
             >
-              <BookOpen className="w-4 h-4" /> <span className="hidden sm:inline">Rules</span>
+              <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" /> <span className="hidden sm:inline">Rules</span>
             </button>
             <button 
               onClick={() => setShowInviteModal(true)} 
-              className="px-2.5 sm:px-4 py-2 bg-rose-600 hover:bg-rose-500 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="px-2 sm:px-4 py-1.5 sm:py-2 bg-rose-600 hover:bg-rose-500 rounded-xl text-[11px] sm:text-sm font-bold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
             >
-              <UserPlus className="w-4 h-4" /> <span className="hidden sm:inline">Invite</span>
+              <UserPlus className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" /> <span className="hidden sm:inline">Invite</span>
             </button>
             <button 
               onClick={handleLeave} 
-              className="px-2.5 sm:px-4 py-2 bg-red-600/20 hover:bg-red-600/40 border border-red-500/30 rounded-xl text-xs sm:text-sm font-bold text-red-400 flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="px-2 sm:px-4 py-1.5 sm:py-2 bg-red-600/20 hover:bg-red-600/40 border border-red-500/30 rounded-xl text-[11px] sm:text-sm font-bold text-red-400 flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
             >
-              <LogOut className="w-4 h-4" /> <span className="hidden sm:inline">Leave</span>
+              <LogOut className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" /> <span className="hidden xs:inline">Leave</span>
             </button>
           </div>
         </div>
@@ -657,16 +660,17 @@ function ColorWarsPageContent() {
           
           {/* Top Panel toolbar */}
           <div className="p-3 md:p-4 border-b border-white/10 flex flex-wrap gap-2 justify-between items-center bg-black/40 backdrop-blur-md relative z-20">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-[200px]">
               <button 
                 onClick={handleLeave}
-                className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                className="p-1.5 sm:p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors shrink-0"
               >
-                <ArrowLeft className="w-5 h-5" />
+                <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
-              <div>
-                <span className="text-lg font-black tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-rose-500 to-red-500 flex items-center gap-2 select-none uppercase">
-                  💥 Chain Reaction
+              <div className="min-w-0">
+                <span className="text-sm sm:text-lg font-black tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-rose-500 to-red-500 flex items-center gap-1.5 sm:gap-2 select-none uppercase truncate">
+                  <span className="shrink-0">💥</span>
+                  <span className="truncate">Chain Reaction</span>
                 </span>
               </div>
             </div>
@@ -689,26 +693,24 @@ function ColorWarsPageContent() {
                   {isMyTurn ? "Your Turn" : `${currentTurnPlayer?.nickname}'s Turn`}
                 </span>
               )}
-            </div>
-
-            <div className="flex gap-2">
+              <div className="flex gap-1.5 sm:gap-2 shrink-0">
               <button 
                 onClick={handleLeave} 
-                className="px-3.5 py-2 bg-red-600/20 hover:bg-red-600/45 border border-red-500/35 rounded-xl text-xs font-bold text-red-400 flex items-center gap-1.5 transition-colors"
+                className="px-2.5 sm:px-3.5 py-1.5 sm:py-2 bg-red-600/20 hover:bg-red-600/45 border border-red-500/35 rounded-xl text-[11px] sm:text-xs font-bold text-red-400 flex items-center gap-1.5 transition-colors whitespace-nowrap"
               >
-                <LogOut className="w-4 h-4" /> Leave
+                <LogOut className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" /> <span className="hidden sm:inline">Leave</span>
               </button>
+              
               <button 
                 onClick={() => setShowChatSidebar(!showChatSidebar)}
-                className={`p-2 rounded-xl border transition-all ${
-                  showChatSidebar 
-                    ? 'bg-purple-500/20 border-purple-500/30 text-purple-300' 
-                    : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
-                }`}
+                className={`px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold flex items-center gap-1.5 transition-colors whitespace-nowrap
+                  ${showChatSidebar 
+                    ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20' 
+                    : 'bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:bg-white/10'}`}
               >
-                <MessageSquare className="w-5 h-5" />
+                <MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" /> <span className="hidden sm:inline">Chat</span>
               </button>
-            </div>
+            </div>        </div>
           </div>
 
           {/* Mobile/Tablet Horizontal Player Strip */}
