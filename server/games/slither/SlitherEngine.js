@@ -1,37 +1,85 @@
 const BaseGameEngine = require('../engine/BaseGameEngine');
 
+class SpatialHashGrid {
+  constructor(cellSize = 120) {
+    this.cellSize = cellSize;
+    this.grid = new Map();
+  }
+
+  clear() {
+    this.grid.clear();
+  }
+
+  getKey(x, y) {
+    const cx = Math.floor(x / this.cellSize);
+    const cy = Math.floor(y / this.cellSize);
+    return `${cx}:${cy}`;
+  }
+
+  insert(item) {
+    const key = this.getKey(item.x, item.y);
+    let cell = this.grid.get(key);
+    if (!cell) {
+      cell = [];
+      this.grid.set(key, cell);
+    }
+    cell.push(item);
+  }
+
+  query(x, y, radius) {
+    const results = [];
+    const minCx = Math.floor((x - radius) / this.cellSize);
+    const maxCx = Math.floor((x + radius) / this.cellSize);
+    const minCy = Math.floor((y - radius) / this.cellSize);
+    const maxCy = Math.floor((y + radius) / this.cellSize);
+
+    for (let cx = minCx; cx <= maxCx; cx++) {
+      for (let cy = minCy; cy <= maxCy; cy++) {
+        const cell = this.grid.get(`${cx}:${cy}`);
+        if (cell) {
+          for (let i = 0; i < cell.length; i++) {
+            results.push(cell[i]);
+          }
+        }
+      }
+    }
+    return results;
+  }
+}
+
 class SlitherEngine extends BaseGameEngine {
   constructor(gameId) {
     super(gameId, 'SLITHER');
-    this.status = 'LOBBY'; // 'LOBBY' | 'PLAYING' | 'FINISHED'
-    
+    this.status = 'LOBBY';
+
     // Physics configs
     this.worldRadius = 3000;
-    this.baseSpeed = 3.5;
-    this.boostSpeed = 6.5;
-    this.turnSpeed = 0.08;
+    this.baseSpeed = 3.6;
+    this.boostSpeed = 7.0;
+    this.turnSpeed = 0.085;
     this.segmentSpacing = 6;
-    
-    // Entity lists
-    this.snakes = new Map(); // userId -> snake state
+
+    // Entity maps & Spatial Grid
+    this.snakes = new Map();
     this.foods = [];
-    this.kills = new Map(); // userId -> number
-    
+    this.foodGrid = new SpatialHashGrid(120);
+    this.kills = new Map();
+
     this.updateInterval = null;
-    this.tickRate = 30; // 30 ticks per second
+    this.tickRate = 30; // 30Hz physics tick
   }
 
   getSafeSpawnPosition() {
     let x = 0;
     let y = 0;
     let attempts = 0;
-    
-    while (attempts < 15) {
+
+    while (attempts < 20) {
       const angle = Math.random() * Math.PI * 2;
-      const dist = Math.random() * (this.worldRadius - 300);
+      const dist = Math.random() * (this.worldRadius - 400);
       x = Math.cos(angle) * dist;
       y = Math.sin(angle) * dist;
-      
+
       let isSafe = true;
       for (const other of this.snakes.values()) {
         if (!other.isAlive || other.segments.length === 0) continue;
@@ -43,35 +91,29 @@ class SlitherEngine extends BaseGameEngine {
           break;
         }
       }
-      
-      if (isSafe) {
-        return { x, y };
-      }
+
+      if (isSafe) return { x, y };
       attempts++;
     }
-    
+
     return { x, y };
   }
 
   startGame() {
     this.status = 'PLAYING';
-    
-    // Initialize user snakes
+
     this.players.forEach((p, id) => {
       const pos = this.getSafeSpawnPosition();
       this.snakes.set(id, this.createSnake(id, p.nickname, 'CLASSIC', false, pos.x, pos.y));
       this.kills.set(id, 0);
     });
 
-    // Populate initial AI Bots (total 50 snakes in the world)
-    this.replenishBots();
+    this.privateReplenishBots();
 
-    // Populate food
     for (let i = 0; i < 1000; i++) {
       this.spawnRandomFood();
     }
 
-    // Start physics tick loop
     if (this.updateInterval) clearInterval(this.updateInterval);
     this.updateInterval = setInterval(() => {
       this.tick();
@@ -90,17 +132,17 @@ class SlitherEngine extends BaseGameEngine {
     const totalDesired = 50;
     const currentTotal = this.snakes.size;
     const needed = totalDesired - currentTotal;
-    
+
     for (let i = 0; i < needed; i++) {
       const id = `bot_${Math.floor(Math.random() * 1000000)}`;
       const pos = this.getSafeSpawnPosition();
-      
+
       const skins = ['CLASSIC', 'RED', 'BLUE', 'YELLOW', 'RAINBOW', 'GLOW'];
       const skin = skins[Math.floor(Math.random() * skins.length)];
-      
+
       const botNames = ['Noodle', 'Wormy', 'Slinky', 'Cobrette', 'Boa', 'Python', 'Kaa', 'Basilisk', 'Viper', 'Adder', 'Copperhead', 'Mamba', 'Anaconda', 'Garter', 'Sidewinder', 'Asp', 'Serpent', 'Naga', 'Wiggle', 'Curly'];
       const name = botNames[Math.floor(Math.random() * botNames.length)] + ` [Bot]`;
-      
+
       this.snakes.set(id, this.createSnake(id, name, skin, true, pos.x, pos.y));
     }
   }
@@ -111,13 +153,14 @@ class SlitherEngine extends BaseGameEngine {
 
   createSnake(id, nickname, skin, isBot, x, y) {
     const segments = [];
-    const length = isBot ? 15 + Math.floor(Math.random() * 20) : 15;
+    const length = isBot ? 18 + Math.floor(Math.random() * 35) : 18;
     const startAngle = Math.random() * Math.PI * 2;
-    
+    const spacing = 6.5;
+
     for (let i = 0; i < length; i++) {
       segments.push({
-        x: x - Math.cos(startAngle) * (i * this.segmentSpacing),
-        y: y - Math.sin(startAngle) * (i * this.segmentSpacing)
+        x: x - Math.cos(startAngle) * (i * spacing),
+        y: y - Math.sin(startAngle) * (i * spacing)
       });
     }
 
@@ -131,7 +174,7 @@ class SlitherEngine extends BaseGameEngine {
       angle: startAngle,
       isBoosting: false,
       segments,
-      width: 22 + Math.min(38, length * 0.1)
+      width: 20 + Math.min(45, Math.pow(length, 0.35) * 3)
     };
   }
 
@@ -140,16 +183,18 @@ class SlitherEngine extends BaseGameEngine {
     const dist = Math.random() * this.worldRadius;
     const x = Math.cos(angle) * dist;
     const y = Math.sin(angle) * dist;
-    
+
     const colors = ['#FF0055', '#00FF66', '#0066FF', '#FFFF00', '#FF00FF', '#00FFFF', '#FF9900'];
     const color = colors[Math.floor(Math.random() * colors.length)];
+    const sizes = [4, 6, 8, 10, 14];
     const val = 1 + Math.floor(Math.random() * 4);
-    
+    const size = sizes[Math.min(sizes.length - 1, val - 1)];
+
     this.foods.push({
-      id: `food_${Math.random().toString(36).substr(2, 9)}`,
+      id: `food_${Math.random().toString(36).substring(2, 9)}`,
       x,
       y,
-      size: 3 + val,
+      size,
       color,
       value: val
     });
@@ -163,8 +208,14 @@ class SlitherEngine extends BaseGameEngine {
       this.spawnRandomFood();
     }
 
-    // 2. Bots replenishment
-    if (this.snakes.size < 40) {
+    // Rebuild Spatial Grid for food
+    this.foodGrid.clear();
+    for (let i = 0; i < this.foods.length; i++) {
+      this.foodGrid.insert(this.foods[i]);
+    }
+
+    // 2. Bots replenishment - maintain constant 50 snakes
+    if (this.snakes.size < 50) {
       this.replenishBots();
     }
 
@@ -180,34 +231,33 @@ class SlitherEngine extends BaseGameEngine {
       this.checkFoodCollision(snake);
     });
 
-    // 4. Collision checking (Head-to-body)
+    // 4. Collision checking (Head to Body & World Boundary)
     this.snakes.forEach((snakeA, idA) => {
       if (!snakeA.isAlive) return;
       const headA = snakeA.segments[0];
 
-      // Wall boundary
+      // Wall boundary collision (snake dies if head edge touches boundary wall)
       const distFromCenter = Math.sqrt(headA.x * headA.x + headA.y * headA.y);
-      if (distFromCenter >= this.worldRadius) {
+      if (distFromCenter + snakeA.width * 0.4 >= this.worldRadius) {
         this.killSnake(snakeA);
         return;
       }
 
-      // Check against all other snakes' bodies
+      // Head to body collision against all other snakes
       this.snakes.forEach((snakeB, idB) => {
         if (!snakeB.isAlive || idA === idB) return;
 
-        const collisionDist = (snakeA.width + snakeB.width) / 2;
+        const collisionDist = (snakeA.width + snakeB.width) * 0.42;
+        const headRadSq = collisionDist * collisionDist;
 
         for (let s = 0; s < snakeB.segments.length; s++) {
           const segB = snakeB.segments[s];
           const dx = headA.x - segB.x;
           const dy = headA.y - segB.y;
-          const dSq = dx * dx + dy * dy;
 
-          if (dSq < collisionDist * collisionDist) {
+          if (dx * dx + dy * dy < headRadSq) {
             this.killSnake(snakeA);
-            
-            // Increment killer's stats
+
             if (!snakeB.isBot) {
               const currentKills = this.kills.get(idB) || 0;
               this.kills.set(idB, currentKills + 1);
@@ -218,8 +268,7 @@ class SlitherEngine extends BaseGameEngine {
       });
     });
 
-    // 5. Broadcast snapshot
-    this.emit('round_started'); // Triggers state broadcasting in GameSocket
+    this.emit('round_started');
   }
 
   moveSnakePhysics(snake) {
@@ -232,13 +281,13 @@ class SlitherEngine extends BaseGameEngine {
     snake.segments.unshift({ x: nextHeadX, y: nextHeadY });
 
     if (snake.isBoosting) {
-      if (Math.random() < 0.15 && snake.segments.length > 10) {
+      if (Math.random() < 0.18 && snake.segments.length > 12) {
         const lastSeg = snake.segments.pop();
         this.foods.push({
-          id: `food_${Math.random().toString(36).substr(2, 9)}`,
-          x: lastSeg.x + (Math.random() * 20 - 10),
-          y: lastSeg.y + (Math.random() * 20 - 10),
-          size: 6,
+          id: `food_${Math.random().toString(36).substring(2, 9)}`,
+          x: lastSeg.x + (Math.random() * 16 - 8),
+          y: lastSeg.y + (Math.random() * 16 - 8),
+          size: 8,
           color: '#00FFFF',
           value: 3
         });
@@ -251,7 +300,7 @@ class SlitherEngine extends BaseGameEngine {
       snake.segments.pop();
     }
 
-    // Spacing update
+    const spacing = 6.0 + Math.min(6.0, snake.width * 0.08);
     for (let i = 1; i < snake.segments.length; i++) {
       const prev = snake.segments[i - 1];
       const curr = snake.segments[i];
@@ -259,39 +308,41 @@ class SlitherEngine extends BaseGameEngine {
       const dy = prev.y - curr.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
-      if (dist > this.segmentSpacing) {
-        const ratio = this.segmentSpacing / dist;
+      if (dist > spacing) {
+        const ratio = spacing / dist;
         curr.x = prev.x - dx * ratio;
         curr.y = prev.y - dy * ratio;
       }
     }
 
-    snake.width = 22 + Math.min(38, snake.segments.length * 0.1);
+    snake.width = 20 + Math.min(45, Math.pow(snake.segments.length, 0.35) * 3);
   }
 
   checkFoodCollision(snake) {
     const head = snake.segments[0];
     const headRad = snake.width / 2;
 
-    for (let i = this.foods.length - 1; i >= 0; i--) {
-      const food = this.foods[i];
+    const nearbyFoods = this.foodGrid.query(head.x, head.y, headRad + 70);
+
+    for (let i = 0; i < nearbyFoods.length; i++) {
+      const food = nearbyFoods[i];
       const dx = head.x - food.x;
       const dy = head.y - food.y;
       const distSq = dx * dx + dy * dy;
 
-      // Attract food
-      const attractDist = headRad + 60;
+      const attractDist = headRad + 55;
       if (distSq < attractDist * attractDist) {
-        food.attractedTo = snake.id;
-        food.x += (head.x - food.x) * 0.3;
-        food.y += (head.y - food.y) * 0.3;
+        food.x += (head.x - food.x) * 0.28;
+        food.y += (head.y - food.y) * 0.28;
       }
 
-      // Eat food
-      const eatDist = headRad + food.size;
+      const eatDist = headRad + food.size * 0.6;
       if (distSq < eatDist * eatDist) {
-        snake.score += food.value * 0.15;
-        this.foods.splice(i, 1);
+        snake.score += food.value * 0.18;
+        const index = this.foods.indexOf(food);
+        if (index !== -1) {
+          this.foods.splice(index, 1);
+        }
       }
     }
   }
@@ -299,23 +350,22 @@ class SlitherEngine extends BaseGameEngine {
   killSnake(snake) {
     snake.isAlive = false;
 
-    // Explode segments into food
     for (let i = 0; i < snake.segments.length; i += 2) {
       const seg = snake.segments[i];
       const colors = ['#FF0055', '#00FF66', '#0066FF', '#FFFF00', '#FF00FF', '#00FFFF', '#FF9900'];
       const color = colors[Math.floor(Math.random() * colors.length)];
-      
+      const sizes = [6, 8, 10, 14];
+
       this.foods.push({
-        id: `food_${Math.random().toString(36).substr(2, 9)}`,
+        id: `food_${Math.random().toString(36).substring(2, 9)}`,
         x: seg.x + (Math.random() * 30 - 15),
         y: seg.y + (Math.random() * 30 - 15),
-        size: 5 + Math.floor(Math.random() * 4),
+        size: sizes[Math.floor(Math.random() * sizes.length)],
         color,
         value: 2 + Math.floor(Math.random() * 3)
       });
     }
 
-    // Trigger client death event
     if (!snake.isBot) {
       const killsCount = this.kills.get(snake.id) || 0;
       this.emitPrivateEvent(snake.id, 'player_died', {
@@ -331,34 +381,43 @@ class SlitherEngine extends BaseGameEngine {
   updateBotAI(bot) {
     const head = bot.segments[0];
 
-    // Avoid border
+    // Boundary check - turn smoothly inward when approaching wall
     const dist = Math.sqrt(head.x * head.x + head.y * head.y);
-    if (dist > this.worldRadius - 200) {
-      bot.angle = Math.atan2(-head.y, -head.x);
+    if (dist > this.worldRadius - 350) {
+      const targetAngle = Math.atan2(-head.y, -head.x);
+      let diff = targetAngle - bot.angle;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      bot.angle += diff * 0.25;
+      bot.isBoosting = false;
       return;
     }
 
-    // Avoid other snakes
+    // Evasion check
     let isAvoiding = false;
+    const detectRadius = bot.width * 2.8 + 45;
+    const detectRadSq = detectRadius * detectRadius;
+
     this.snakes.forEach((other, otherId) => {
       if (!other.isAlive || isAvoiding) return;
 
-      const detectRadius = bot.width * 2.5 + 40;
-
-      for (let s = 0; s < other.segments.length; s++) {
-        if (otherId === bot.id && s < 4) continue;
+      for (let s = 0; s < other.segments.length; s += 2) {
+        if (otherId === bot.id && s < 5) continue;
 
         const seg = other.segments[s];
         const dx = head.x - seg.x;
         const dy = head.y - seg.y;
-        const distSq = dx * dx + dy * dy;
 
-        if (distSq < detectRadius * detectRadius) {
+        if (dx * dx + dy * dy < detectRadSq) {
           isAvoiding = true;
-          bot.angle += (Math.atan2(dy, dx) - bot.angle) * 0.15;
-          if (Math.random() < 0.05 && bot.segments.length > 15) {
+          const steerAngle = Math.atan2(dy, dx);
+          let diff = steerAngle - bot.angle;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          bot.angle += diff * 0.2;
+          if (Math.random() < 0.08 && bot.segments.length > 15) {
             bot.isBoosting = true;
-            setTimeout(() => { bot.isBoosting = false; }, 800);
+            setTimeout(() => { bot.isBoosting = false; }, 600);
           }
           return;
         }
@@ -367,17 +426,17 @@ class SlitherEngine extends BaseGameEngine {
 
     if (isAvoiding) return;
 
-    // Search food
+    // Search food using spatial hash grid
+    const nearbyFoods = this.foodGrid.query(head.x, head.y, 350);
     let nearestFood = null;
     let nearestDistSq = Infinity;
-    const searchDist = 300;
 
-    for (let i = 0; i < this.foods.length; i++) {
-      const food = this.foods[i];
+    for (let i = 0; i < nearbyFoods.length; i++) {
+      const food = nearbyFoods[i];
       const dx = food.x - head.x;
       const dy = food.y - head.y;
       const dSq = dx * dx + dy * dy;
-      if (dSq < searchDist * searchDist && dSq < nearestDistSq) {
+      if (dSq < nearestDistSq) {
         nearestFood = food;
         nearestDistSq = dSq;
       }
@@ -388,9 +447,9 @@ class SlitherEngine extends BaseGameEngine {
       let diff = foodAngle - bot.angle;
       while (diff < -Math.PI) diff += Math.PI * 2;
       while (diff > Math.PI) diff -= Math.PI * 2;
-      bot.angle += diff * 0.08;
-    } else if (Math.random() < 0.05) {
-      bot.angle += (Math.random() - 0.5) * 1.5;
+      bot.angle += diff * 0.09;
+    } else if (Math.random() < 0.04) {
+      bot.angle += (Math.random() - 0.5) * 1.2;
     }
   }
 
@@ -401,18 +460,19 @@ class SlitherEngine extends BaseGameEngine {
 
     if (action === 'angle_update' && snake && snake.isAlive) {
       snake.angle = data.angle;
-      return { success: true };
+      return { success: true, forceStateSync: false };
     }
 
     if (action === 'boost_update' && snake && snake.isAlive) {
       snake.isBoosting = data.isBoosting && snake.segments.length > 10;
-      return { success: true };
+      return { success: true, forceStateSync: false };
     }
 
     if (action === 'respawn') {
       const pos = this.getSafeSpawnPosition();
-      const nickname = data.nickname || 'Player';
-      const skin = data.skin || 'CLASSIC';
+      const existingPlayer = this.players.get(userId);
+      const nickname = (data && data.nickname) || (existingPlayer && existingPlayer.nickname) || 'Player';
+      const skin = (data && data.skin) || 'CLASSIC';
 
       this.snakes.set(userId, this.createSnake(userId, nickname, skin, false, pos.x, pos.y));
       this.kills.set(userId, 0);
@@ -433,14 +493,13 @@ class SlitherEngine extends BaseGameEngine {
     const filterCenter = mySnake && mySnake.isAlive && mySnake.segments.length > 0
       ? mySnake.segments[0]
       : { x: 0, y: 0 };
-    
-    const filterRadius = 1300; // Area of Interest viewport radius
+
+    const filterRadius = 1400;
 
     this.snakes.forEach((snake) => {
       if (!snake.isAlive || snake.segments.length === 0) return;
       const head = snake.segments[0];
-      
-      // Keep inside AoI or if it is our snake
+
       if (snake.id === privatePlayerId) {
         snakesArr.push(snake);
         return;
@@ -459,7 +518,17 @@ class SlitherEngine extends BaseGameEngine {
       return dx * dx + dy * dy < filterRadius * filterRadius;
     });
 
-    // Make kills mapping object
+    const leaderboard = Array.from(this.snakes.values())
+      .filter((s) => s.isAlive)
+      .map((s) => ({
+        id: s.id,
+        nickname: s.nickname,
+        score: Math.floor(s.score * 10),
+        isBot: s.isBot
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10);
+
     const killsObj = {};
     this.kills.forEach((v, k) => { killsObj[k] = v; });
 
@@ -470,6 +539,7 @@ class SlitherEngine extends BaseGameEngine {
       worldRadius: this.worldRadius,
       snakes: snakesArr,
       foods: foodsFiltered,
+      leaderboard,
       kills: killsObj
     };
   }
@@ -480,8 +550,6 @@ class SlitherEngine extends BaseGameEngine {
       this.killSnake(snake);
       this.snakes.delete(userId);
       this.kills.delete(userId);
-      
-      // Remove from players mapping of BaseGameEngine
       super.removePlayer(userId);
       return true;
     }

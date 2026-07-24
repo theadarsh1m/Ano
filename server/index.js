@@ -1,3 +1,4 @@
+require('dotenv').config({ path: '.env.local' });
 require('dotenv').config();
 console.log('DATABASE_URL loaded:', process.env.DATABASE_URL ? 'YES (starts with ' + process.env.DATABASE_URL.substring(0, 15) + '...)' : 'NO');
 const express = require('express');

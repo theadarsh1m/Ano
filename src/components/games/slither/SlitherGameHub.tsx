@@ -126,7 +126,7 @@ export function SlitherGameHub() {
   useEffect(() => {
     let intervalId: any;
     if (activeView === 'SINGLEPLAYER' || activeView === 'MULTIPLAYER_MATCH') {
-      // FPS loop
+      let lastLbUpdate = 0;
       const checkFps = () => {
         const now = performance.now();
         framesRef.current++;
@@ -135,8 +135,10 @@ export function SlitherGameHub() {
           framesRef.current = 0;
           lastTimeRef.current = now;
         }
-        if (engineRef.current) {
+        // Throttle leaderboard updates to twice per second (500ms) to prevent React DOM re-render thrashing
+        if (engineRef.current && now > lastLbUpdate + 500) {
           setLeaderboard(engineRef.current.getLeaderboard());
+          lastLbUpdate = now;
         }
         requestAnimationFrame(checkFps);
       };
@@ -174,7 +176,7 @@ export function SlitherGameHub() {
     setKills(0);
     
     const socket = mode === 'MULTIPLAYER' ? socketService.getSocket() : undefined;
-    const gameId = mode === 'MULTIPLAYER' ? roomState?.id : undefined;
+    const gameId = mode === 'MULTIPLAYER' ? (roomState?.id || 'slither_global') : undefined;
 
     const engine = new SlitherClientEngine(
       canvasRef.current,
@@ -208,9 +210,11 @@ export function SlitherGameHub() {
   };
 
   const joinGlobalOnline = () => {
-    // Online mode uses a persistent lobby ID 'slither_global'
-    setActiveView('MULTIPLAYER_LOBBY');
+    setActiveView('MULTIPLAYER_MATCH');
     joinLobby('slither_global', userId, nickNameInput);
+    setTimeout(() => {
+      initGameEngine('MULTIPLAYER');
+    }, 100);
   };
 
   const handleHostLAN = () => {

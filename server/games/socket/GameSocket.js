@@ -103,22 +103,35 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
           if (type === 'round_started') {
             engine.players.forEach((p, id) => {
               const sockets = onlineUsers.get(id);
-              if (sockets) {
+              if (sockets && sockets.size > 0) {
                 sockets.forEach(sId => {
                   io.to(sId).emit('game_state', engine.serializeState(id));
                 });
+              } else {
+                // Fallback: emit to slither_global room directly so connected sockets get state
+                io.to('slither_global').emit('game_state', engine.serializeState(id));
               }
             });
           }
         };
         engine.onPrivateEvent = (targetUserId, type, data) => {
           const targetSockets = onlineUsers.get(targetUserId);
-          if (targetSockets) {
+          if (targetSockets && targetSockets.size > 0) {
             targetSockets.forEach(sId => io.to(sId).emit(type, data));
+          } else {
+            io.to('slither_global').emit(type, data);
           }
         };
         engine.startGame();
         activeGames.set('slither_global', engine);
+      }
+
+      // Ensure user presence mapping in onlineUsers map
+      if (userId) {
+        if (!onlineUsers.has(userId)) {
+          onlineUsers.set(userId, new Set());
+        }
+        onlineUsers.get(userId).add(socket.id);
       }
 
       engine.players.set(userId, {
@@ -129,9 +142,14 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
         isOnline: true
       });
 
-      const pos = engine.getSafeSpawnPosition();
-      engine.snakes.set(userId, engine.createSnake(userId, nickname, 'CLASSIC', false, pos.x, pos.y));
-      engine.kills.set(userId, 0);
+      if (!engine.snakes.has(userId) || !engine.snakes.get(userId).isAlive) {
+        const pos = engine.getSafeSpawnPosition();
+        engine.snakes.set(userId, engine.createSnake(userId, nickname, 'CLASSIC', false, pos.x, pos.y));
+        engine.kills.set(userId, 0);
+      } else {
+        const existingSnake = engine.snakes.get(userId);
+        if (nickname) existingSnake.nickname = nickname;
+      }
 
       socket.join('slither_global');
 
@@ -148,8 +166,12 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
         status: 'PLAYING',
         settings: { maxPlayers: 100 }
       };
+
       socket.emit('lobby_state', fakeLobby);
       io.to('slither_global').emit('lobby_state', fakeLobby);
+
+      // Immediately send initial game_state to joining player
+      socket.emit('game_state', engine.serializeState(userId));
       return;
     }
 
