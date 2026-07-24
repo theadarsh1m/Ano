@@ -34,7 +34,12 @@ export function SlitherGameHub() {
   const searchParams = useSearchParams();
   const gameIdParam = searchParams.get('gameId');
 
-  const userId = useUserStore((s) => s.id) || '';
+  const rawUserId = useUserStore((s) => s.id) || '';
+  const guestIdRef = useRef<string>('');
+  if (!guestIdRef.current) {
+    guestIdRef.current = `guest_${Math.random().toString(36).substring(2, 9)}`;
+  }
+  const userId = rawUserId || guestIdRef.current;
   const nickname = useUserStore((s) => s.nickname) || 'Player';
 
   const {
@@ -62,7 +67,7 @@ export function SlitherGameHub() {
   const [nickNameInput, setNickNameInput] = useState<string>(nickname);
   const [showSettings, setShowSettings] = useState<boolean>(false);
   const [isMuted, setIsMuted] = useState<boolean>(false);
-  
+
   // Game stats overlays
   const [score, setScore] = useState<number>(0);
   const [kills, setKills] = useState<number>(0);
@@ -126,7 +131,7 @@ export function SlitherGameHub() {
   useEffect(() => {
     let intervalId: any;
     if (activeView === 'SINGLEPLAYER' || activeView === 'MULTIPLAYER_MATCH') {
-      let lastLbUpdate = 0;
+      // FPS loop
       const checkFps = () => {
         const now = performance.now();
         framesRef.current++;
@@ -135,10 +140,8 @@ export function SlitherGameHub() {
           framesRef.current = 0;
           lastTimeRef.current = now;
         }
-        // Throttle leaderboard updates to twice per second (500ms) to prevent React DOM re-render thrashing
-        if (engineRef.current && now > lastLbUpdate + 500) {
+        if (engineRef.current) {
           setLeaderboard(engineRef.current.getLeaderboard());
-          lastLbUpdate = now;
         }
         requestAnimationFrame(checkFps);
       };
@@ -163,20 +166,20 @@ export function SlitherGameHub() {
 
   const initGameEngine = (mode: 'SINGLEPLAYER' | 'MULTIPLAYER') => {
     if (!canvasRef.current) return;
-    
+
     // Stop old engine if running
     if (engineRef.current) {
       engineRef.current.stop();
       engineRef.current = null;
     }
-    
+
     setShowDeathOverlay(false);
     setIsPaused(false);
     setScore(0);
     setKills(0);
-    
+
     const socket = mode === 'MULTIPLAYER' ? socketService.getSocket() : undefined;
-    const gameId = mode === 'MULTIPLAYER' ? (roomState?.id || 'slither_global') : undefined;
+    const gameId = mode === 'MULTIPLAYER' ? roomState?.id : undefined;
 
     const engine = new SlitherClientEngine(
       canvasRef.current,
@@ -197,7 +200,7 @@ export function SlitherGameHub() {
       socket,
       gameId
     );
-    
+
     engineRef.current = engine;
     engine.start();
   };
@@ -210,11 +213,9 @@ export function SlitherGameHub() {
   };
 
   const joinGlobalOnline = () => {
-    setActiveView('MULTIPLAYER_MATCH');
+    // Online mode uses a persistent lobby ID 'slither_global'
+    setActiveView('MULTIPLAYER_LOBBY');
     joinLobby('slither_global', userId, nickNameInput);
-    setTimeout(() => {
-      initGameEngine('MULTIPLAYER');
-    }, 100);
   };
 
   const handleHostLAN = () => {
@@ -225,10 +226,10 @@ export function SlitherGameHub() {
   const scanLAN = async () => {
     setIsScanning(true);
     setLanHosts([]);
-    
+
     const currentHost = window.location.hostname;
     const subnetParts = currentHost.split('.');
-    
+
     // Default subnets to scan if we are on localhost
     const subnetsToScan = [];
     if (currentHost === 'localhost' || currentHost === '127.0.0.1') {
@@ -299,14 +300,14 @@ export function SlitherGameHub() {
       engineRef.current.stop();
       engineRef.current = null;
     }
-    
+
     if (roomState) {
       leaveLobby(userId);
     }
-    
+
     // Connect back to the default socket URL in case we were redirected to a LAN host
     socketService.connect();
-    
+
     setActiveView('MENU');
     setShowDeathOverlay(false);
     setIsPaused(false);
@@ -318,7 +319,7 @@ export function SlitherGameHub() {
       {(activeView === 'SINGLEPLAYER' || activeView === 'MULTIPLAYER_MATCH') && (
         <div className="absolute inset-0 z-0">
           <canvas ref={canvasRef} className="block w-full h-full cursor-default" />
-          
+
           {/* Game HUD Overlay */}
           <div className="absolute top-4 left-4 z-10 flex flex-col gap-1 text-xs md:text-sm font-semibold drop-shadow-md text-white/80 bg-black/40 px-3 py-2 rounded-lg backdrop-blur-sm border border-white/5">
             <div>Nickname: <span className="text-emerald-400 font-bold">{nickNameInput}</span></div>
@@ -379,7 +380,7 @@ export function SlitherGameHub() {
                 <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4 animate-pulse" />
                 <h2 className="text-3xl font-black text-red-500 tracking-wide mb-2 uppercase">You Crashed!</h2>
                 <p className="text-muted-foreground text-sm mb-6">Your snake exploded into glowing food particles.</p>
-                
+
                 <div className="grid grid-cols-2 gap-4 bg-white/5 p-4 rounded-xl mb-6 text-center border border-white/5">
                   <div>
                     <div className="text-[10px] text-white/40 uppercase tracking-wide">Final Score</div>
@@ -392,7 +393,7 @@ export function SlitherGameHub() {
                 </div>
 
                 <div className="flex flex-col gap-3">
-                  <Button 
+                  <Button
                     onClick={() => {
                       if (activeView === 'SINGLEPLAYER') {
                         initGameEngine('SINGLEPLAYER');
@@ -406,7 +407,7 @@ export function SlitherGameHub() {
                         });
                         setShowDeathOverlay(false);
                       }
-                    }} 
+                    }}
                     className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3"
                   >
                     <RotateCcw className="w-4 h-4 mr-2" />
@@ -457,21 +458,19 @@ export function SlitherGameHub() {
                       <button
                         key={skin}
                         onClick={() => setSkin(skin)}
-                        className={`h-11 rounded-lg border-2 flex items-center justify-center transition-all ${
-                          selectedSkin === skin
+                        className={`h-11 rounded-lg border-2 flex items-center justify-center transition-all ${selectedSkin === skin
                             ? 'border-emerald-400 scale-105 bg-white/10'
                             : 'border-white/5 bg-white/5 hover:border-white/20'
-                        }`}
+                          }`}
                       >
                         <div
-                          className={`w-5 h-5 rounded-full ${
-                            skin === 'CLASSIC' ? 'bg-teal-500' :
-                            skin === 'RED' ? 'bg-red-500' :
-                            skin === 'BLUE' ? 'bg-blue-500' :
-                            skin === 'YELLOW' ? 'bg-amber-500' :
-                            skin === 'GLOW' ? 'bg-emerald-500' :
-                            'bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500'
-                          }`}
+                          className={`w-5 h-5 rounded-full ${skin === 'CLASSIC' ? 'bg-teal-500' :
+                              skin === 'RED' ? 'bg-red-500' :
+                                skin === 'BLUE' ? 'bg-blue-500' :
+                                  skin === 'YELLOW' ? 'bg-amber-500' :
+                                    skin === 'GLOW' ? 'bg-emerald-500' :
+                                      'bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500'
+                            }`}
                         />
                       </button>
                     ))}
@@ -480,15 +479,15 @@ export function SlitherGameHub() {
 
                 {/* Game Modes */}
                 <div className="space-y-3 pt-3">
-                  <Button 
-                    onClick={startSinglePlayer} 
+                  <Button
+                    onClick={startSinglePlayer}
                     className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white font-black py-4 rounded-xl text-md flex items-center justify-center gap-2 border border-green-400/20 shadow-lg shadow-green-500/10 hover:scale-[1.01] active:scale-[0.99] transition-transform"
                   >
                     <Play className="w-5 h-5" />
                     Play Offline (VS Bots)
                   </Button>
 
-                  <Button 
+                  <Button
                     onClick={joinGlobalOnline}
                     className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-black py-4 rounded-xl text-md flex items-center justify-center gap-2 border border-blue-400/20 shadow-lg shadow-blue-500/10 hover:scale-[1.01] active:scale-[0.99] transition-transform"
                   >
@@ -496,7 +495,7 @@ export function SlitherGameHub() {
                     Join Online World
                   </Button>
 
-                  <Button 
+                  <Button
                     onClick={() => {
                       setActiveView('LAN_SELECT');
                       scanLAN();
@@ -531,8 +530,8 @@ export function SlitherGameHub() {
                 <Wifi className="w-6 h-6 text-emerald-400" />
                 <h2 className="text-2xl font-black tracking-tight text-white">LAN Multiplayer</h2>
               </div>
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 onClick={() => setActiveView('MENU')}
                 className="p-2 rounded-full hover:bg-white/15 text-gray-400 hover:text-white"
               >
@@ -543,7 +542,7 @@ export function SlitherGameHub() {
             <GlassCard className="p-6 border-white/10 mb-4">
               <div className="space-y-6">
                 <div>
-                  <Button 
+                  <Button
                     onClick={handleHostLAN}
                     className="w-full bg-emerald-600 hover:bg-emerald-500 font-bold py-3 rounded-xl flex items-center justify-center gap-2"
                   >
@@ -555,9 +554,9 @@ export function SlitherGameHub() {
                 <div className="border-t border-white/10 pt-4">
                   <div className="flex justify-between items-center mb-3">
                     <span className="text-xs uppercase font-bold tracking-wider text-gray-400">Available LAN Hosts</span>
-                    <Button 
-                      size="sm" 
-                      onClick={scanLAN} 
+                    <Button
+                      size="sm"
+                      onClick={scanLAN}
                       disabled={isScanning}
                       className="bg-white/5 border border-white/10 hover:bg-white/10 text-xs px-3 py-1.5 h-auto rounded"
                     >
@@ -579,7 +578,7 @@ export function SlitherGameHub() {
                           <div className="font-bold text-sm text-white/90 truncate">{host.hostName}'s Slither Server</div>
                           <div className="text-[10px] text-emerald-400 font-mono tracking-wider">{host.ip}</div>
                         </div>
-                        <Button 
+                        <Button
                           onClick={() => {
                             setActiveView('MULTIPLAYER_LOBBY');
                             // Connect directly to the LAN host server
@@ -612,7 +611,7 @@ export function SlitherGameHub() {
           <div className="max-w-md w-full my-8">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-black text-white tracking-tight">Game Lobby</h2>
-              <Button 
+              <Button
                 variant="destructive"
                 onClick={handleExitGame}
                 className="bg-red-500/20 text-red-400 hover:bg-red-500/40 hover:text-red-300 border border-red-500/30 font-bold"
@@ -631,9 +630,9 @@ export function SlitherGameHub() {
                         {`${window.location.origin}/dashboard/games/slither?gameId=${roomState.id}`}
                       </span>
                     </div>
-                    <Button 
-                      size="sm" 
-                      onClick={handleCopyInvite} 
+                    <Button
+                      size="sm"
+                      onClick={handleCopyInvite}
                       className="bg-white/10 border border-white/10 hover:bg-white/15 px-3 py-1.5 h-auto rounded flex-shrink-0 text-xs font-bold"
                     >
                       {copiedLink ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
@@ -648,8 +647,8 @@ export function SlitherGameHub() {
                   </h3>
                   <div className="space-y-2 max-h-56 overflow-y-auto custom-scrollbar">
                     {roomState.players.map((p) => (
-                      <div 
-                        key={p.userId} 
+                      <div
+                        key={p.userId}
                         className="flex justify-between items-center p-3 bg-white/5 border border-white/5 rounded-xl"
                       >
                         <div className="flex items-center gap-3">
@@ -665,22 +664,21 @@ export function SlitherGameHub() {
                             )}
                           </div>
                         </div>
-                        
+
                         <div className="flex items-center gap-2">
                           {p.userId !== roomState.hostId && roomState.hostId === userId && (
-                            <Button 
+                            <Button
                               onClick={() => kickPlayer(roomState.id, userId, p.userId)}
                               className="bg-red-500/10 hover:bg-red-500/30 text-red-400 p-1.5 h-auto rounded"
                             >
                               <UserX className="w-4 h-4" />
                             </Button>
                           )}
-                          
-                          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
-                            p.isReady 
-                              ? 'text-green-400 bg-green-500/10 border border-green-500/20' 
+
+                          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${p.isReady
+                              ? 'text-green-400 bg-green-500/10 border border-green-500/20'
                               : 'text-yellow-400 bg-yellow-500/10 border border-yellow-500/20'
-                          }`}>
+                            }`}>
                             {p.isReady ? 'Ready' : 'Waiting'}
                           </span>
                         </div>
@@ -704,11 +702,10 @@ export function SlitherGameHub() {
                     ) : (
                       <Button
                         onClick={() => toggleReady(roomState.id, userId)}
-                        className={`w-full font-black py-3 rounded-xl ${
-                          roomState.players.find((p) => p.userId === userId)?.isReady
+                        className={`w-full font-black py-3 rounded-xl ${roomState.players.find((p) => p.userId === userId)?.isReady
                             ? 'bg-red-600 hover:bg-red-500'
                             : 'bg-emerald-600 hover:bg-emerald-500'
-                        }`}
+                          }`}
                       >
                         {roomState.players.find((p) => p.userId === userId)?.isReady ? 'Not Ready' : 'I am Ready!'}
                       </Button>
@@ -721,7 +718,7 @@ export function SlitherGameHub() {
                   <div className="text-center py-4 bg-white/5 border border-white/5 rounded-xl">
                     <Loader2 className="w-6 h-6 text-emerald-400 animate-spin mx-auto mb-2" />
                     <p className="text-xs text-muted-foreground font-semibold">Connecting you to the persistent slither world...</p>
-                    <Button 
+                    <Button
                       onClick={() => {
                         // Immediately launch client side wrapper joining global
                         setActiveView('MULTIPLAYER_MATCH');
