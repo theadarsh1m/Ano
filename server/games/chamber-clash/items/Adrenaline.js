@@ -1,3 +1,4 @@
+
 const BaseItem = {
   id: 'adrenaline',
   name: 'Adrenaline',
@@ -6,7 +7,7 @@ const BaseItem = {
   rarity: 'rare',
   cooldown: 0,
   stackable: true,
-  targetRules: 'other',
+  targetRules: 'opponent',
   
   canUse: (engine, playerId, targetId) => {
     // Return true if there is at least one living opponent with items in inventory
@@ -39,13 +40,14 @@ const BaseItem = {
       return { success: false, error: 'Target does not have this item' };
     }
     
-    // Perform the steal
-    target.inventory.splice(itemIndex, 1);
-    
-    const stealer = engine.players.get(playerId);
-    if (stealer.inventory.length < engine.settings.maxInventory) {
-      stealer.inventory.push(stolenItemId);
+    const ItemRegistry = require('./ItemRegistry');
+    const stolenItemDef = ItemRegistry.getItem(stolenItemId);
+    if (!stolenItemDef) {
+      return { success: false, error: 'Unknown stolen item' };
     }
+    
+    // Perform the steal (remove from victim)
+    target.inventory.splice(itemIndex, 1);
     
     // Broadcast steal event
     engine.emitPublicEvent('item_stolen', {
@@ -54,7 +56,27 @@ const BaseItem = {
       itemId: stolenItemId
     });
 
-    return { success: true, message: `Stole ${stolenItemId} from ${target.nickname}` };
+    // Check if the stolen item explicitly requires the player to select a target
+    if (stolenItemDef.targetRules === 'opponent' || stolenItemDef.targetRules === 'any') {
+      engine.pendingItemAction = {
+        sourceItem: 'adrenaline',
+        stolenItem: stolenItemId,
+        playerId: playerId,
+        stage: 'SELECT_TARGET'
+      };
+      
+      // Do not advance turn, require the player to select a target
+      return { 
+        success: true, 
+        message: `Stole ${stolenItemId}. Target required.`, 
+        effectResult: { advanceTurn: false } 
+      };
+    } else {
+      // Execute immediately using the unified pipeline
+      // Items that target 'self' or 'none' will resolve automatically
+      const targetIdForEffect = stolenItemDef.targetRules === 'self' ? playerId : null;
+      return engine.executeItemEffect(playerId, stolenItemId, targetIdForEffect, data, 'ADRENALINE');
+    }
   }
 };
 

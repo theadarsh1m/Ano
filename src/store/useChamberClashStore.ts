@@ -22,6 +22,12 @@ export interface ChamberClashState {
   blankShells: number;
   settings: any;
   winnerId: string | null;
+  pendingItemAction?: {
+    sourceItem: string;
+    stolenItem: string;
+    playerId: string;
+    stage: string;
+  };
 }
 
 export interface ActionLogEntry {
@@ -54,6 +60,7 @@ interface ChamberClashStore {
   // Game Actions
   shootTarget: (gameId: string, userId: string, targetId: string) => void;
   useItem: (gameId: string, userId: string, itemId: string, targetId?: string, stolenItemId?: string) => void;
+  resolvePendingItem: (gameId: string, userId: string, targetId: string, stolenItemId?: string) => void;
 
   // Internal/Setup
   setupListeners: (gameId: string, userId: string) => () => void;
@@ -118,6 +125,11 @@ export const useChamberClashStore = create<ChamberClashStore>((set, get) => ({
   useItem: (gameId, userId, itemId, targetId, stolenItemId) => {
     const socket = socketService.getSocket();
     if (socket) socket.emit('game_action', { gameId, userId, action: 'use_item', data: { itemId, targetId, stolenItemId } });
+  },
+
+  resolvePendingItem: (gameId, userId, targetId, stolenItemId) => {
+    const socket = socketService.getSocket();
+    if (socket) socket.emit('game_action', { gameId, userId, action: 'resolve_pending_item', data: { targetId, stolenItemId } });
   },
 
   setupListeners: (gameId, userId) => {

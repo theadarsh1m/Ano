@@ -42,7 +42,7 @@ function ChamberClashGameContent() {
     lobby, gameState, eventQueue, isAnimating, availableLobbies, error,
     actionLog, revealedShell, burnerPhoneReveal,
     createLobby, joinLobby, leaveLobby, toggleReady, startGame,
-    shootTarget, useItem,
+    shootTarget, useItem, resolvePendingItem,
     setupListeners, dequeueEvent, setAnimating, addLogEntry, clearState
   } = useChamberClashStore();
 
@@ -680,6 +680,14 @@ function ChamberClashGameContent() {
   // ═════════════════════════════════════
   if (gameState) {
     const isMyTurn = !isAnimating && visualTurnPlayerId === userId;
+    const isPendingAction = gameState?.pendingItemAction?.playerId === userId;
+    const pendingItemId = isPendingAction ? gameState?.pendingItemAction?.stolenItem : null;
+    const isPendingHandcuffs = isPendingAction && pendingItemId === 'handcuffs';
+    const isPendingAdrenaline = isPendingAction && pendingItemId === 'adrenaline';
+    
+    const activeHandcuffMode = handcuffModeActive || isPendingHandcuffs;
+    const activeStealMode = stealModeActive || isPendingAdrenaline;
+
     const currentBannerText = eventQueue.length > 0 ? eventQueue[0].type.replace(/_/g, ' ').toUpperCase() : '';
     const hasHandsaw = gameState.players.find(p => p.userId === visualTurnPlayerId)?.statusEffects?.some((e: any) => e.type === 'DOUBLE_DAMAGE');
 
@@ -838,7 +846,11 @@ function ChamberClashGameContent() {
                   {gameState.players.find(p => p.userId === stealingFromPlayerId)?.inventory.map((itemId, idx) => (
                     <button key={idx}
                       onClick={() => {
-                        useItem(gameState.gameId, userId, 'adrenaline', stealingFromPlayerId, itemId);
+                        if (isPendingAdrenaline) {
+                          resolvePendingItem(gameState.gameId, userId, stealingFromPlayerId, itemId);
+                        } else {
+                          useItem(gameState.gameId, userId, 'adrenaline', stealingFromPlayerId, itemId);
+                        }
                         setStealingFromPlayerId(null);
                         setStealModeActive(false);
                       }}
@@ -996,19 +1008,24 @@ function ChamberClashGameContent() {
                 const isSkipped = skippedPlayerId === p.userId;
                 const itemAnim = activeItemAnim?.targetId === p.userId ? activeItemAnim.itemId : null;
                 const isMe = p.userId === userId;
-                const canSteal = stealModeActive && p.isAlive && !isMe && p.inventory?.length > 0;
-                const canHandcuff = handcuffModeActive && p.isAlive && !isMe && !p.statusEffects?.some((e: any) => e.type === 'SKIP_TURN');
-                const canSelect = !stealModeActive && !handcuffModeActive && isMyTurn && p.isAlive && !isMe;
+
+                const canSteal = activeStealMode && p.isAlive && !isMe && p.inventory?.length > 0;
+                const canHandcuff = activeHandcuffMode && p.isAlive && !isMe && !p.statusEffects?.some((e: any) => e.type === 'SKIP_TURN');
+                const canSelect = !activeStealMode && !activeHandcuffMode && isMyTurn && p.isAlive && !isMe;
 
                 return (
                   <motion.div key={p.userId}
                     onClick={() => {
-                      if (stealModeActive) {
+                      if (activeStealMode) {
                         if (canSteal) setStealingFromPlayerId(p.userId);
-                      } else if (handcuffModeActive) {
+                      } else if (activeHandcuffMode) {
                         if (canHandcuff) {
-                          useItem(gameState.gameId, userId, 'handcuffs', p.userId);
-                          setHandcuffModeActive(false);
+                          if (isPendingHandcuffs) {
+                            resolvePendingItem(gameState.gameId, userId, p.userId);
+                          } else {
+                            useItem(gameState.gameId, userId, 'handcuffs', p.userId);
+                            setHandcuffModeActive(false);
+                          }
                         }
                       } else {
                         if (canSelect) setSelectedTargetId(p.userId === selectedTargetId ? null : p.userId);
@@ -1024,11 +1041,11 @@ function ChamberClashGameContent() {
                     transition={{ duration: 0.4 }}
                     className={`w-[110px] sm:w-[130px] p-2 sm:p-2.5 rounded-2xl border-2 flex flex-col items-center gap-1 sm:gap-1.5 z-10 transition-all duration-300 ${
                       !p.isAlive ? 'opacity-30 border-zinc-900/50 bg-black/90 grayscale cursor-default' :
-                      stealModeActive ? (
+                      activeStealMode ? (
                         canSteal 
                           ? 'border-amber-500/40 bg-amber-950/10 cursor-pointer shadow-[0_0_15px_rgba(245,158,11,0.2)] hover:border-amber-500/80 hover:scale-[1.03]'
                           : 'opacity-40 border-white/[0.02] bg-[#111318]/90 cursor-default'
-                      ) : handcuffModeActive ? (
+                      ) : activeHandcuffMode ? (
                         canHandcuff
                           ? 'border-zinc-300/50 bg-zinc-900/40 cursor-pointer shadow-[0_0_15px_rgba(255,255,255,0.2)] hover:border-white hover:scale-[1.03]'
                           : 'opacity-40 border-white/[0.02] bg-[#111318]/90 cursor-default'
@@ -1126,7 +1143,7 @@ function ChamberClashGameContent() {
         <div className="relative z-30 bg-black/70 border-t border-white/[0.04] backdrop-blur-md px-4 py-3">
           <div className="max-w-4xl mx-auto">
             {isMyTurn ? (
-              stealModeActive ? (
+              activeStealMode ? (
                 <div className="flex items-center justify-between w-full bg-amber-950/20 border border-amber-500/30 rounded-xl p-3 shadow-[0_0_20px_rgba(245,158,11,0.05)]">
                   <div className="flex items-center gap-3">
                     <span className="text-xl animate-pulse">💉</span>
@@ -1139,25 +1156,27 @@ function ChamberClashGameContent() {
                     Cancel
                   </button>
                 </div>
-              ) : handcuffModeActive ? (
+              ) : activeHandcuffMode ? (
                 <div className="flex items-center justify-between w-full bg-zinc-900/90 border border-zinc-500/30 rounded-xl p-3 shadow-[0_0_20px_rgba(255,255,255,0.05)]">
                   <div className="flex items-center gap-3">
                     <span className="text-xl animate-pulse">⛓️</span>
                     <div className="text-left">
-                      <div className="text-xs font-bold text-zinc-200 uppercase tracking-widest leading-normal">Handcuffs Active</div>
+                      <div className="text-xs font-bold text-zinc-200 uppercase tracking-widest leading-normal">{isPendingHandcuffs ? 'Stolen Handcuffs Active' : 'Handcuffs Active'}</div>
                       <p className="text-[10px] text-zinc-400">Select any living opponent to skip their next turn.</p>
                     </div>
                   </div>
-                  <button onClick={() => setHandcuffModeActive(false)} className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors">
-                    Cancel
-                  </button>
+                  {!isPendingHandcuffs && (
+                    <button onClick={() => setHandcuffModeActive(false)} className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors">
+                      Cancel
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 w-full">
                   {/* Shoot buttons */}
                   <div className="flex gap-2 w-full sm:w-auto">
-                    <button disabled={!selectedTargetId}
-                      onClick={() => selectedTargetId && shootTarget(gameState.gameId, userId, selectedTargetId)}
+                    <button disabled={!selectedTargetId || isPendingAction}
+                      onClick={() => selectedTargetId && !isPendingAction && shootTarget(gameState.gameId, userId, selectedTargetId)}
                       className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all ${
                         selectedTargetId
                           ? 'bg-red-600 hover:bg-red-500 text-white shadow-[0_0_20px_rgba(239,68,68,0.4)] hover:scale-[1.02]'
@@ -1165,8 +1184,12 @@ function ChamberClashGameContent() {
                       }`}>
                       {selectedTargetId ? `Shoot ${getPlayerName(gameState.players, selectedTargetId)}` : 'Select Target'}
                     </button>
-                    <button onClick={() => { shootTarget(gameState.gameId, userId, userId); }}
-                      className="flex-1 sm:flex-none px-5 py-2.5 bg-zinc-900 border border-white/[0.08] hover:border-white/15 text-zinc-300 hover:bg-zinc-800 rounded-xl font-bold text-xs uppercase tracking-wider transition-all">
+                    <button disabled={isPendingAction} onClick={() => { if (!isPendingAction) shootTarget(gameState.gameId, userId, userId); }}
+                      className={`flex-1 sm:flex-none px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all ${
+                        isPendingAction
+                          ? 'bg-zinc-900 border border-white/[0.05] text-zinc-600 cursor-not-allowed'
+                          : 'bg-zinc-900 border border-white/[0.08] hover:border-white/15 text-zinc-300 hover:bg-zinc-800'
+                      }`}>
                       Shoot Self
                     </button>
                   </div>
@@ -1179,8 +1202,9 @@ function ChamberClashGameContent() {
                     {me?.inventory.map((itemId, i) => {
                       const meta = ITEM_META[itemId] || { name: itemId, icon: "📦", desc: "", color: "text-zinc-400", sound: () => {} };
                       return (
-                        <button key={i}
+                        <button key={i} disabled={isPendingAction}
                           onClick={() => {
+                            if (isPendingAction) return;
                             if (itemId === 'adrenaline') {
                               setStealModeActive(true);
                               setHandcuffModeActive(false);
@@ -1191,7 +1215,11 @@ function ChamberClashGameContent() {
                               useItem(gameState.gameId, userId, itemId, userId);
                             }
                           }}
-                          className="min-w-[70px] h-[70px] rounded-xl border flex flex-col items-center justify-center gap-0.5 transition-all bg-zinc-950/80 border-white/[0.06] hover:border-red-500/30 hover:bg-[#141518] cursor-pointer hover:shadow-[0_0_12px_rgba(239,68,68,0.1)]"
+                          className={`min-w-[70px] h-[70px] rounded-xl border flex flex-col items-center justify-center gap-0.5 transition-all ${
+                            isPendingAction
+                              ? 'bg-zinc-950/80 border-white/[0.02] cursor-not-allowed opacity-50 grayscale'
+                              : 'bg-zinc-950/80 border-white/[0.06] hover:border-red-500/30 hover:bg-[#141518] cursor-pointer hover:shadow-[0_0_12px_rgba(239,68,68,0.1)]'
+                          }`}
                           title={meta.desc}>
                           <span className="text-lg">{meta.icon}</span>
                           <span className={`text-[8px] font-bold ${meta.color}`}>{meta.name}</span>

@@ -28,6 +28,7 @@ class ChamberClashEngine extends BaseGameEngine {
     this.historyLogs = [];
     this.winnerId = null;
     this.actionQueue = [];
+    this.pendingItemAction = null;
   }
 
   // --- EVENTS SYSTEM ---
@@ -228,12 +229,31 @@ class ChamberClashEngine extends BaseGameEngine {
       return { success: false, error: 'Invalid state for actions' };
     }
 
+    if (this.pendingItemAction && this.pendingItemAction.playerId === playerId) {
+      if (action !== 'resolve_pending_item') {
+        return { success: false, error: 'Must resolve pending item action first' };
+      }
+    } else if (action === 'resolve_pending_item') {
+      return { success: false, error: 'No pending item action' };
+    }
+
     let result = { success: false, error: 'Unknown action' };
     
-    if (action === 'shoot_target') {
-      result = this.actionShoot(playerId, data.targetId);
-    } else if (action === 'use_item') {
-      result = this.actionUseItem(playerId, data.itemId, data.targetId, data);
+    try {
+      if (action === 'shoot_target') {
+        result = this.actionShoot(playerId, data.targetId);
+      } else if (action === 'use_item') {
+        result = this.actionUseItem(playerId, data.itemId, data.targetId, data);
+      } else if (action === 'resolve_pending_item') {
+        result = this.actionResolvePendingItem(playerId, data.targetId, data);
+      }
+    } catch (err) {
+      console.error(`[ChamberClashEngine] Error executing action ${action} for player ${playerId}:`, err);
+      // Attempt safe recovery
+      if (this.pendingItemAction && this.pendingItemAction.playerId === playerId) {
+        this.pendingItemAction = null;
+      }
+      return { success: false, error: 'Internal game error. Please try again.' };
     }
     
     if (result.success) {
@@ -243,7 +263,7 @@ class ChamberClashEngine extends BaseGameEngine {
       result.forceStateSync = true;
       
       // Advance turn if the item effect explicitly requests it
-      if (action === 'use_item' && result.effectResult && result.effectResult.advanceTurn) {
+      if ((action === 'use_item' || action === 'resolve_pending_item') && result.effectResult && result.effectResult.advanceTurn) {
         this.advanceTurn();
         const finalEvents = this.getPendingEvents();
         if (finalEvents.public.length > 0) {
@@ -317,6 +337,31 @@ class ChamberClashEngine extends BaseGameEngine {
     return { success: true };
   }
 
+  executeItemEffect(playerId, itemId, targetId, data, source) {
+    const itemDef = ItemRegistry.getItem(itemId);
+    if (!itemDef) {
+      return { success: false, error: 'Unknown item' };
+    }
+
+    if (!itemDef.canUse(this, playerId, targetId)) {
+      return { success: false, error: 'Cannot use item right now or invalid target' };
+    }
+
+    this.emitPublicEvent('item_used', {
+      playerId,
+      itemId,
+      targetId,
+      stolenItemId: source === 'ADRENALINE' ? null : data?.stolenItemId,
+      source
+    });
+
+    this.startTurnTimer(playerId);
+
+    const effectResult = itemDef.serverEffect(this, playerId, targetId, data);
+    
+    return { success: true, effectResult };
+  }
+
   actionUseItem(playerId, itemId, targetId, data) {
     const player = this.players.get(playerId);
     const itemIndex = player.inventory.findIndex(id => id === itemId);
@@ -325,31 +370,33 @@ class ChamberClashEngine extends BaseGameEngine {
       return { success: false, error: 'Item not in inventory' };
     }
 
+    // Validate item exists before removing from inventory
     const itemDef = ItemRegistry.getItem(itemId);
     if (!itemDef) {
       return { success: false, error: 'Unknown item' };
     }
 
-    if (!itemDef.canUse(this, playerId, targetId)) {
-      return { success: false, error: 'Cannot use item right now' };
-    }
-
     player.inventory.splice(itemIndex, 1);
     
-    this.emitPublicEvent('item_used', {
-      playerId,
-      itemId,
-      targetId,
-      stolenItemId: data.stolenItemId // Include stolen item ID if present
-    });
+    return this.executeItemEffect(playerId, itemId, targetId, data, 'NORMAL');
+  }
 
-    // Reset turn timer to give player time to act after item animation
-    this.startTurnTimer(playerId);
+  actionResolvePendingItem(playerId, targetId, data) {
+    if (!this.pendingItemAction || this.pendingItemAction.playerId !== playerId) {
+      return { success: false, error: 'No pending action' };
+    }
 
-    // APPLY item effect
-    const effectResult = itemDef.serverEffect(this, playerId, targetId, data);
+    const stolenItemId = this.pendingItemAction.stolenItem;
+    const result = this.executeItemEffect(playerId, stolenItemId, targetId, data, 'ADRENALINE');
     
-    return { success: true, effectResult };
+    if (result.success) {
+      this.pendingItemAction = null;
+    } else if (result.error === 'Unknown item') {
+      // Clear lock if the item doesn't exist to prevent deadlocks
+      this.pendingItemAction = null;
+    }
+
+    return result;
   }
 
   // --- END GAME ---
@@ -433,7 +480,8 @@ class ChamberClashEngine extends BaseGameEngine {
       liveShells: counts.remainingLive,
       blankShells: counts.remainingBlank,
       currentChamberIndex: this.currentChamberIndex,
-      winnerId: this.winnerId
+      winnerId: this.winnerId,
+      pendingItemAction: this.pendingItemAction
     };
   }
 }
