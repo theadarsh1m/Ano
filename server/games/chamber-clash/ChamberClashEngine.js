@@ -13,6 +13,7 @@ class ChamberClashEngine extends BaseGameEngine {
       turnTimer: 30,
       chamberSize: 6,
       maxInventory: 5,
+      maxPlayers: 6,
       isPrivate: false
     };
 

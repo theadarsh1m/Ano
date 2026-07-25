@@ -56,6 +56,7 @@ interface ChamberClashStore {
   leaveLobby: (gameId: string, userId: string) => void;
   toggleReady: (gameId: string, userId: string, isReady: boolean) => void;
   startGame: (gameId: string, hostId: string) => void;
+  startPracticeGame: (userId: string, nickname: string) => void;
   
   // Game Actions
   shootTarget: (gameId: string, userId: string, targetId: string) => void;
@@ -115,6 +116,26 @@ export const useChamberClashStore = create<ChamberClashStore>((set, get) => ({
   startGame: (gameId, hostId) => {
     const socket = socketService.getSocket();
     if (socket) socket.emit('game_start', { gameId, hostId });
+  },
+
+  startPracticeGame: (userId, nickname) => {
+    const mockState: ChamberClashState = {
+      gameId: 'practice-game',
+      gameType: 'CHAMBER_CLASH',
+      status: 'IN_ROUND',
+      roundNumber: 1,
+      currentTurnPlayerId: userId || 'local-p1',
+      winnerId: null,
+      players: [
+        { userId: userId || 'local-p1', nickname: nickname || 'You', hp: 5, inventory: ["magnifier", "medkit", "inverter", "beer"], statusEffects: [], isAlive: true },
+        { userId: 'opponent-dealer', nickname: 'Dealer', hp: 5, inventory: ["magnifier", "medkit", "beer", "handsaw"], statusEffects: [], isAlive: true }
+      ],
+      liveShells: 3,
+      blankShells: 3,
+      pendingItemAction: undefined,
+      settings: { startingHp: 5, turnTimer: 30, chamberSize: 6, maxInventory: 5, maxPlayers: 6, isPrivate: false }
+    };
+    set({ gameState: mockState, pendingGameState: mockState, lobby: null });
   },
 
   shootTarget: (gameId, userId, targetId) => {

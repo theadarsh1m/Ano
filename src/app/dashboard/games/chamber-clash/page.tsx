@@ -9,8 +9,11 @@ import { useRoomConnectionStore } from "@/store/useRoomConnectionStore";
 import { useChamberClashStore, type ActionLogEntry } from "@/store/useChamberClashStore";
 import { GlassCard } from "@/components/layout/GlassCard";
 import { TurnIndicator } from "@/components/games/TurnIndicator";
+import dynamic from "next/dynamic";
 import { useExitWarning } from "@/hooks/useExitWarning";
 import { sounds } from "@/lib/sounds";
+
+const ChamberClash3D = dynamic(() => import("@/components/games/chamber-clash/ChamberClash3D").then((m) => m.ChamberClash3D), { ssr: false });
 
 // ─── Item Metadata ───
 const ITEM_META: Record<string, { name: string; icon: string; desc: string; color: string; sound: () => void }> = {
@@ -41,7 +44,7 @@ function ChamberClashGameContent() {
   const {
     lobby, gameState, eventQueue, isAnimating, availableLobbies, error,
     actionLog, revealedShell, burnerPhoneReveal,
-    createLobby, joinLobby, leaveLobby, toggleReady, startGame,
+    createLobby, joinLobby, leaveLobby, toggleReady, startGame, startPracticeGame,
     shootTarget, useItem, resolvePendingItem,
     setupListeners, dequeueEvent, setAnimating, addLogEntry, clearState
   } = useChamberClashStore();
@@ -647,7 +650,7 @@ function ChamberClashGameContent() {
           </div>
 
           <GlassCard className="p-4 sm:p-6 space-y-6">
-            <h2 className="text-lg font-bold">Players ({lobby.players.length}/8)</h2>
+            <h2 className="text-lg font-bold">Players ({lobby.players.length}/6)</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
               {lobby.players.map((p: any) => (
                 <div key={p.userId} className={`p-3 sm:p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${p.userId === userId ? 'border-red-500/50 bg-red-500/10' : 'border-white/[0.06] bg-white/[0.03]'}`}>
@@ -664,9 +667,14 @@ function ChamberClashGameContent() {
                 </button>
               )}
               {isHost && (
-                <button onClick={() => startGame(lobby.id, userId)} disabled={!canStart} className={`w-full sm:w-auto px-8 py-2.5 rounded-xl font-bold transition-all cursor-pointer ${canStart ? 'bg-red-600 hover:bg-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)]' : 'bg-zinc-900 text-zinc-600 cursor-not-allowed'}`}>
-                  Start Match
-                </button>
+                <div className="flex gap-2">
+                  <button onClick={() => startPracticeGame(userId || 'p1', nickname || 'You')} className="px-5 py-2.5 bg-amber-600/80 hover:bg-amber-500 rounded-xl font-bold transition-all text-white text-xs cursor-pointer">
+                    Practice 3D View (Dev)
+                  </button>
+                  <button onClick={() => startGame(lobby.id, userId)} disabled={!canStart} className={`px-8 py-2.5 rounded-xl font-bold transition-all cursor-pointer text-xs ${canStart ? 'bg-red-600 hover:bg-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)]' : 'bg-zinc-900 text-zinc-600 cursor-not-allowed'}`}>
+                    Start Match
+                  </button>
+                </div>
               )}
             </div>
           </GlassCard>
@@ -913,230 +921,15 @@ function ChamberClashGameContent() {
         </AnimatePresence>
 
         {/* ── MAIN GAME AREA ── */}
-        <div className="flex-1 relative z-20 flex items-center justify-center overflow-hidden w-full max-w-[1200px] mx-auto">
-
-          {/* ── Table Area ── */}
-          <div className="flex-1 relative flex items-center justify-center cc-table-wrapper w-full h-full">
-
-            {/* ── Table ── */}
-            <div className="w-[95%] sm:w-[82%] max-w-[800px] aspect-[1.1] sm:aspect-[1.7] rounded-[50%] relative flex items-center justify-center"
-              style={{
-                background: 'radial-gradient(ellipse at center, #1a1c22 0%, #111318 50%, #0a0b0e 100%)',
-                border: '5px solid #22252b',
-                boxShadow: '0 30px 60px rgba(0,0,0,0.8), inset 0 3px 15px rgba(255,255,255,0.03)'
-              }}>
-
-              {/* ── Flying Item Steal Animation ── */}
-              <AnimatePresence>
-                {stealingAnimation && (
-                  <motion.div
-                    initial={{ left: stealingAnimation.from.left, top: stealingAnimation.from.top, scale: 0.5, opacity: 0 }}
-                    animate={{ 
-                      left: [stealingAnimation.from.left, "50%", stealingAnimation.to.left], 
-                      top: [stealingAnimation.from.top, "50%", stealingAnimation.to.top], 
-                      scale: [0.5, 1.8, 1],
-                      opacity: [0, 1, 1, 0]
-                    }}
-                    transition={{ duration: 1.5, ease: "easeInOut" }}
-                    className="absolute z-50 text-4xl pointer-events-none -translate-x-1/2 -translate-y-1/2 select-none"
-                  >
-                    {stealingAnimation.icon}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* ── Table Spotlight ── */}
-              <div className="absolute inset-0 rounded-[50%] pointer-events-none" style={{
-                background: 'radial-gradient(circle at 50% 40%, rgba(239,68,68,0.05) 0%, transparent 50%)'
-              }} />
-
-              {/* ── Smoke Particles ── */}
-              {smokeParticles.map(p => (
-                <div key={p.id} className="absolute pointer-events-none z-30" style={{
-                  left: `calc(50% + ${p.x}px)`, top: `calc(50% + ${p.y}px)`,
-                  width: 25, height: 25, borderRadius: '50%', background: 'rgba(255,255,255,0.15)',
-                  animation: 'cc-smoke 1.8s forwards ease-out', filter: 'blur(5px)'
-                }} />
-              ))}
-
-              {/* ── SVG WEAPON ── */}
-              <motion.div className="absolute z-20 pointer-events-none" style={{ width: 80, height: 80, left: 'calc(50% - 40px)', top: 'calc(50% - 40px)' }}
-                animate={{
-                  rotate: gunAngle,
-                  scale: gunState === 'firing' ? 0.82 : gunState === 'pump' ? 0.94 : 1,
-                  y: gunState === 'firing' ? -12 : 0
-                }}
-                transition={{ type: 'spring', stiffness: gunState === 'firing' ? 500 : 100, damping: gunState === 'firing' ? 15 : 22 }}>
-
-                {muzzleFlash && (
-                  <div className="absolute w-28 h-28 rounded-full -top-14 left-1/2 -translate-x-1/2 z-30 pointer-events-none"
-                    style={{ background: 'radial-gradient(circle, rgba(249,115,22,0.9) 0%, rgba(239,68,68,0.4) 40%, transparent 70%)' }} />
-                )}
-
-                <svg viewBox="0 0 100 100" className="w-full h-full" style={{ filter: 'drop-shadow(0 8px 12px rgba(0,0,0,0.6))' }}>
-                  {/* Stock */}
-                  <path d="M45,68 L55,68 L53,92 L47,92 Z" fill="#4a3728" stroke="#3a2a1e" strokeWidth="0.5" />
-                  {/* Grip */}
-                  <rect x="47" y="58" width="6" height="12" rx="1.5" fill="#1e2024" />
-                  {/* Trigger guard */}
-                  <path d="M47,62 Q47,66 50,66 Q53,66 53,62" fill="none" stroke="#333" strokeWidth="1" />
-                  {/* Trigger */}
-                  <line x1="50" y1="62" x2="50" y2="65" stroke="#c9a84c" strokeWidth="1.2" strokeLinecap="round" />
-                  {/* Receiver */}
-                  <rect x="46" y="40" width="8" height="20" rx="1" fill="#1a1c20" stroke="#2a2c30" strokeWidth="0.5" />
-                  {/* Pump slide */}
-                  <rect x="45" y={gunState === 'pump' ? 52 : 46} width="10" height="6" rx="1" fill={gunState === 'pump' ? '#3a3d42' : '#25282d'} stroke="#333" strokeWidth="0.5">
-                    {gunState === 'pump' && <animate attributeName="y" values="52;46" dur="0.2s" fill="forwards" />}
-                  </rect>
-                  {/* Barrel */}
-                  <rect x="48" y={hasHandsaw ? 24 : 8} width="4" height={hasHandsaw ? 18 : 34} rx="0.5" fill="#111215" stroke="#1a1c20" strokeWidth="0.5" />
-                  {/* Muzzle */}
-                  <circle cx="50" cy={hasHandsaw ? 24 : 8} r="2.5" fill="#0a0b0d" stroke="#1a1c20" strokeWidth="0.5" />
-                  {/* Handsaw indicator */}
-                  {hasHandsaw && <circle cx="50" cy="28" r="1.5" fill="#ef4444" opacity="0.9"><animate attributeName="opacity" values="0.9;0.3;0.9" dur="1s" repeatCount="indefinite" /></circle>}
-                </svg>
-              </motion.div>
-
-              {/* ── PLAYER SEATS ── */}
-              {orderedPlayers.map((p, idx) => {
-                const pos = getPlayerPos(idx, orderedPlayers.length);
-                const isTurn = p.userId === visualTurnPlayerId;
-                const isTarget = selectedTargetId === p.userId;
-                const isDamaged = damagedPlayerId === p.userId;
-                const isHealed = healedPlayerId === p.userId;
-                const isElim = eliminatedPlayerId === p.userId;
-                const isSkipped = skippedPlayerId === p.userId;
-                const itemAnim = activeItemAnim?.targetId === p.userId ? activeItemAnim.itemId : null;
-                const isMe = p.userId === userId;
-
-                const canSteal = activeStealMode && p.isAlive && !isMe && p.inventory?.length > 0;
-                const canHandcuff = activeHandcuffMode && p.isAlive && !isMe && !p.statusEffects?.some((e: any) => e.type === 'SKIP_TURN');
-                const canSelect = !activeStealMode && !activeHandcuffMode && isMyTurn && p.isAlive && !isMe;
-
-                return (
-                  <motion.div key={p.userId}
-                    onClick={() => {
-                      if (activeStealMode) {
-                        if (canSteal) setStealingFromPlayerId(p.userId);
-                      } else if (activeHandcuffMode) {
-                        if (canHandcuff) {
-                          if (isPendingHandcuffs) {
-                            resolvePendingItem(gameState.gameId, userId, p.userId);
-                          } else {
-                            useItem(gameState.gameId, userId, 'handcuffs', p.userId);
-                            setHandcuffModeActive(false);
-                          }
-                        }
-                      } else {
-                        if (canSelect) setSelectedTargetId(p.userId === selectedTargetId ? null : p.userId);
-                      }
-                    }}
-                    style={{ 
-                      position: 'absolute', 
-                      left: pos.left, top: pos.top, 
-                      transform: `translate(-50%, -50%) perspective(600px) rotateX(${pos.rotateX}deg) rotateY(${pos.rotateY}deg)`,
-                      transformStyle: 'preserve-3d'
-                    }}
-                    animate={{ scale: isDamaged ? [1, 0.92, 1.05, 1] : isHealed ? [1, 1.06, 1] : isElim ? [1, 0.9] : 1 }}
-                    transition={{ duration: 0.4 }}
-                    className={`w-[110px] sm:w-[130px] p-2 sm:p-2.5 rounded-2xl border-2 flex flex-col items-center gap-1 sm:gap-1.5 z-10 transition-all duration-300 ${
-                      !p.isAlive ? 'opacity-30 border-zinc-900/50 bg-black/90 grayscale cursor-default' :
-                      activeStealMode ? (
-                        canSteal 
-                          ? 'border-amber-500/40 bg-amber-950/10 cursor-pointer shadow-[0_0_15px_rgba(245,158,11,0.2)] hover:border-amber-500/80 hover:scale-[1.03]'
-                          : 'opacity-40 border-white/[0.02] bg-[#111318]/90 cursor-default'
-                      ) : activeHandcuffMode ? (
-                        canHandcuff
-                          ? 'border-zinc-300/50 bg-zinc-900/40 cursor-pointer shadow-[0_0_15px_rgba(255,255,255,0.2)] hover:border-white hover:scale-[1.03]'
-                          : 'opacity-40 border-white/[0.02] bg-[#111318]/90 cursor-default'
-                      ) : (
-                        isTurn ? 'border-red-500/60 bg-red-950/15 shadow-[0_0_25px_rgba(239,68,68,0.2)] cursor-default' :
-                        isTarget ? 'border-yellow-500/50 bg-yellow-950/10 shadow-[0_0_20px_rgba(234,179,8,0.15)] cursor-pointer' :
-                        canSelect ? 'border-white/[0.06] bg-[#111318]/90 hover:border-white/15 hover:bg-[#151720]/90 cursor-pointer' :
-                        'border-white/[0.04] bg-[#111318]/90 cursor-default'
-                      )
-                    }`}>
-
-
-                    {/* Handcuff overlay */}
-                    {p.isAlive && (p.statusEffects?.some((e: any) => e.type === 'SKIP_TURN') || isSkipped) && (
-                      <div className="absolute inset-0 rounded-2xl bg-zinc-950/40 flex items-center justify-center pointer-events-none">
-                        <span className="text-xl opacity-70">⛓️</span>
-                      </div>
-                    )}
-
-                    {/* Damage flash */}
-                    {isDamaged && <div className="absolute inset-0 rounded-2xl bg-red-500/25 pointer-events-none animate-pulse" />}
-                    {isHealed && <div className="absolute inset-0 rounded-2xl bg-green-500/20 pointer-events-none animate-pulse" />}
-
-                    {/* Elimination overlay */}
-                    {!p.isAlive && (
-                      <div className="absolute inset-0 rounded-2xl bg-black/60 flex items-center justify-center pointer-events-none z-20">
-                        <span className="text-[10px] font-black text-red-600/80 uppercase tracking-widest">Eliminated</span>
-                      </div>
-                    )}
-
-                    {/* Item animation popup */}
-                    <AnimatePresence>
-                      {itemAnim && (
-                        <motion.div initial={{ opacity: 0, scale: 0.5, y: 10 }} animate={{ opacity: 1, scale: 1.4, y: -20 }} exit={{ opacity: 0 }}
-                          className="absolute z-30 text-2xl pointer-events-none">
-                          {ITEM_META[itemAnim]?.icon || "📦"}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-
-                    {/* Avatar */}
-                    <div className={`w-7 h-7 sm:w-9 sm:h-9 rounded-full flex items-center justify-center font-black text-[9px] sm:text-[11px] relative overflow-hidden ${
-                      isTurn ? 'bg-red-900/60 ring-2 ring-red-500/50' : 'bg-zinc-800/80'
-                    }`}>
-                      {p.nickname.substring(0, 2).toUpperCase()}
-                    </div>
-
-                    {/* Name */}
-                    <span className="text-[9px] sm:text-[10px] font-bold truncate w-full text-center text-zinc-200 leading-tight">
-                      {p.nickname}{isMe ? <span className="text-zinc-600 text-[8px] ml-0.5">(You)</span> : ''}
-                    </span>
-
-                    {/* HP Bar */}
-                    <div className="flex gap-[2px]">
-                      {Array.from({ length: gameState.settings?.startingHp || 5 }).map((_, i) => (
-                        <motion.div key={i} layout
-                          className={`w-2 sm:w-3 h-[4px] sm:h-[5px] rounded-[1px] sm:rounded-[2px] transition-colors duration-500 ${
-                            i < p.hp
-                              ? (p.hp <= 2 ? 'bg-red-500 shadow-[0_0_4px_rgba(239,68,68,0.5)]' : 'bg-gradient-to-r from-red-600 to-rose-500')
-                              : 'bg-zinc-800'
-                          }`}
-                        />
-                      ))}
-                    </div>
-
-                    {/* Status icons */}
-                    {p.statusEffects?.length > 0 && (
-                      <div className="flex gap-1">
-                        {p.statusEffects.map((e: any, i: number) => (
-                          <span key={i} className="text-[8px] sm:text-[10px]" title={e.type}>
-                            {e.type === 'SKIP_TURN' ? '⛓️' : e.type === 'DOUBLE_DAMAGE' ? '🪚' : '⚡'}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Item inventory emojis */}
-                    {p.isAlive && p.inventory?.length > 0 && (
-                      <div className="flex flex-wrap justify-center gap-0.5 mt-0.5 max-w-[96px]">
-                        {p.inventory.map((itemId: string, idx: number) => (
-                          <span key={idx} className="text-[10px] sm:text-xs" title={ITEM_META[itemId]?.name || itemId}>
-                            {ITEM_META[itemId]?.icon || "📦"}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </motion.div>
-                );
-              })}
-            </div>
-          </div>
+        <div className="flex-1 relative z-20 flex items-center justify-center overflow-hidden w-full h-full">
+          <ChamberClash3D
+            gameState={gameState}
+            userId={userId}
+            eventQueue={eventQueue}
+            isAnimating={isAnimating}
+            onUseItem={(itemId) => useItem(gameState.gameId, userId || '', itemId)}
+            onShootTarget={(targetId) => shootTarget(gameState.gameId, userId || '', targetId)}
+          />
         </div>
 
         {/* ── Bottom Action Bar ── */}

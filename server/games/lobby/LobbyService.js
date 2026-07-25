@@ -1,6 +1,7 @@
 const GamePersistenceService = require('../services/GamePersistenceService');
 
 const MAX_PLAYERS = {
+  'CHAMBER_CLASH': 6,
   'BLUFF': 6,
   'MEMORY_MATCH': 8,
   'DOTS_AND_BOXES': 8,
