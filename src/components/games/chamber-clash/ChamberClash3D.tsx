@@ -1,10 +1,15 @@
 "use client";
 
-import React, { Suspense, useEffect } from "react";
-import { Canvas } from "@react-three/fiber";
+import React, { Suspense, useEffect, useMemo, useRef } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useGLTF, Html, useProgress } from "@react-three/drei";
 import * as THREE from "three";
+import { dampV3 } from "./animationConfigs";
 import type { ChamberClashState } from "@/store/useChamberClashStore";
+
+import { PlayerTargetSelector } from "./PlayerTargetSelector";
+import { EjectedShell } from "./EjectedShell";
+import { PlayerHealthIndicator } from "./PlayerHealthIndicator";
 
 export function preloadChamberClashAssets() {
   useGLTF.preload("/chamber-clash/3d/environment.glb");
@@ -30,6 +35,11 @@ interface ChamberClash3DProps {
   isBarrelShortened?: boolean;
   showDebugArrows?: boolean;
   privatePayload?: any;
+  burnerPhoneResult?: any;
+  isStealSelectionMode?: boolean;
+  onShotgunClick?: () => void;
+  onSelectStolenItem?: (stolenItemId: string) => void;
+  onCameraReturned?: () => void;
   onUseItem?: (itemId: string, targetId?: string) => void;
   onShootTarget?: (targetId: string) => void;
   onSelectTarget?: (targetId: string) => void;
@@ -119,6 +129,59 @@ function LoaderOverlay() {
   );
 }
 
+function TargetSelectionCamera({
+  targetingAction,
+  isStealSelectionMode,
+  onCameraReturned
+}: {
+  targetingAction: 'shoot' | 'handcuffs' | 'adrenaline' | null;
+  isStealSelectionMode: boolean;
+  onCameraReturned?: () => void;
+}) {
+  const { camera } = useThree();
+
+  const normalPos = useMemo(() => new THREE.Vector3(0, 1.3, 1.2), []);
+  const normalLookAt = useMemo(() => new THREE.Vector3(0, 0.77, -0.4), []);
+
+  // Selection Camera pose: higher angle looking down at table showing both YOU and OPPONENT target markers
+  const selectionPos = useMemo(() => new THREE.Vector3(0, 1.70, 0.40), []);
+  const selectionLookAt = useMemo(() => new THREE.Vector3(0, 0.77, -0.20), []);
+
+  const targetPos = useRef(new THREE.Vector3().copy(normalPos));
+  const targetLookAt = useRef(new THREE.Vector3().copy(normalLookAt));
+  const currentLookAt = useRef(new THREE.Vector3().copy(normalLookAt));
+
+  const wasActive = useRef(false);
+  const isActive = Boolean(targetingAction || isStealSelectionMode);
+
+  useFrame((_, delta) => {
+    const dt = Math.min(delta, 0.05);
+
+    if (isActive) {
+      targetPos.current.copy(selectionPos);
+      targetLookAt.current.copy(selectionLookAt);
+      wasActive.current = true;
+    } else {
+      targetPos.current.copy(normalPos);
+      targetLookAt.current.copy(normalLookAt);
+    }
+
+    dampV3(camera.position, targetPos.current, 6, dt);
+    dampV3(currentLookAt.current, targetLookAt.current, 6, dt);
+    camera.lookAt(currentLookAt.current);
+
+    if (wasActive.current && !isActive) {
+      const distToNormal = camera.position.distanceTo(normalPos);
+      if (distToNormal < 0.04) {
+        wasActive.current = false;
+        onCameraReturned?.();
+      }
+    }
+  });
+
+  return null;
+}
+
 function StaticScene({ 
   gameState, 
   userId, 
@@ -131,6 +194,11 @@ function StaticScene({
   isBarrelShortened,
   showDebugArrows,
   privatePayload,
+  burnerPhoneResult,
+  isStealSelectionMode,
+  onShotgunClick,
+  onSelectStolenItem,
+  onCameraReturned,
   onUseItem,
   onSelectTarget,
   onAnimationComplete,
@@ -150,6 +218,11 @@ function StaticScene({
   isBarrelShortened?: boolean,
   showDebugArrows?: boolean,
   privatePayload?: any,
+  burnerPhoneResult?: any,
+  isStealSelectionMode?: boolean,
+  onShotgunClick?: () => void,
+  onSelectStolenItem?: (stolenItemId: string) => void,
+  onCameraReturned?: () => void,
   onUseItem?: (itemId: string) => void,
   onSelectTarget?: (targetId: string) => void,
   onAnimationComplete?: () => void,
@@ -188,7 +261,8 @@ function StaticScene({
 
     const meshName = ITEM_MESH_MAP[activeItemAnimation.itemId];
     const sourceMesh = itemsGLTF.nodes[meshName] as THREE.Mesh;
-    if (!sourceMesh) return null;
+    const customMeshItems = ['inverter', 'beer', 'adrenaline', 'medkit', 'handsaw', 'burner_phone'];
+    if (!sourceMesh && !customMeshItems.includes(activeItemAnimation.itemId)) return null;
 
     const baseRot = ITEM_ROTATIONS[activeItemAnimation.itemId] || [0, 0, 0];
 
@@ -212,6 +286,7 @@ function StaticScene({
             animation={activeItemAnimation}
             sourceMesh={sourceMesh}
             localUserId={userId}
+            burnerPhoneResult={burnerPhoneResult || privatePayload}
             privatePayload={privatePayload}
             onComplete={onAnimationComplete}
           />
@@ -363,19 +438,41 @@ function StaticScene({
         shellType={shellType}
         isBarrelShortened={isBarrelShortened}
         showDebugArrows={showDebugArrows}
+        isClickable={gunState === 'idle' && !activeItemAnimation}
+        onClick={onShotgunClick}
         onFireMoment={onFireMoment}
         onSequenceComplete={onShotgunSequenceComplete}
       />
 
-      {/* Opponent Items */}
+      {/* Target Selection Camera Controller */}
+      <TargetSelectionCamera
+        targetingAction={targetingAction || null}
+        isStealSelectionMode={Boolean(isStealSelectionMode)}
+        onCameraReturned={onCameraReturned}
+      />
+
+      {/* In-World Interactive Player Target Markers */}
+      <PlayerTargetSelector
+        action={targetingAction || null}
+        localUserId={userId}
+        gameState={gameState}
+        onSelectTarget={(targetId) => {
+          onSelectTarget?.(targetId);
+        }}
+      />
+
+      {/* Opponent Items — STRICTLY ONLY items owned by the opponent */}
       {opponentInventory.map((itemId, idx) => {
         const meshName = ITEM_MESH_MAP[itemId];
         const sourceMesh = itemsGLTF.nodes[meshName] as THREE.Mesh;
-        if (!sourceMesh) return null;
+        const customMeshItems = ['inverter', 'beer', 'adrenaline', 'medkit', 'handsaw', 'burner_phone'];
+        if (!sourceMesh && !customMeshItems.includes(itemId)) return null;
         
         const slot = OPPONENT_ITEM_SLOTS[idx];
         const rot = ITEM_ROTATIONS[itemId];
-        
+        const isStealActive = Boolean(isStealSelectionMode || targetingAction === 'adrenaline');
+        const isSelectable = isStealActive && itemId !== 'adrenaline';
+
         return (
           <InteractiveItem 
             key={`opponent-${itemId}-${idx}`}
@@ -384,6 +481,12 @@ function StaticScene({
             position={slot.position}
             rotation={rot}
             isLocal={false}
+            isSelectable={isSelectable}
+            onClick={(stolenItemId) => {
+              if (isSelectable) {
+                onSelectStolenItem?.(stolenItemId);
+              }
+            }}
             tableY={0.771}
           />
         );
@@ -392,18 +495,28 @@ function StaticScene({
       {/* Item Animation (Beer/Phone/Adrenaline/Handcuffs/Handsaw/Magnifier/Inverter/Medkit) */}
       {renderItemAnimation()}
 
+      {/* Standalone Physical Ejected Shell (Persists for full flight and resting lifecycle) */}
+      {ejectedShellType && (
+        <EjectedShell
+          key={`ejected-shell-${ejectedShellType}`}
+          shellType={ejectedShellType}
+        />
+      )}
+
       {/* Persistent Restrained Handcuffs Props */}
       {isHandcuffedLocal && <RestrainedHandcuffs isLocal={true} />}
       {isHandcuffedOpponent && <RestrainedHandcuffs isLocal={false} />}
 
-      {/* Local Items */}
+      {/* Local Items — Non-interactive during Adrenaline steal-selection mode */}
       {localInventory.map((itemId, idx) => {
         const meshName = ITEM_MESH_MAP[itemId];
         const sourceMesh = itemsGLTF.nodes[meshName] as THREE.Mesh;
-        if (!sourceMesh) return null;
+        const customMeshItems = ['inverter', 'beer', 'adrenaline', 'medkit', 'handsaw', 'burner_phone'];
+        if (!sourceMesh && !customMeshItems.includes(itemId)) return null;
         
         const slot = LOCAL_ITEM_SLOTS[idx];
         const rot = ITEM_ROTATIONS[itemId];
+        const isStealActive = Boolean(isStealSelectionMode || targetingAction === 'adrenaline');
 
         return (
           <InteractiveItem 
@@ -413,11 +526,38 @@ function StaticScene({
             position={slot.position}
             rotation={rot}
             isLocal={true}
-            onClick={handleItemClick}
+            isDisabled={isStealActive}
+            onClick={(clickedItemId) => {
+              if (!isStealActive) {
+                handleItemClick(clickedItemId);
+              }
+            }}
             tableY={0.771}
           />
         );
       })}
+      {/* Opponent 3D World Health Indicator Attached to Opponent Character */}
+      {gameState?.players && (() => {
+        const localPlayer = gameState.players.find(p => p.userId === userId) || gameState.players[0];
+        const opponents = gameState.players.filter(p => p.userId !== localPlayer.userId);
+        const maxHp = gameState.settings?.startingHp || 4;
+
+        return opponents.map((opp) => (
+          <Html
+            key={`opp-health-3d-${opp.userId}`}
+            position={[0, 1.48, -0.8]}
+            center
+            zIndexRange={[50, 0]}
+            style={{ pointerEvents: 'none' }}
+          >
+            <PlayerHealthIndicator
+              player={opp}
+              maxHp={maxHp}
+              isLocal={false}
+            />
+          </Html>
+        ));
+      })()}
 
       {/* FP Arms - Pushed back and down to avoid covering the local inventory */}
       <group position={[0, -0.3, 0.4]}>
@@ -450,7 +590,7 @@ export function ChamberClash3D(props: ChamberClash3DProps) {
         onCreated={({ camera }) => {
           camera.lookAt(0, 0.77, -0.4);
         }}
-        gl={{ antialias: true, alpha: false }}
+        gl={{ antialias: true, alpha: false, localClippingEnabled: true }}
       >
         <Suspense fallback={<LoaderOverlay />}>
           <StaticScene 
@@ -465,6 +605,11 @@ export function ChamberClash3D(props: ChamberClash3DProps) {
             isBarrelShortened={props.isBarrelShortened}
             showDebugArrows={props.showDebugArrows}
             privatePayload={props.privatePayload}
+            burnerPhoneResult={props.burnerPhoneResult}
+            isStealSelectionMode={props.isStealSelectionMode}
+            onShotgunClick={props.onShotgunClick}
+            onSelectStolenItem={props.onSelectStolenItem}
+            onCameraReturned={props.onCameraReturned}
             onUseItem={props.onUseItem}
             onSelectTarget={props.onSelectTarget}
             onAnimationComplete={props.onAnimationComplete}

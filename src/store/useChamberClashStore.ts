@@ -47,7 +47,7 @@ interface ChamberClashStore {
   error: string | null;
   actionLog: ActionLogEntry[];
   revealedShell: string | null;
-  burnerPhoneReveal: { position: number; shell: string } | null;
+  burnerPhoneReveal: { displayShellNumber: number; shellType: string } | null;
   
   // Lobby Actions
   fetchLobbies: () => void;
@@ -72,7 +72,7 @@ interface ChamberClashStore {
   setAnimating: (animating: boolean) => void;
   addLogEntry: (text: string, icon: string, color: string) => void;
   setRevealedShell: (shell: string | null) => void;
-  setBurnerPhoneReveal: (reveal: { position: number; shell: string } | null) => void;
+  setBurnerPhoneReveal: (reveal: { displayShellNumber: number; shellType: string } | null) => void;
 }
 
 export const useChamberClashStore = create<ChamberClashStore>((set, get) => ({
@@ -150,7 +150,20 @@ export const useChamberClashStore = create<ChamberClashStore>((set, get) => ({
 
   resolvePendingItem: (gameId, userId, targetId, stolenItemId) => {
     const socket = socketService.getSocket();
-    if (socket) socket.emit('game_action', { gameId, userId, action: 'resolve_pending_item', data: { targetId, stolenItemId } });
+    if (socket) {
+      socket.emit('game_action', { gameId, userId, action: 'resolve_pending_item', data: { targetId, stolenItemId } });
+    } else {
+      // Local / Practice Mode state resolution
+      set((state) => {
+        if (!state.gameState) return state;
+        return {
+          gameState: {
+            ...state.gameState,
+            pendingItemAction: undefined
+          }
+        };
+      });
+    }
   },
 
   setupListeners: (gameId, userId) => {
@@ -226,8 +239,9 @@ export const useChamberClashStore = create<ChamberClashStore>((set, get) => ({
     };
 
     const onBurnerPhone = (data: any) => {
-      set({ burnerPhoneReveal: { position: data.position, shell: data.shell } });
-      setTimeout(() => set({ burnerPhoneReveal: null }), 4000);
+      console.log(`[BurnerPhone SERVER EVENT] displayShellNumber=${data.position}, shellType=${data.shell}`);
+      set({ burnerPhoneReveal: { displayShellNumber: Number(data.position), shellType: data.shell === 'LIVE' ? 'LIVE' : 'BLANK' } });
+      setTimeout(() => set({ burnerPhoneReveal: null }), 6000);
     };
 
     socket.on('connect', handleConnect);

@@ -2,6 +2,7 @@ import React, { useRef, useMemo } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { applyEasing, TABLE_Y, LOCAL_CHEST, OPPONENT_CHEST } from './animationConfigs';
+import { MedkitBottleMesh } from './CustomItemMeshes';
 
 interface MedkitAnimationProps {
   animation: { itemId: string; userId: string; targetId: string | null };
@@ -12,14 +13,13 @@ interface MedkitAnimationProps {
 }
 
 /**
- * Medkit Animation Component:
- * Opens and brings treatment toward actor chest with green healing glow feedback.
+ * Medkit Bottle Animation Component:
+ * Picks up medical bottle, brings to actor, tilts bottle to apply/drink emergency medicine,
+ * with green healing aura feedback.
  */
 export function MedkitAnimation({
   animation,
-  sourceMesh,
   localUserId,
-  baseRotation = [0, 0, 0],
   onComplete
 }: MedkitAnimationProps) {
   const groupRef = useRef<THREE.Group>(null);
@@ -31,27 +31,11 @@ export function MedkitAnimation({
   const chest = isLocalActor ? LOCAL_CHEST : OPPONENT_CHEST;
   const startZ = isLocalActor ? 0.35 : -0.35;
 
-  const normalizedMesh = useMemo(() => {
-    if (!sourceMesh) return null;
-    const cloned = sourceMesh.clone();
-    cloned.position.set(0, 0, 0);
-    cloned.rotation.set(0, 0, 0);
-    const box = new THREE.Box3().setFromObject(cloned);
-    const center = new THREE.Vector3();
-    box.getCenter(center);
-    cloned.position.set(-center.x, -center.y, -center.z);
-
-    const rotGroup = new THREE.Group();
-    rotGroup.rotation.set(baseRotation[0], baseRotation[1], baseRotation[2]);
-    rotGroup.add(cloned);
-    return rotGroup;
-  }, [sourceMesh, baseRotation]);
-
   const phases = useMemo(() => [
-    { name: 'LIFT',        start: 0,   end: 0.25, from: [0, TABLE_Y, startZ],            to: [0, TABLE_Y + 0.15, startZ] },
-    { name: 'TO_CHEST',    start: 0.25, end: 0.65, from: [0, TABLE_Y + 0.15, startZ],     to: [chest.x, chest.y, chest.z] },
-    { name: 'TREATMENT',   start: 0.65, end: 1.30, from: [chest.x, chest.y, chest.z],     to: [chest.x, chest.y + 0.05, chest.z] },
-    { name: 'REMOVE',      start: 1.30, end: 1.55, from: [chest.x, chest.y + 0.05, chest.z], to: [0, TABLE_Y - 0.5, startZ] },
+    { name: 'LIFT',        start: 0,    end: 0.25, from: [0, TABLE_Y, startZ],            to: [0, TABLE_Y + 0.15, startZ] },
+    { name: 'TO_CHEST',    start: 0.25, end: 0.65, from: [0, TABLE_Y + 0.15, startZ],     to: [chest.x, chest.y + 0.05, chest.z] },
+    { name: 'DRINK',       start: 0.65, end: 1.30, from: [chest.x, chest.y + 0.05, chest.z], to: [chest.x, chest.y + 0.08, chest.z] },
+    { name: 'REMOVE',      start: 1.30, end: 1.55, from: [chest.x, chest.y + 0.08, chest.z], to: [0, TABLE_Y - 0.5, startZ] },
   ] as const, [startZ, chest]);
 
   const totalDuration = 1.55;
@@ -90,29 +74,22 @@ export function MedkitAnimation({
       THREE.MathUtils.lerp(from[2], to[2], eased)
     );
 
-    if (innerRef.current && currentPhase.name === 'TREATMENT') {
-      // Healing aura spin
-      innerRef.current.rotation.y = t * 5;
+    if (innerRef.current) {
+      if (currentPhase.name === 'DRINK') {
+        const tiltDirection = isLocalActor ? 1.0 : -1.0;
+        innerRef.current.rotation.x = THREE.MathUtils.lerp(0, tiltDirection * 0.8, applyEasing(progress, 'easeOut'));
+        innerRef.current.rotation.y = Math.sin(t * 12) * 0.1;
+      }
     }
   });
 
   return (
     <group ref={groupRef}>
       <group ref={innerRef}>
-        {normalizedMesh ? (
-          <primitive object={normalizedMesh} />
-        ) : (
-          <mesh>
-            <boxGeometry args={[0.08, 0.06, 0.04]} />
-            <meshStandardMaterial color="#22cc44" metalness={0.4} roughness={0.4} />
-          </mesh>
-        )}
+        <MedkitBottleMesh />
+        {/* Green Healing Pulse Aura */}
+        <pointLight position={[0, 0.05, 0]} color="#22c55e" intensity={2} distance={0.5} />
       </group>
-
-      {/* Green healing point light during treatment */}
-      {elapsed.current >= 0.65 && elapsed.current < 1.30 && (
-        <pointLight color="#33ff55" intensity={12} distance={2.0} />
-      )}
     </group>
   );
 }

@@ -1,7 +1,8 @@
-import React, { useRef, useMemo } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { applyEasing, TABLE_Y, SHOTGUN_BREECH } from './animationConfigs';
+import { InverterMesh } from './CustomItemMeshes';
 
 interface InverterAnimationProps {
   animation: { itemId: string; userId: string; targetId: string | null };
@@ -13,44 +14,26 @@ interface InverterAnimationProps {
 
 /**
  * Inverter Animation Component:
- * Hovers over shotgun breech, rotates 180°, and emits an electrical pulse.
+ * Hovers over shotgun breech, physically flips its central switch, and emits an electrical pulse.
  */
 export function InverterAnimation({
   animation,
-  sourceMesh,
   localUserId,
-  baseRotation = [0, 0, 0],
   onComplete
 }: InverterAnimationProps) {
   const groupRef = useRef<THREE.Group>(null);
-  const innerRef = useRef<THREE.Group>(null);
   const elapsed = useRef(0);
   const completed = useRef(false);
+  const [toggleRot, setToggleRot] = useState(0);
 
   const isLocalActor = animation.userId === localUserId;
   const startZ = isLocalActor ? 0.35 : -0.35;
   const breech = SHOTGUN_BREECH;
 
-  const normalizedMesh = useMemo(() => {
-    if (!sourceMesh) return null;
-    const cloned = sourceMesh.clone();
-    cloned.position.set(0, 0, 0);
-    cloned.rotation.set(0, 0, 0);
-    const box = new THREE.Box3().setFromObject(cloned);
-    const center = new THREE.Vector3();
-    box.getCenter(center);
-    cloned.position.set(-center.x, -center.y, -center.z);
-
-    const rotGroup = new THREE.Group();
-    rotGroup.rotation.set(baseRotation[0], baseRotation[1], baseRotation[2]);
-    rotGroup.add(cloned);
-    return rotGroup;
-  }, [sourceMesh, baseRotation]);
-
   const phases = useMemo(() => [
     { name: 'LIFT',        start: 0,   end: 0.25, from: [0, TABLE_Y, startZ],                to: [0, TABLE_Y + 0.15, startZ] },
     { name: 'TO_BREECH',   start: 0.25, end: 0.60, from: [0, TABLE_Y + 0.15, startZ],        to: [breech.x, breech.y + 0.1, breech.z] },
-    { name: 'FLIP_PULSE',  start: 0.60, end: 1.20, from: [breech.x, breech.y + 0.1, breech.z], to: [breech.x, breech.y + 0.1, breech.z] },
+    { name: 'FLIP_SWITCH', start: 0.60, end: 1.20, from: [breech.x, breech.y + 0.1, breech.z], to: [breech.x, breech.y + 0.1, breech.z] },
     { name: 'REMOVE',      start: 1.20, end: 1.45, from: [breech.x, breech.y + 0.1, breech.z], to: [0, TABLE_Y - 0.5, startZ] },
   ] as const, [startZ, breech]);
 
@@ -90,30 +73,22 @@ export function InverterAnimation({
       THREE.MathUtils.lerp(from[2], to[2], eased)
     );
 
-    if (innerRef.current && currentPhase.name === 'FLIP_PULSE') {
-      // 180° flip rotation on X axis
-      innerRef.current.rotation.x = THREE.MathUtils.lerp(0, Math.PI, applyEasing(progress, 'spring'));
-      // Electrical vibration
-      groupRef.current.position.x += Math.sin(t * 40) * 0.004;
+    if (currentPhase.name === 'FLIP_SWITCH') {
+      // Physically flip central toggle switch 180°
+      const targetAngle = THREE.MathUtils.lerp(0, Math.PI, applyEasing(progress, 'spring'));
+      setToggleRot(targetAngle);
+      // Subtle electrical vibration
+      groupRef.current.position.x += Math.sin(t * 50) * 0.002;
     }
   });
 
   return (
     <group ref={groupRef}>
-      <group ref={innerRef}>
-        {normalizedMesh ? (
-          <primitive object={normalizedMesh} />
-        ) : (
-          <mesh>
-            <boxGeometry args={[0.04, 0.04, 0.04]} />
-            <meshStandardMaterial color="#00ccff" metalness={0.8} roughness={0.2} />
-          </mesh>
-        )}
-      </group>
+      <InverterMesh toggleRotation={toggleRot} />
 
-      {/* Electrical pulse light during flip */}
+      {/* Electrical pulse light during switch flip */}
       {elapsed.current >= 0.60 && elapsed.current < 1.20 && (
-        <pointLight color="#00ffff" intensity={15} distance={1.5} />
+        <pointLight color="#00e5ff" intensity={10} distance={1.2} />
       )}
     </group>
   );

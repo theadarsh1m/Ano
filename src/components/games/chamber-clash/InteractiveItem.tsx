@@ -1,6 +1,19 @@
-import React, { useRef, useState, useLayoutEffect, useMemo } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
+import { AdrenalineMesh, MedkitBottleMesh, HandsawMesh, InverterMesh, BeerCanMesh, BurnerPhoneMesh } from './CustomItemMeshes';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
+import { Html } from '@react-three/drei';
+
+const ITEM_NAMES: Record<string, string> = {
+  beer: "BEER",
+  magnifier: "MAGNIFIER",
+  handsaw: "HANDSAW",
+  inverter: "INVERTER",
+  medkit: "MEDKIT",
+  burner_phone: "BURNER PHONE",
+  handcuffs: "HANDCUFFS",
+  adrenaline: "ADRENALINE"
+};
 
 interface InteractiveItemProps {
   id: string;
@@ -8,6 +21,8 @@ interface InteractiveItemProps {
   position: [number, number, number];
   rotation: [number, number, number];
   isLocal: boolean;
+  isSelectable?: boolean;
+  isDisabled?: boolean;
   onClick?: (id: string) => void;
   tableY?: number;
 }
@@ -18,6 +33,8 @@ export function InteractiveItem({
   position,
   rotation,
   isLocal,
+  isSelectable = false,
+  isDisabled = false,
   onClick,
   tableY = 0.77
 }: InteractiveItemProps) {
@@ -26,38 +43,8 @@ export function InteractiveItem({
   const [hovered, setHovered] = useState(false);
   const [clickScale, setClickScale] = useState(1);
 
-  // Compute the resting Y offset so the item physically touches the table
-  const { geometry, meshCenter, size } = useMemo(() => {
-    // Clone to manipulate
-    const cloned = sourceMesh.clone();
-    // Zero out baked GLB position/rotation
-    cloned.position.set(0, 0, 0);
-    cloned.rotation.set(0, 0, 0);
-    
-    // Apply the intended rotation to compute the accurate bounding box
-    cloned.rotation.set(rotation[0], rotation[1], rotation[2]);
-    cloned.updateMatrixWorld();
+  const canInteract = !isDisabled && (isLocal || isSelectable);
 
-    const box = new THREE.Box3().setFromObject(cloned);
-    const min = box.min;
-    const max = box.max;
-    const center = new THREE.Vector3();
-    box.getCenter(center);
-    const size = new THREE.Vector3();
-    box.getSize(size);
-
-    return {
-      geometry: sourceMesh.geometry, // Share geometry
-      meshCenter: center,
-      size,
-      // We want the item's lowest point (min.y) to sit exactly at 0 local Y
-      // so when the group is placed at tableY, the bottom touches the table.
-      yOffset: -min.y
-    };
-  }, [sourceMesh, rotation]);
-
-  const yOffset = -size.y / 2; // Actually wait, if we center the mesh, the bottom is at -size.y/2.
-  // Better approach:
   const normalizedMesh = useMemo(() => {
     const cloned = sourceMesh.clone();
     cloned.position.set(0, 0, 0);
@@ -67,10 +54,8 @@ export function InteractiveItem({
     const center = new THREE.Vector3();
     box.getCenter(center);
     
-    // Center the mesh at origin
     cloned.position.set(-center.x, -center.y, -center.z);
     
-    // Apply intended rotation
     const rotGroup = new THREE.Group();
     rotGroup.rotation.set(rotation[0], rotation[1], rotation[2]);
     rotGroup.add(cloned);
@@ -85,25 +70,23 @@ export function InteractiveItem({
     };
   }, [sourceMesh, rotation]);
 
-  // We need to inject an emissive color to the mesh when hovered
-  useFrame((state, delta) => {
+  useFrame((_, delta) => {
     if (!meshRef.current) return;
-    // Smooth hover animation (lift by 1.5cm = 0.015 units)
-    const targetY = (isLocal && hovered) ? 0.015 : 0;
+    // Smooth hover animation (lift by 2.5cm)
+    const targetY = (canInteract && hovered) ? 0.025 : 0;
     meshRef.current.position.y += (targetY - meshRef.current.position.y) * 12 * delta;
     
-    // Smooth rotation on Y axis when hovered for an extra tactile feel
-    const targetRot = (isLocal && hovered) ? 0.1 : 0;
+    // Smooth rotation on Y axis when hovered
+    const targetRot = (canInteract && hovered) ? 0.12 : 0;
     meshRef.current.rotation.y += (targetRot - meshRef.current.rotation.y) * 8 * delta;
 
-    // Emissive glow logic
+    // Emissive glow logic (Cyan glow for stealable opponent items)
     meshRef.current.traverse((child) => {
       if (child instanceof THREE.Mesh && child.material) {
-        // Only apply if the material supports emissive (like MeshStandardMaterial)
         if (child.material.emissive !== undefined) {
-          const targetEmissive = (isLocal && hovered) ? 0.2 : 0;
+          const targetEmissive = (canInteract && hovered) ? (isSelectable ? 0.4 : 0.2) : 0;
           const currentIntensity = child.material.emissiveIntensity || 0;
-          child.material.emissive.setHex(0xffffff); // White glow
+          child.material.emissive.setHex(isSelectable ? 0x00f0ff : 0xffffff);
           child.material.emissiveIntensity = currentIntensity + (targetEmissive - currentIntensity) * 10 * delta;
         }
       }
@@ -117,23 +100,23 @@ export function InteractiveItem({
   });
 
   const handlePointerOver = (e: any) => {
-    if (!isLocal) return;
+    if (!canInteract) return;
     e.stopPropagation();
     setHovered(true);
     document.body.style.cursor = 'pointer';
   };
 
   const handlePointerOut = (e: any) => {
-    if (!isLocal) return;
+    if (!canInteract) return;
     e.stopPropagation();
     setHovered(false);
     document.body.style.cursor = 'auto';
   };
 
   const handleClick = (e: any) => {
-    if (!isLocal) return;
+    if (!canInteract) return;
     e.stopPropagation();
-    setClickScale(0.9);
+    setClickScale(0.85);
     onClick?.(id);
   };
   
@@ -148,7 +131,21 @@ export function InteractiveItem({
       <group rotation={rotation}>
         {/* Animate this group up and down for hover */}
         <group ref={meshRef} position={[0, -normalizedMesh.bottomY, 0]}>
-          <primitive object={normalizedMesh.mesh} />
+          {id === 'adrenaline' ? (
+            <AdrenalineMesh />
+          ) : id === 'medkit' ? (
+            <MedkitBottleMesh />
+          ) : id === 'handsaw' ? (
+            <HandsawMesh />
+          ) : id === 'inverter' ? (
+            <InverterMesh />
+          ) : id === 'beer' ? (
+            <BeerCanMesh />
+          ) : id === 'burner_phone' ? (
+            <BurnerPhoneMesh />
+          ) : (
+            <primitive object={normalizedMesh.mesh} />
+          )}
           
           {/* Forgiving invisible hitbox */}
           <mesh 
@@ -164,6 +161,15 @@ export function InteractiveItem({
             ]} />
             <meshBasicMaterial transparent opacity={0.1} color="red" />
           </mesh>
+
+          {/* Floating Tooltip when hovered during steal selection */}
+          {isSelectable && hovered && (
+            <Html position={[0, normalizedMesh.size.y + 0.08, 0]} center style={{ pointerEvents: 'none' }}>
+              <div className="bg-cyan-950/95 border border-cyan-400 p-1.5 rounded-lg font-mono text-[9px] font-bold text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.6)] uppercase tracking-wider whitespace-nowrap">
+                STEAL {ITEM_NAMES[id] || id.toUpperCase()} ➔
+              </div>
+            </Html>
+          )}
         </group>
       </group>
     </group>

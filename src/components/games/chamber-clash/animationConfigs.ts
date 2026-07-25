@@ -78,11 +78,12 @@ export const OPPONENT_SHOT_TARGET = new THREE.Vector3(0, 1.15, -0.85); // Oppone
 
 /**
  * Calculates exact quaternion rotating SHOTGUN_LOCAL_FORWARD (+X) onto target direction,
- * using a right-handed basis matrix to guarantee +X points at target while local +Y stays upright.
+ * using a right-handed basis matrix to guarantee +X points at target, plus a model-local roll correction around +X.
  */
 export function computeShotgunAimQuaternion(
   gunPosition: THREE.Vector3,
-  targetPosition: THREE.Vector3
+  targetPosition: THREE.Vector3,
+  rollDegrees: number = -90
 ): THREE.Quaternion {
   const F = new THREE.Vector3().subVectors(targetPosition, gunPosition).normalize();
   const upRef = new THREE.Vector3(0, 1, 0);
@@ -97,9 +98,23 @@ export function computeShotgunAimQuaternion(
   const mat = new THREE.Matrix4();
   mat.makeBasis(F, U, S);
   
-  const q = new THREE.Quaternion();
-  q.setFromRotationMatrix(mat);
-  return q;
+  const baseAimQ = new THREE.Quaternion();
+  baseAimQ.setFromRotationMatrix(mat);
+
+  // Model-local roll around local +X (stock-to-muzzle axis)
+  const rollRad = THREE.MathUtils.degToRad(rollDegrees);
+  const rollQ = new THREE.Quaternion().setFromAxisAngle(SHOTGUN_LOCAL_FORWARD, rollRad);
+
+  return baseAimQ.multiply(rollQ);
+}
+
+export function getActorAnchors(isLocalActor: boolean) {
+  return {
+    face: isLocalActor ? LOCAL_FACE : OPPONENT_FACE,
+    chest: isLocalActor ? LOCAL_CHEST : OPPONENT_CHEST,
+    ear: isLocalActor ? LOCAL_EAR : OPPONENT_EAR,
+    wrist: isLocalActor ? LOCAL_WRIST : OPPONENT_WRIST,
+  };
 }
 
 // ─── Item Animation Types & Configs ─────────────────────────────────────

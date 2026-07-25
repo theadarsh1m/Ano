@@ -13,6 +13,7 @@ import dynamic from "next/dynamic";
 import { useExitWarning } from "@/hooks/useExitWarning";
 import { sounds } from "@/lib/sounds";
 import { getItemAnimConfig } from "@/components/games/chamber-clash/animationConfigs";
+import { PlayerHealthIndicator } from "@/components/games/chamber-clash/PlayerHealthIndicator";
 
 const ChamberClash3D = dynamic(() => import("@/components/games/chamber-clash/ChamberClash3D").then((m) => m.ChamberClash3D), { ssr: false });
 
@@ -60,9 +61,15 @@ function ChamberClashGameContent() {
   const [gunTarget, setGunTarget] = useState<'local' | 'opponent' | null>(null);
   const [activeItemAnimation, setActiveItemAnimation] = useState<{ itemId: string; userId: string; targetId: string | null } | null>(null);
   const [currentShellType, setCurrentShellType] = useState<'LIVE' | 'BLANK' | null>(null);
-  const [isBarrelShortened, setIsBarrelShortened] = useState(false);
+  const [localBarrelCut, setLocalBarrelCut] = useState(false);
+  const isBarrelShortened = Boolean(
+    gameState?.players?.some((p) => p.statusEffects?.some((e: any) => e.type === 'DOUBLE_DAMAGE')) ||
+    localBarrelCut
+  );
   const [animationLocked, setAnimationLocked] = useState(false);
   const [privatePayload, setPrivatePayload] = useState<any>(null);
+  const [isStealSelectionMode, setIsStealSelectionMode] = useState(false);
+  const [stolenItemPending, setStolenItemPending] = useState<string | null>(null);
   const [muzzleFlash, setMuzzleFlash] = useState(false);
   const [screenShake, setScreenShake] = useState(false);
   const [smokeParticles, setSmokeParticles] = useState<Array<{ id: number; x: number; y: number }>>([]);
@@ -85,6 +92,7 @@ function ChamberClashGameContent() {
   const [skippedPlayerId, setSkippedPlayerId] = useState<string | null>(null);
 
   const isAnimatingRef = useRef(false);
+  const processedShellEvents = useRef<Set<string>>(new Set());
   const logEndRef = useRef<HTMLDivElement>(null);
   const dustParticles = useMemo(() =>
     Array.from({ length: 30 }).map((_, i) => ({
@@ -104,6 +112,18 @@ function ChamberClashGameContent() {
     sounds.isMuted = true;
     setIsMuted(true);
   }, [clearState]);
+
+  // ─── Escape key listener to cancel targeting ───
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && (targetingAction || isStealSelectionMode)) {
+        setTargetingAction(null);
+        setIsStealSelectionMode(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [targetingAction, isStealSelectionMode]);
 
   // ─── Leave on unmount ───
   useEffect(() => {
@@ -203,7 +223,7 @@ function ChamberClashGameContent() {
       // ──── ROUND START ────
       case 'round_started': {
         duration = 3500;
-        setIsBarrelShortened(false);
+        setLocalBarrelCut(false);
         setRoundOverlayData({ round: evt.data.roundNumber, total: evt.data.totalShells, live: evt.data.liveShells, blank: evt.data.blankShells });
         setShowRoundOverlay(true);
         setShellCounterLive(evt.data.liveShells);
@@ -410,16 +430,21 @@ function ChamberClashGameContent() {
         const isLocalTarget = (evt.data.targetId || null) === userId;
         const itemConfig = getItemAnimConfig(evt.data.itemId, isLocalActor, isLocalTarget);
         
-        // Pass private payload for Burner Phone and Magnifier
-        if (evt.data.revealedShell || evt.data.burnerPhoneReveal || evt.data.shellType) {
-          setPrivatePayload({
-            shellIndex: evt.data.shellIndex || evt.data.burnerPhoneReveal?.shellIndex || 3,
-            shellType: evt.data.shellType || evt.data.revealedShell || evt.data.burnerPhoneReveal?.shellType || 'LIVE'
-          });
-        }
-
         const isAdrenalineSteal = evt.data.itemId === 'adrenaline' && evt.data.stolenItem;
         const stolenItemConfig = isAdrenalineSteal ? getItemAnimConfig(evt.data.stolenItem, isLocalActor, isLocalTarget) : null;
+        const targetItem = isAdrenalineSteal ? evt.data.stolenItem : evt.data.itemId;
+
+        // Pass single authoritative private payload for Burner Phone and Magnifier
+        const storeBurner = useChamberClashStore.getState().burnerPhoneReveal;
+
+        if (isLocalActor && (targetItem === 'burner_phone' || storeBurner || evt.data.revealedShell || evt.data.shellType)) {
+          const authoritativePayload = {
+            displayShellNumber: storeBurner?.displayShellNumber || evt.data.position || evt.data.displayShellNumber,
+            shellType: storeBurner?.shellType || evt.data.shell || evt.data.shellType
+          };
+
+          setPrivatePayload(authoritativePayload);
+        }
         
         duration = isAdrenalineSteal
           ? Math.ceil((itemConfig.totalDuration + (stolenItemConfig?.totalDuration || 1.5)) * 1000) + 600
@@ -476,13 +501,24 @@ function ChamberClashGameContent() {
       // ──── SHELL EJECTED (Beer) ────
       case 'shell_ejected': {
         duration = 1500;
-        setEjectedShellType(evt.data.shellType);
-        sounds.playShellEject();
+        const eventKey = evt.id || `${evt.timestamp || Date.now()}_${evt.data.shellType}`;
+        if (!processedShellEvents.current.has(eventKey)) {
+          processedShellEvents.current.add(eventKey);
+          if (processedShellEvents.current.size > 50) {
+            const firstKey = processedShellEvents.current.values().next().value;
+            if (firstKey) processedShellEvents.current.delete(firstKey);
+          }
+
+          console.log(`[BEER] shell_ejected received eventId=${eventKey} type=${evt.data.shellType}`);
+          setEjectedShellType(evt.data.shellType);
+          sounds.playShellEject();
+          setTimeout(() => setEjectedShellType(null), 4500);
+        }
+        
         if (evt.data.remainingLive !== undefined) {
           setShellCounterLive(evt.data.remainingLive);
           setShellCounterBlank(evt.data.remainingBlank);
         }
-        setTimeout(() => setEjectedShellType(null), 1300);
         addLogEntry(`Shell ejected — ${evt.data.shellType === 'LIVE' ? '🔴 Live' : '⚪ Blank'}`, "🍺", "text-amber-400");
         break;
       }
@@ -815,6 +851,7 @@ function ChamberClashGameContent() {
               setAnimationLocked(true);
               setEjectedShellType('LIVE');
               setActiveItemAnimation({ itemId: 'beer', userId: userId || 'local', targetId: null });
+              setTimeout(() => { setEjectedShellType(null); }, 4500);
               setTimeout(() => { setActiveItemAnimation(null); setAnimationLocked(false); }, 3200);
             }}>LOCAL BEER LIVE</button>
 
@@ -824,6 +861,7 @@ function ChamberClashGameContent() {
               setAnimationLocked(true);
               setEjectedShellType('BLANK');
               setActiveItemAnimation({ itemId: 'beer', userId: userId || 'local', targetId: null });
+              setTimeout(() => { setEjectedShellType(null); }, 4500);
               setTimeout(() => { setActiveItemAnimation(null); setAnimationLocked(false); }, 3200);
             }}>LOCAL BEER BLANK</button>
 
@@ -834,6 +872,7 @@ function ChamberClashGameContent() {
               setEjectedShellType('LIVE');
               const oppId = gameState?.players.find(p => p.userId !== userId)?.userId || 'opp';
               setActiveItemAnimation({ itemId: 'beer', userId: oppId, targetId: null });
+              setTimeout(() => { setEjectedShellType(null); }, 4500);
               setTimeout(() => { setActiveItemAnimation(null); setAnimationLocked(false); }, 3200);
             }}>OPP BEER LIVE</button>
 
@@ -842,22 +881,53 @@ function ChamberClashGameContent() {
             onClick={() => {
               if (animationLocked) return;
               setAnimationLocked(true);
-              setPrivatePayload({ shellIndex: 3, shellType: 'LIVE' });
+              const payload = { displayShellNumber: 4, shellType: 'LIVE' };
+              setPrivatePayload(payload);
+              useChamberClashStore.setState({ burnerPhoneReveal: payload });
               setActiveItemAnimation({ itemId: 'burner_phone', userId: userId || 'local', targetId: null });
-              setTimeout(() => { setActiveItemAnimation(null); setAnimationLocked(false); setPrivatePayload(null); }, 3200);
+              setTimeout(() => {
+                setActiveItemAnimation(null);
+                setAnimationLocked(false);
+                setPrivatePayload(null);
+                useChamberClashStore.setState({ burnerPhoneReveal: null });
+              }, 2800);
             }}>LOCAL PHONE</button>
 
           <button className="px-2 py-1 bg-amber-700 text-white text-[9px] font-bold rounded cursor-pointer"
             onClick={() => {
               if (animationLocked) return;
               setAnimationLocked(true);
-              setPrivatePayload({ shellIndex: 3, shellType: 'LIVE' });
               const oppId = gameState?.players.find(p => p.userId !== userId)?.userId || 'opp';
               setActiveItemAnimation({ itemId: 'burner_phone', userId: oppId, targetId: null });
-              setTimeout(() => { setActiveItemAnimation(null); setAnimationLocked(false); setPrivatePayload(null); }, 3200);
+              setTimeout(() => { setActiveItemAnimation(null); setAnimationLocked(false); setPrivatePayload(null); }, 2800);
             }}>OPP PHONE (SECRET)</button>
 
           {/* Adrenaline Steal Debug */}
+          <button className="px-2 py-1 bg-purple-600 text-white text-[9px] font-bold rounded cursor-pointer"
+            onClick={() => {
+              if (animationLocked) return;
+              setAnimationLocked(true);
+              setEjectedShellType('LIVE');
+              // Populate opponent inventory in debug mode for testing
+              useChamberClashStore.setState(state => {
+                if (!state.gameState) return state;
+                const newPlayers = state.gameState.players.map(p => {
+                  if (p.userId !== userId) {
+                    return { ...p, inventory: ['beer', 'magnifier', 'handsaw', 'medkit'] };
+                  }
+                  return p;
+                });
+                return { gameState: { ...state.gameState, players: newPlayers } };
+              });
+              // Step 1: Self injection
+              setActiveItemAnimation({ itemId: 'adrenaline', userId: userId || 'local', targetId: null });
+              setTimeout(() => {
+                // Step 2: Transition camera to top-down view and expose opponent items for 3D click selection
+                setActiveItemAnimation(null);
+                setIsStealSelectionMode(true);
+              }, 1500);
+            }}>TOP-DOWN STEAL MODE</button>
+
           <button className="px-2 py-1 bg-purple-700 text-white text-[9px] font-bold rounded cursor-pointer"
             onClick={() => {
               if (animationLocked) return;
@@ -881,6 +951,19 @@ function ChamberClashGameContent() {
               }, 1500);
               setTimeout(() => { setActiveItemAnimation(null); setAnimationLocked(false); setPrivatePayload(null); }, 3800);
             }}>STEAL MAGNIFIER</button>
+
+          <button className="px-2 py-1 bg-purple-950 text-white text-[9px] font-bold rounded cursor-pointer"
+            onClick={() => {
+              if (animationLocked) return;
+              setAnimationLocked(true);
+              setActiveItemAnimation({ itemId: 'adrenaline', userId: userId || 'local', targetId: null });
+              setTimeout(() => {
+                setActiveItemAnimation(null);
+                setStolenItemPending('handcuffs');
+                setTargetingAction('handcuffs');
+                setAnimationLocked(false);
+              }, 1500);
+            }}>STEAL HANDCUFFS</button>
 
           {/* Handcuffs Debug */}
           <button className="px-2 py-1 bg-zinc-700 text-white text-[9px] font-bold rounded cursor-pointer"
@@ -1016,26 +1099,7 @@ function ChamberClashGameContent() {
           )}
         </AnimatePresence>
 
-        {/* ── Burner Phone Reveal ── */}
-        <AnimatePresence>
-          {burnerPhoneReveal && (
-            <motion.div initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }}
-              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-none">
-              <div className="bg-[#0b0c10] border-2 border-amber-500/40 rounded-3xl p-6 text-center shadow-[0_0_50px_rgba(245,158,11,0.25)] min-w-[240px]">
-                <div className="text-4xl mb-3">📞</div>
-                <div className="text-2xl font-black tracking-wide flex flex-col gap-2">
-                  <div className="text-zinc-300 text-lg uppercase font-bold tracking-widest">Shell <span className="text-amber-400 text-xl font-black">#{burnerPhoneReveal.position}</span></div>
-                  <div className="text-zinc-500 text-xs font-semibold uppercase tracking-widest leading-none">is</div>
-                  <div className={`text-3xl font-black uppercase tracking-wider ${
-                    burnerPhoneReveal.shell === 'LIVE' ? 'text-red-500 animate-pulse' : 'text-zinc-400'
-                  }`}>
-                    {burnerPhoneReveal.shell === 'LIVE' ? '🔴 LIVE' : '⚪ BLANK'}
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+
 
         {/* ── Stealing Target Inventory Modal ── */}
         <AnimatePresence>
@@ -1136,6 +1200,22 @@ function ChamberClashGameContent() {
           )}
         </AnimatePresence>
 
+        {/* Top-Down Adrenaline Selection Banner */}
+        {isStealSelectionMode && (
+          <div className="absolute top-16 left-1/2 -translate-x-1/2 z-[9999] pointer-events-auto bg-cyan-950/90 border border-cyan-400/60 text-cyan-300 px-4 py-2 rounded-xl text-xs font-mono font-bold tracking-wider shadow-[0_0_30px_rgba(6,182,212,0.4)] flex items-center gap-3 animate-pulse">
+            <span>💉 ADRENALINE ACTIVE — CLICK AN OPPONENT ITEM ON THE TABLE TO STEAL</span>
+            <button 
+              onClick={() => {
+                setIsStealSelectionMode(false);
+                setAnimationLocked(false);
+              }}
+              className="px-2 py-0.5 bg-red-900/60 hover:bg-red-800 text-red-200 rounded text-[9px] uppercase font-bold"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+
         {/* ── MAIN GAME AREA ── */}
         <div className="flex-1 relative z-20 flex items-center justify-center overflow-hidden w-full h-full">
           <ChamberClash3D
@@ -1151,10 +1231,76 @@ function ChamberClashGameContent() {
             ejectedShellType={ejectedShellType as any}
             isBarrelShortened={isBarrelShortened}
             privatePayload={privatePayload}
+            burnerPhoneResult={burnerPhoneReveal || privatePayload}
+            isStealSelectionMode={isStealSelectionMode}
+            onShotgunClick={() => {
+              if (animationLocked || isPendingAction || !isMyTurn) return;
+              setTargetingAction('shoot');
+            }}
+            onSelectStolenItem={(stolenItemId) => {
+              console.log('[ADRENALINE 3D STEAL CLICKED]', stolenItemId);
+              if (stolenItemId === 'adrenaline') {
+                return;
+              }
+
+              const opp = gameState?.players.find(p => p.userId !== userId);
+              const oppId = opp?.userId || 'opp';
+
+              setIsStealSelectionMode(false);
+              setStolenItemPending(stolenItemId);
+
+              if (stolenItemId === 'handcuffs') {
+                // 2-Stage Stolen Item (Handcuffs): Transition directly into player target selection
+                setTargetingAction('handcuffs');
+                setAnimationLocked(false);
+              } else {
+                setTargetingAction(null);
+              }
+
+              if (gameState) {
+                useItem(gameState.gameId, userId || '', 'adrenaline', oppId, stolenItemId);
+              }
+            }}
+            onCameraReturned={() => {
+              console.log('[CAMERA RETURNED TO FP]', stolenItemPending);
+              if (stolenItemPending && stolenItemPending !== 'handcuffs') {
+                const nextItem = stolenItemPending;
+                setStolenItemPending(null);
+                setAnimationLocked(true);
+                setActiveItemAnimation({
+                  itemId: nextItem,
+                  userId: userId || 'local',
+                  targetId: null
+                });
+                const meta = ITEM_META[nextItem];
+                if (meta) meta.sound();
+
+                const config = getItemAnimConfig(nextItem, true, false);
+                setTimeout(() => {
+                  setActiveItemAnimation(null);
+                  setAnimationLocked(false);
+                }, Math.ceil(config.totalDuration * 1000) + 1000);
+              }
+            }}
             onUseItem={(itemId) => {
               if (animationLocked || isPendingAction) return;
               if (itemId === 'adrenaline') {
-                setTargetingAction('adrenaline');
+                const opp = gameState?.players.find(p => p.userId !== userId);
+                const oppStealableItems = opp?.inventory?.filter((id: string) => id !== 'adrenaline') || [];
+                if (oppStealableItems.length === 0) {
+                  addLogEntry("No valid items to steal!", "⚠️", "text-amber-400");
+                  return;
+                }
+                setAnimationLocked(true);
+                setActiveItemAnimation({
+                  itemId: 'adrenaline',
+                  userId: userId || 'local',
+                  targetId: null
+                });
+                setTimeout(() => {
+                  setActiveItemAnimation(null);
+                  setIsStealSelectionMode(true);
+                }, 1500);
               } else if (itemId === 'handcuffs') {
                 setTargetingAction('handcuffs');
               } else {
@@ -1167,10 +1313,16 @@ function ChamberClashGameContent() {
                 shootTarget(gameState.gameId, userId || '', targetId);
                 setTargetingAction(null);
               } else if (targetingAction === 'handcuffs') {
-                useItem(gameState.gameId, userId || '', 'handcuffs', targetId);
-                setTargetingAction(null);
-              } else if (targetingAction === 'adrenaline') {
-                setStealingFromPlayerId(targetId);
+                if (stolenItemPending === 'handcuffs' || isPendingHandcuffs) {
+                  // Authoritative stolen Handcuffs resolution
+                  resolvePendingItem(gameState.gameId, userId || '', targetId, 'handcuffs');
+                  setStolenItemPending(null);
+                  setTargetingAction(null);
+                } else {
+                  // Direct Handcuffs resolution
+                  useItem(gameState.gameId, userId || '', 'handcuffs', targetId);
+                  setTargetingAction(null);
+                }
               }
             }}
             onAnimationComplete={() => {
@@ -1178,7 +1330,7 @@ function ChamberClashGameContent() {
               setAnimationLocked(false);
             }}
             onBarrelCut={() => {
-              setIsBarrelShortened(true);
+              setLocalBarrelCut(true);
             }}
             onShotgunPump={() => {
               sounds.playPump();
@@ -1191,69 +1343,87 @@ function ChamberClashGameContent() {
               setGunTarget(null);
               setCurrentShellType(null);
               setAnimationLocked(false);
+              setLocalBarrelCut(false);
             }}
           />
         </div>
+
+        {/* ── Persistent Local Player Health Indicator HUD ── */}
+        {gameState?.players && (
+          <div className="absolute bottom-28 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
+            {(() => {
+              const localPlayer = gameState.players.find((p: any) => p.userId === userId) || gameState.players[0];
+              if (!localPlayer) return null;
+              return (
+                <PlayerHealthIndicator
+                  player={localPlayer}
+                  maxHp={gameState.settings?.startingHp || 4}
+                  isLocal={true}
+                />
+              );
+            })()}
+          </div>
+        )}
 
         {/* ── Bottom Action Bar ── */}
         <div className="relative z-30 bg-black/70 border-t border-white/[0.04] backdrop-blur-md px-4 py-3">
           <div className="max-w-4xl mx-auto">
             {isMyTurn ? (
-              activeStealMode ? (
-                <div className="flex items-center justify-between w-full bg-amber-950/20 border border-amber-500/30 rounded-xl p-3 shadow-[0_0_20px_rgba(245,158,11,0.05)]">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xl animate-pulse">💉</span>
-                    <div className="text-left">
-                      <div className="text-xs font-bold text-amber-400 uppercase tracking-widest leading-normal">Adrenaline Active</div>
-                      <p className="text-[10px] text-zinc-400">Select any living opponent with items to steal from.</p>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 w-full">
+                {targetingAction === 'shoot' ? (
+                  <div className="flex items-center justify-between w-full bg-red-950/30 border border-red-500/40 rounded-xl p-3 shadow-[0_0_20px_rgba(239,68,68,0.15)]">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl animate-pulse">🎯</span>
+                      <div className="text-left">
+                        <div className="text-xs font-bold text-red-400 uppercase tracking-widest leading-normal">Shooting Target Selection Active</div>
+                        <p className="text-[10px] text-zinc-400">Click YOU to Shoot Self, or click Opponent marker across table.</p>
+                      </div>
                     </div>
-                  </div>
-                  <button onClick={() => setTargetingAction(null)} className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors">
-                    Cancel
-                  </button>
-                </div>
-              ) : activeHandcuffMode ? (
-                <div className="flex items-center justify-between w-full bg-zinc-900/90 border border-zinc-500/30 rounded-xl p-3 shadow-[0_0_20px_rgba(255,255,255,0.05)]">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xl animate-pulse">⛓️</span>
-                    <div className="text-left">
-                      <div className="text-xs font-bold text-zinc-200 uppercase tracking-widest leading-normal">{isPendingHandcuffs ? 'Stolen Handcuffs Active' : 'Handcuffs Active'}</div>
-                      <p className="text-[10px] text-zinc-400">Select an opponent to handcuff.</p>
-                    </div>
-                  </div>
-                  <button onClick={() => setTargetingAction(null)} className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors">
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 w-full">
-                  {/* Shoot buttons */}
-                  <div className="flex gap-2 w-full sm:w-auto">
-                    <button disabled={targetingAction !== 'shoot' && !selectedTargetId || isPendingAction}
-                      onClick={() => {
-                        if (targetingAction === 'shoot' && selectedTargetId && !isPendingAction) {
-                          shootTarget(gameState.gameId, userId, selectedTargetId);
-                          setTargetingAction(null);
-                        } else {
-                          setTargetingAction('shoot');
-                        }
-                      }}
-                      className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all ${
-                        targetingAction === 'shoot'
-                          ? 'bg-red-600 hover:bg-red-500 text-white shadow-[0_0_20px_rgba(239,68,68,0.4)] hover:scale-[1.02]'
-                          : 'bg-zinc-900 border border-white/[0.05] text-zinc-600 hover:text-white hover:border-white/10'
-                      }`}>
-                      {targetingAction === 'shoot' ? (selectedTargetId ? `Shoot ${getPlayerName(gameState.players, selectedTargetId)}` : 'Select Target') : 'Shoot Target'}
-                    </button>
-                    <button disabled={isPendingAction} onClick={() => { if (!isPendingAction) shootTarget(gameState.gameId, userId, userId); }}
-                      className={`flex-1 sm:flex-none px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all ${
-                        isPendingAction
-                          ? 'bg-zinc-900 border border-white/[0.05] text-zinc-600 cursor-not-allowed'
-                          : 'bg-zinc-900 border border-white/[0.08] hover:border-white/15 text-zinc-300 hover:bg-zinc-800'
-                      }`}>
-                      Shoot Self
+                    <button onClick={() => setTargetingAction(null)} className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors">
+                      Cancel
                     </button>
                   </div>
+                ) : activeStealMode ? (
+                  <div className="flex items-center justify-between w-full bg-amber-950/20 border border-amber-500/30 rounded-xl p-3 shadow-[0_0_20px_rgba(245,158,11,0.05)]">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl animate-pulse">💉</span>
+                      <div className="text-left">
+                        <div className="text-xs font-bold text-amber-400 uppercase tracking-widest leading-normal">Adrenaline Active</div>
+                        <p className="text-[10px] text-zinc-400">Select an opponent item on the table to steal.</p>
+                      </div>
+                    </div>
+                    <button onClick={() => {
+                      setTargetingAction(null);
+                      setIsStealSelectionMode(false);
+                      setStolenItemPending(null);
+                    }} className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors">
+                      Cancel
+                    </button>
+                  </div>
+                ) : activeHandcuffMode ? (
+                  <div className="flex items-center justify-between w-full bg-zinc-900/90 border border-zinc-500/30 rounded-xl p-3 shadow-[0_0_20px_rgba(255,255,255,0.05)]">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl animate-pulse">⛓️</span>
+                      <div className="text-left">
+                        <div className="text-xs font-bold text-zinc-200 uppercase tracking-widest leading-normal">{isPendingHandcuffs ? 'Stolen Handcuffs Active' : 'Handcuffs Active'}</div>
+                        <p className="text-[10px] text-zinc-400">Select opponent marker across table to handcuff.</p>
+                      </div>
+                    </div>
+                    <button onClick={() => {
+                      setTargetingAction(null);
+                      setStolenItemPending(null);
+                    }} className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors">
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between sm:w-auto bg-zinc-900/70 border border-white/[0.06] rounded-xl px-4 py-2.5">
+                    <div className="flex items-center gap-3">
+                      <span className="text-lg">🔫</span>
+                      <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider whitespace-nowrap">Click Physical Shotgun to Shoot</span>
+                    </div>
+                  </div>
+                )}
 
                   {/* Divider */}
                   <div className="hidden sm:block w-px h-8 bg-white/[0.06]" />
@@ -1290,7 +1460,6 @@ function ChamberClashGameContent() {
                     )}
                   </div>
                 </div>
-              )
             ) : (
               <div className="text-center py-1">
                 <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">
@@ -1372,6 +1541,8 @@ function ChamberClashGameContent() {
             </motion.div>
           )}
         </AnimatePresence>
+
+
 
         {/* ── Error Toast ── */}
         <AnimatePresence>

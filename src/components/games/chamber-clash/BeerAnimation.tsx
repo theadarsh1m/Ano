@@ -1,17 +1,15 @@
-import React, { useRef, useMemo, useEffect, useState } from 'react';
+import React, { useRef, useMemo } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { applyEasing, TABLE_Y, LOCAL_FACE, OPPONENT_FACE } from './animationConfigs';
-import { EjectedShell } from './EjectedShell';
+import { BeerCanMesh } from './CustomItemMeshes';
 
 interface BeerAnimationProps {
   animation: { itemId: string; userId: string; targetId: string | null };
-  sourceMesh: THREE.Mesh;
+  sourceMesh?: THREE.Mesh;
   localUserId: string | null;
   baseRotation?: [number, number, number];
-  /** Shell type from the server event — used to color the ejected shell */
   ejectedShellType?: 'LIVE' | 'BLANK' | null;
-  /** Called when the pump/ejection phase triggers (to sync shotgun visual) */
   onShotgunPump?: () => void;
   onComplete?: () => void;
 }
@@ -21,21 +19,15 @@ interface BeerAnimationProps {
  * 
  * 1. LIFT off table
  * 2. MOVE to actor face
- * 3. TILT back (drinking)
+ * 3. TILT back (drinking, top opening toward actor mouth)
  * 4. HOLD/DRINK
  * 5. LOWER beer
- * 6. SHOTGUN PUMP / EJECTION (triggers shell ejection)
+ * 6. SHOTGUN PUMP / EJECTION
  * 7. COMPLETE
- * 
- * The shell ejection visually shows the shell type (LIVE/BLANK)
- * using ONLY information legally available from the server event.
  */
 export function BeerAnimation({
   animation,
-  sourceMesh,
   localUserId,
-  baseRotation = [0, 0, 0],
-  ejectedShellType,
   onShotgunPump,
   onComplete
 }: BeerAnimationProps) {
@@ -45,26 +37,8 @@ export function BeerAnimation({
   const completed = useRef(false);
   const pumpTriggered = useRef(false);
 
-  const [showShell, setShowShell] = useState(false);
-
   const isLocalActor = animation.userId === localUserId;
   const face = isLocalActor ? LOCAL_FACE : OPPONENT_FACE;
-
-  // Normalize the source mesh
-  const normalizedMesh = useMemo(() => {
-    const cloned = sourceMesh.clone();
-    cloned.position.set(0, 0, 0);
-    cloned.rotation.set(0, 0, 0);
-    const box = new THREE.Box3().setFromObject(cloned);
-    const center = new THREE.Vector3();
-    box.getCenter(center);
-    cloned.position.set(-center.x, -center.y, -center.z);
-
-    const rotGroup = new THREE.Group();
-    rotGroup.rotation.set(baseRotation[0], baseRotation[1], baseRotation[2]);
-    rotGroup.add(cloned);
-    return rotGroup;
-  }, [sourceMesh, baseRotation]);
 
   // Phase definitions with cumulative times
   const phases = useMemo(() => {
@@ -117,34 +91,33 @@ export function BeerAnimation({
       THREE.MathUtils.lerp(from[2], to[2], eased)
     );
 
-    // Phase-specific behavior
+    // Phase-specific behavior (Actor-relative tilt direction)
+    const tiltDirection = isLocalActor ? 1.1 : -1.1;
+
     switch (currentPhase.name) {
       case 'TILT': {
-        // Tilt the beer back to drink
-        const tiltAngle = -1.0 * applyEasing(phaseProgress, 'easeOut');
+        // Tilt the top of the can toward actor mouth
+        const tiltAngle = tiltDirection * applyEasing(phaseProgress, 'easeOut');
         innerRef.current.rotation.x = tiltAngle;
         break;
       }
       case 'DRINK_HOLD': {
-        // Hold tilted position with slight sway
-        innerRef.current.rotation.x = -1.0;
-        // Subtle drinking motion
+        // Hold tilted position with subtle sway
+        innerRef.current.rotation.x = tiltDirection;
         innerRef.current.rotation.z = Math.sin(t * 8) * 0.05;
         break;
       }
       case 'LOWER': {
         // Return tilt to upright
-        innerRef.current.rotation.x = THREE.MathUtils.lerp(-1.0, 0, applyEasing(phaseProgress, 'easeOut'));
+        innerRef.current.rotation.x = THREE.MathUtils.lerp(tiltDirection, 0, applyEasing(phaseProgress, 'easeOut'));
         innerRef.current.rotation.z = 0;
         break;
       }
       case 'EJECT': {
-        // Trigger shotgun pump and shell ejection at the start of this phase
+        // Trigger shotgun pump & single physical shell ejection
         if (!pumpTriggered.current) {
           pumpTriggered.current = true;
           onShotgunPump?.();
-          // Show shell after a brief delay (pump has to rack first)
-          setTimeout(() => setShowShell(true), 150);
         }
         // Fade out the beer mesh during this phase
         groupRef.current.scale.setScalar(Math.max(0, 1 - phaseProgress));
@@ -160,20 +133,10 @@ export function BeerAnimation({
   });
 
   return (
-    <>
-      <group ref={groupRef}>
-        <group ref={innerRef}>
-          <primitive object={normalizedMesh} />
-        </group>
+    <group ref={groupRef}>
+      <group ref={innerRef}>
+        <BeerCanMesh />
       </group>
-
-      {/* Ejected Shell */}
-      {showShell && ejectedShellType && (
-        <EjectedShell
-          shellType={ejectedShellType}
-          onComplete={() => setShowShell(false)}
-        />
-      )}
-    </>
+    </group>
   );
 }

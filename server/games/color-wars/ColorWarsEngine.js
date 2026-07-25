@@ -293,7 +293,7 @@ class ColorWarsEngine extends BaseGameEngine {
         const p = this.players.get(pId);
         if (p) {
           p.role = 'SPECTATOR';
-          this.historyLogs.push(`💀 ${p.nickname} has been eliminated!`);
+          this.historyLogs.push(`${p.nickname} has been eliminated!`);
         }
       }
     });

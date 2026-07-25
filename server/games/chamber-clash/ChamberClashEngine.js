@@ -378,12 +378,17 @@ class ChamberClashEngine extends BaseGameEngine {
       return { success: false, error: 'Item not in inventory' };
     }
 
-    // Validate item exists before removing from inventory
+    // Validate item exists and CAN be used BEFORE removing from inventory
     const itemDef = ItemRegistry.getItem(itemId);
     if (!itemDef) {
       return { success: false, error: 'Unknown item' };
     }
 
+    if (!itemDef.canUse(this, playerId, targetId)) {
+      return { success: false, error: 'Cannot use item right now or invalid target' };
+    }
+
+    // Item usage is valid — consume item from inventory
     player.inventory.splice(itemIndex, 1);
     
     return this.executeItemEffect(playerId, itemId, targetId, data, 'NORMAL');

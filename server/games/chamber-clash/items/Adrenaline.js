@@ -10,11 +10,14 @@ const BaseItem = {
   targetRules: 'opponent',
   
   canUse: (engine, playerId, targetId) => {
-    // Return true if there is at least one living opponent with items in inventory
+    // Return true if there is at least one living opponent with stealable non-adrenaline items
     let hasTarget = false;
     engine.players.forEach(p => {
-      if (p.userId !== playerId && p.isAlive && p.inventory.length > 0) {
-        hasTarget = true;
+      if (p.userId !== playerId && p.isAlive) {
+        const stealableItems = p.inventory.filter(id => id !== 'adrenaline');
+        if (stealableItems.length > 0) {
+          hasTarget = true;
+        }
       }
     });
     return hasTarget;
@@ -33,6 +36,10 @@ const BaseItem = {
     const stolenItemId = data?.stolenItemId;
     if (!stolenItemId) {
       return { success: false, error: 'No item selected to steal' };
+    }
+
+    if (stolenItemId === 'adrenaline') {
+      return { success: false, error: 'Adrenaline cannot steal another Adrenaline.' };
     }
     
     const itemIndex = target.inventory.findIndex(id => id === stolenItemId);
