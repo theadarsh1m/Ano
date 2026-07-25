@@ -127,6 +127,13 @@ class ChamberClashEngine extends BaseGameEngine {
     this.players.forEach(p => {
       if (!p.isAlive) return;
       given[p.userId] = [];
+      
+      // Forcefully add a beer
+      if (p.inventory.length < this.settings.maxInventory) {
+        p.inventory.push('beer');
+        given[p.userId].push('beer');
+      }
+
       for (let i = 0; i < amount; i++) {
         if (p.inventory.length >= this.settings.maxInventory) break;
         const itemId = RandomService.drawItem(ItemRegistry);

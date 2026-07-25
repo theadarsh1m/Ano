@@ -85,16 +85,34 @@ export function InteractiveItem({
     };
   }, [sourceMesh, rotation]);
 
+  // We need to inject an emissive color to the mesh when hovered
   useFrame((state, delta) => {
     if (!meshRef.current) return;
-    // Smooth hover animation (lift by 1cm = 0.01 units)
-    const targetY = (isLocal && hovered) ? 0.01 : 0;
-    meshRef.current.position.y += (targetY - meshRef.current.position.y) * 10 * delta;
+    // Smooth hover animation (lift by 1.5cm = 0.015 units)
+    const targetY = (isLocal && hovered) ? 0.015 : 0;
+    meshRef.current.position.y += (targetY - meshRef.current.position.y) * 12 * delta;
+    
+    // Smooth rotation on Y axis when hovered for an extra tactile feel
+    const targetRot = (isLocal && hovered) ? 0.1 : 0;
+    meshRef.current.rotation.y += (targetRot - meshRef.current.rotation.y) * 8 * delta;
+
+    // Emissive glow logic
+    meshRef.current.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.material) {
+        // Only apply if the material supports emissive (like MeshStandardMaterial)
+        if (child.material.emissive !== undefined) {
+          const targetEmissive = (isLocal && hovered) ? 0.2 : 0;
+          const currentIntensity = child.material.emissiveIntensity || 0;
+          child.material.emissive.setHex(0xffffff); // White glow
+          child.material.emissiveIntensity = currentIntensity + (targetEmissive - currentIntensity) * 10 * delta;
+        }
+      }
+    });
     
     // Click scale animation
     meshRef.current.scale.setScalar(clickScale);
     if (clickScale < 1) {
-      setClickScale(prev => Math.min(1, prev + delta * 5));
+      setClickScale(prev => Math.min(1, prev + delta * 8));
     }
   });
 

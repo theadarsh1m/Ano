@@ -12,6 +12,7 @@ import { TurnIndicator } from "@/components/games/TurnIndicator";
 import dynamic from "next/dynamic";
 import { useExitWarning } from "@/hooks/useExitWarning";
 import { sounds } from "@/lib/sounds";
+import { getItemAnimConfig } from "@/components/games/chamber-clash/animationConfigs";
 
 const ChamberClash3D = dynamic(() => import("@/components/games/chamber-clash/ChamberClash3D").then((m) => m.ChamberClash3D), { ssr: false });
 
@@ -50,19 +51,26 @@ function ChamberClashGameContent() {
   } = useChamberClashStore();
 
   // ─── Local UI State ───
-  const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
-  const [stealModeActive, setStealModeActive] = useState(false);
-  const [handcuffModeActive, setHandcuffModeActive] = useState(false);
+  const [targetingAction, setTargetingAction] = useState<'shoot' | 'handcuffs' | 'adrenaline' | null>(null);
   const [stealingFromPlayerId, setStealingFromPlayerId] = useState<string | null>(null);
   const [stealingAnimation, setStealingAnimation] = useState<{ icon: string; from: { left: string; top: string }; to: { left: string; top: string } } | null>(null);
   const [visualTurnPlayerId, setVisualTurnPlayerId] = useState<string | null>(null);
   const [gunAngle, setGunAngle] = useState(0);
   const [gunState, setGunState] = useState<'idle' | 'pointing' | 'pump' | 'firing'>('idle');
+  const [gunTarget, setGunTarget] = useState<'local' | 'opponent' | null>(null);
+  const [activeItemAnimation, setActiveItemAnimation] = useState<{ itemId: string; userId: string; targetId: string | null } | null>(null);
+  const [currentShellType, setCurrentShellType] = useState<'LIVE' | 'BLANK' | null>(null);
+  const [isBarrelShortened, setIsBarrelShortened] = useState(false);
+  const [animationLocked, setAnimationLocked] = useState(false);
+  const [privatePayload, setPrivatePayload] = useState<any>(null);
   const [muzzleFlash, setMuzzleFlash] = useState(false);
   const [screenShake, setScreenShake] = useState(false);
   const [smokeParticles, setSmokeParticles] = useState<Array<{ id: number; x: number; y: number }>>([]);
   const [showRoundOverlay, setShowRoundOverlay] = useState(false);
   const [roundOverlayData, setRoundOverlayData] = useState<{ round: number; total: number; live: number; blank: number } | null>(null);
+
+  // Derive selectedTargetId from the active targetingAction, except when shooting it might just highlight
+  const selectedTargetId = targetingAction === 'shoot' ? (gameState?.players.find(p => p.userId !== userId)?.userId || null) : null;
   const [shellCounterLive, setShellCounterLive] = useState(0);
   const [shellCounterBlank, setShellCounterBlank] = useState(0);
   const [showActionLog, setShowActionLog] = useState(false);
@@ -116,15 +124,12 @@ function ChamberClashGameContent() {
   }, [userId, lobby?.id, gameState?.gameId, gameIdParam]);
 
   // ─── // Local variables previously used for shell counters are removed for suspense
-
-
   // ─── Sync visual turn when not animating ───
   useEffect(() => {
     if (!isAnimating && eventQueue.length === 0 && gameState?.currentTurnPlayerId) {
       setVisualTurnPlayerId(gameState.currentTurnPlayerId);
       if (gameState.currentTurnPlayerId !== userId) {
-        setStealModeActive(false);
-        setHandcuffModeActive(false);
+        setTargetingAction(null);
       }
     }
   }, [isAnimating, eventQueue.length, gameState?.currentTurnPlayerId, userId]);
@@ -198,6 +203,7 @@ function ChamberClashGameContent() {
       // ──── ROUND START ────
       case 'round_started': {
         duration = 3500;
+        setIsBarrelShortened(false);
         setRoundOverlayData({ round: evt.data.roundNumber, total: evt.data.totalShells, live: evt.data.liveShells, blank: evt.data.blankShells });
         setShowRoundOverlay(true);
         setShellCounterLive(evt.data.liveShells);
@@ -230,7 +236,9 @@ function ChamberClashGameContent() {
       case 'turn_started': {
         duration = 1200;
         setGunState('idle');
-        setSelectedTargetId(null);
+        setGunTarget(null);
+        setTargetingAction(null);
+        setActiveItemAnimation(null);
         setVisualTurnPlayerId(evt.data.playerId);
         
         // Point gun toward current turn player
@@ -248,21 +256,23 @@ function ChamberClashGameContent() {
       // ──── SHOT FIRED ────
       case 'shot_fired': {
         const isLive = evt.data.shellType === 'LIVE';
-        duration = isLive ? 2800 : 2000;
+        // Total visual duration: pickup(0.4) + aim(0.5) + settle(0.3) + fire(0.08) + recoil(0.2) + recover(0.4) + return(0.6) = 2.48s + buffer
+        duration = isLive ? 3200 : 2600;
         
-        // Point at target
+        setAnimationLocked(true);
+        
+        // Set shell type so shotgun knows recoil intensity
+        setCurrentShellType(isLive ? 'LIVE' : 'BLANK');
+
+        // Point at target — starts the PICKING_UP → AIMING → AIM_SETTLE sequence
         setGunAngle(computeGunAngle(evt.data.targetId));
+        setGunTarget(evt.data.targetId === userId ? 'local' : 'opponent');
         setGunState('pointing');
         
-        // Pump at 500ms
-        setTimeout(() => {
-          setGunState('pump');
-          sounds.playPump();
-        }, 500);
-
-        // Fire at 1100ms
+        // Fire after aim settles: pickup(0.4) + aim(0.5) + settle(0.3) = 1.2s
         setTimeout(() => {
           setGunState('firing');
+          // ONE sound, ONE muzzle flash, ONE recoil
           if (isLive) {
             sounds.playGunShootLive();
             setMuzzleFlash(true);
@@ -270,25 +280,31 @@ function ChamberClashGameContent() {
             setSmokeParticles(Array.from({ length: 8 }).map((_, i) => ({
               id: Date.now() + i, x: (Math.random() - 0.5) * 60, y: (Math.random() - 0.5) * 60
             })));
-            setTimeout(() => setMuzzleFlash(false), 250);
-            setTimeout(() => setScreenShake(false), 400);
+            setTimeout(() => setMuzzleFlash(false), 200);
+            setTimeout(() => setScreenShake(false), 350);
           } else {
             sounds.playGunShootBlank();
             setScreenShake(true);
-            setTimeout(() => setScreenShake(false), 180);
+            setTimeout(() => setScreenShake(false), 150);
           }
-        }, 1100);
+        }, 1200);
 
-        // Update shell counters
+        // Update shell counters after fire
         if (evt.data.remainingLive !== undefined) {
           setTimeout(() => {
             setShellCounterLive(evt.data.remainingLive);
             setShellCounterBlank(evt.data.remainingBlank);
-          }, 1300);
+          }, 1500);
         }
 
-        // Return gun to idle
-        setTimeout(() => { setGunState('idle'); setSmokeParticles([]); }, duration - 300);
+        // Return gun to idle — the shotgun state machine handles the visual return
+        setTimeout(() => { 
+            setGunState('idle'); 
+            setGunTarget(null);
+            setCurrentShellType(null);
+            setSmokeParticles([]); 
+            setAnimationLocked(false);
+        }, duration - 300);
 
         const shooterName = getPlayerName(players, evt.data.shooterId);
         const targetName = evt.data.shooterId === evt.data.targetId ? "themselves" : getPlayerName(players, evt.data.targetId);
@@ -335,6 +351,11 @@ function ChamberClashGameContent() {
             setShellCounterBlank(evt.data.remainingBlank);
           }, 1000);
         }
+
+        setTimeout(() => {
+          setStealingAnimation(null);
+          setActiveItemAnimation(null);
+        }, duration);
 
         setTimeout(() => setGunState('idle'), duration - 300);
         
@@ -385,10 +406,34 @@ function ChamberClashGameContent() {
 
       // ──── ITEM USED ────
       case 'item_used': {
-        duration = 1500;
+        const isLocalActor = evt.data.playerId === userId;
+        const isLocalTarget = (evt.data.targetId || null) === userId;
+        const itemConfig = getItemAnimConfig(evt.data.itemId, isLocalActor, isLocalTarget);
+        
+        // Pass private payload for Burner Phone and Magnifier
+        if (evt.data.revealedShell || evt.data.burnerPhoneReveal || evt.data.shellType) {
+          setPrivatePayload({
+            shellIndex: evt.data.shellIndex || evt.data.burnerPhoneReveal?.shellIndex || 3,
+            shellType: evt.data.shellType || evt.data.revealedShell || evt.data.burnerPhoneReveal?.shellType || 'LIVE'
+          });
+        }
+
+        const isAdrenalineSteal = evt.data.itemId === 'adrenaline' && evt.data.stolenItem;
+        const stolenItemConfig = isAdrenalineSteal ? getItemAnimConfig(evt.data.stolenItem, isLocalActor, isLocalTarget) : null;
+        
+        duration = isAdrenalineSteal
+          ? Math.ceil((itemConfig.totalDuration + (stolenItemConfig?.totalDuration || 1.5)) * 1000) + 600
+          : Math.ceil(itemConfig.totalDuration * 1000) + 500;
+        
+        setAnimationLocked(true);
+        setActiveItemAnimation({
+          itemId: evt.data.itemId,
+          userId: evt.data.playerId,
+          targetId: evt.data.targetId || null
+        });
+
         const meta = ITEM_META[evt.data.itemId];
         if (meta) meta.sound();
-        setActiveItemAnim({ itemId: evt.data.itemId, targetId: evt.data.targetId || evt.data.playerId });
         
         // Patch local state (remove item from inventory)
         useChamberClashStore.setState(state => {
@@ -403,7 +448,26 @@ function ChamberClashGameContent() {
           return { gameState: { ...state.gameState, players: newPlayers } };
         });
 
-        setTimeout(() => setActiveItemAnim(null), 1300);
+        // Adrenaline Stolen Item Chaining: play stolen item animation after self-injection
+        if (isAdrenalineSteal) {
+          setTimeout(() => {
+            setActiveItemAnimation({
+              itemId: evt.data.stolenItem,
+              userId: evt.data.playerId,
+              targetId: evt.data.targetId || null
+            });
+            const stolenMeta = ITEM_META[evt.data.stolenItem];
+            if (stolenMeta) stolenMeta.sound();
+          }, Math.ceil(itemConfig.totalDuration * 1000));
+        }
+
+        // Safety watchdog: clear animation if onComplete doesn't fire
+        setTimeout(() => {
+          setActiveItemAnimation(null);
+          setAnimationLocked(false);
+          setPrivatePayload(null);
+        }, duration + 1500);
+
         const itemName = meta?.name || evt.data.itemId;
         addLogEntry(`${getPlayerName(players, evt.data.playerId)} used ${itemName}`, meta?.icon || "📦", meta?.color || "text-white");
         break;
@@ -599,8 +663,11 @@ function ChamberClashGameContent() {
               <h2 className="text-2xl font-black mb-2">Host a Match</h2>
               <p className="text-sm text-zinc-500">2–8 players. Last one standing wins.</p>
             </div>
-            <button onClick={() => createLobby(userId, nickname)} className="w-full py-4 bg-gradient-to-r from-red-600 to-rose-700 text-white rounded-xl font-bold shadow-lg hover:scale-[1.02] transition-transform">
+            <button onClick={() => createLobby(userId, nickname)} className="w-full py-4 bg-gradient-to-r from-red-600 to-rose-700 text-white rounded-xl font-bold shadow-lg hover:scale-[1.02] transition-transform cursor-pointer">
               Create Lobby
+            </button>
+            <button onClick={() => startPracticeGame(userId, nickname || "Player")} className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl font-bold text-sm transition-colors cursor-pointer">
+              Practice Mode (Single Player)
             </button>
           </GlassCard>
 
@@ -693,15 +760,164 @@ function ChamberClashGameContent() {
     const isPendingHandcuffs = isPendingAction && pendingItemId === 'handcuffs';
     const isPendingAdrenaline = isPendingAction && pendingItemId === 'adrenaline';
     
-    const activeHandcuffMode = handcuffModeActive || isPendingHandcuffs;
-    const activeStealMode = stealModeActive || isPendingAdrenaline;
+    const activeHandcuffMode = targetingAction === 'handcuffs' || isPendingHandcuffs;
+    const activeStealMode = targetingAction === 'adrenaline' || isPendingAdrenaline;
 
     const currentBannerText = eventQueue.length > 0 ? eventQueue[0].type.replace(/_/g, ' ').toUpperCase() : '';
     const hasHandsaw = gameState.players.find(p => p.userId === visualTurnPlayerId)?.statusEffects?.some((e: any) => e.type === 'DOUBLE_DAMAGE');
 
     return (
       <div className={`flex flex-col h-screen bg-[#060709] text-white overflow-hidden select-none relative ${screenShake ? 'cc-shake' : ''}`}>
+        
+        {/* DEBUG BUTTONS — Expanded Animation Controls */}
+        <div className="absolute top-2 left-2 z-[9999] flex flex-wrap gap-1 max-w-[720px] pointer-events-auto bg-black/80 p-2 rounded-xl border border-white/10 backdrop-blur-md">
+          {/* Shotgun Debug */}
+          {[
+            { label: 'SHOOT OPP LIVE', target: 'opponent' as const, shell: 'LIVE' as const, color: 'bg-red-600' },
+            { label: 'SHOOT OPP BLANK', target: 'opponent' as const, shell: 'BLANK' as const, color: 'bg-zinc-600' },
+            { label: 'SHOOT SELF LIVE', target: 'local' as const, shell: 'LIVE' as const, color: 'bg-red-800' },
+            { label: 'SHOOT SELF BLANK', target: 'local' as const, shell: 'BLANK' as const, color: 'bg-zinc-700' },
+          ].map(({ label, target, shell, color }) => (
+            <button key={label} className={`px-2 py-1 ${color} text-white text-[9px] font-bold rounded cursor-pointer`}
+              onClick={() => {
+                if (animationLocked) return;
+                setAnimationLocked(true);
+                setCurrentShellType(shell);
+                setGunTarget(target);
+                setGunState('pointing');
+                setTimeout(() => {
+                  setGunState('firing');
+                  if (shell === 'LIVE') {
+                    setMuzzleFlash(true);
+                    setScreenShake(true);
+                    setTimeout(() => setMuzzleFlash(false), 200);
+                    setTimeout(() => setScreenShake(false), 350);
+                  } else {
+                    setScreenShake(true);
+                    setTimeout(() => setScreenShake(false), 150);
+                  }
+                }, 900);
+                setTimeout(() => {
+                  setGunState('idle');
+                  setGunTarget(null);
+                  setCurrentShellType(null);
+                  setAnimationLocked(false);
+                }, 2800);
+              }}>
+              {label}
+            </button>
+          ))}
 
+          {/* Beer Debug (Local Live/Blank, Opponent Live/Blank) */}
+          <button className="px-2 py-1 bg-amber-700 text-white text-[9px] font-bold rounded cursor-pointer"
+            onClick={() => {
+              if (animationLocked) return;
+              setAnimationLocked(true);
+              setEjectedShellType('LIVE');
+              setActiveItemAnimation({ itemId: 'beer', userId: userId || 'local', targetId: null });
+              setTimeout(() => { setActiveItemAnimation(null); setAnimationLocked(false); }, 3200);
+            }}>LOCAL BEER LIVE</button>
+
+          <button className="px-2 py-1 bg-amber-900 text-white text-[9px] font-bold rounded cursor-pointer"
+            onClick={() => {
+              if (animationLocked) return;
+              setAnimationLocked(true);
+              setEjectedShellType('BLANK');
+              setActiveItemAnimation({ itemId: 'beer', userId: userId || 'local', targetId: null });
+              setTimeout(() => { setActiveItemAnimation(null); setAnimationLocked(false); }, 3200);
+            }}>LOCAL BEER BLANK</button>
+
+          <button className="px-2 py-1 bg-amber-600 text-white text-[9px] font-bold rounded cursor-pointer"
+            onClick={() => {
+              if (animationLocked) return;
+              setAnimationLocked(true);
+              setEjectedShellType('LIVE');
+              const oppId = gameState?.players.find(p => p.userId !== userId)?.userId || 'opp';
+              setActiveItemAnimation({ itemId: 'beer', userId: oppId, targetId: null });
+              setTimeout(() => { setActiveItemAnimation(null); setAnimationLocked(false); }, 3200);
+            }}>OPP BEER LIVE</button>
+
+          {/* Burner Phone Debug (Local vs Opponent) */}
+          <button className="px-2 py-1 bg-amber-500 text-black text-[9px] font-bold rounded cursor-pointer"
+            onClick={() => {
+              if (animationLocked) return;
+              setAnimationLocked(true);
+              setPrivatePayload({ shellIndex: 3, shellType: 'LIVE' });
+              setActiveItemAnimation({ itemId: 'burner_phone', userId: userId || 'local', targetId: null });
+              setTimeout(() => { setActiveItemAnimation(null); setAnimationLocked(false); setPrivatePayload(null); }, 3200);
+            }}>LOCAL PHONE</button>
+
+          <button className="px-2 py-1 bg-amber-700 text-white text-[9px] font-bold rounded cursor-pointer"
+            onClick={() => {
+              if (animationLocked) return;
+              setAnimationLocked(true);
+              setPrivatePayload({ shellIndex: 3, shellType: 'LIVE' });
+              const oppId = gameState?.players.find(p => p.userId !== userId)?.userId || 'opp';
+              setActiveItemAnimation({ itemId: 'burner_phone', userId: oppId, targetId: null });
+              setTimeout(() => { setActiveItemAnimation(null); setAnimationLocked(false); setPrivatePayload(null); }, 3200);
+            }}>OPP PHONE (SECRET)</button>
+
+          {/* Adrenaline Steal Debug */}
+          <button className="px-2 py-1 bg-purple-700 text-white text-[9px] font-bold rounded cursor-pointer"
+            onClick={() => {
+              if (animationLocked) return;
+              setAnimationLocked(true);
+              setEjectedShellType('LIVE');
+              setActiveItemAnimation({ itemId: 'adrenaline', userId: userId || 'local', targetId: null });
+              setTimeout(() => {
+                setActiveItemAnimation({ itemId: 'beer', userId: userId || 'local', targetId: null });
+              }, 1500);
+              setTimeout(() => { setActiveItemAnimation(null); setAnimationLocked(false); }, 4500);
+            }}>STEAL BEER</button>
+
+          <button className="px-2 py-1 bg-purple-900 text-white text-[9px] font-bold rounded cursor-pointer"
+            onClick={() => {
+              if (animationLocked) return;
+              setAnimationLocked(true);
+              setPrivatePayload({ shellType: 'BLANK' });
+              setActiveItemAnimation({ itemId: 'adrenaline', userId: userId || 'local', targetId: null });
+              setTimeout(() => {
+                setActiveItemAnimation({ itemId: 'magnifier', userId: userId || 'local', targetId: null });
+              }, 1500);
+              setTimeout(() => { setActiveItemAnimation(null); setAnimationLocked(false); setPrivatePayload(null); }, 3800);
+            }}>STEAL MAGNIFIER</button>
+
+          {/* Handcuffs Debug */}
+          <button className="px-2 py-1 bg-zinc-700 text-white text-[9px] font-bold rounded cursor-pointer"
+            onClick={() => {
+              if (animationLocked) return;
+              setAnimationLocked(true);
+              const oppId = gameState?.players.find(p => p.userId !== userId)?.userId || 'opp';
+              setActiveItemAnimation({ itemId: 'handcuffs', userId: userId || 'local', targetId: oppId });
+              setTimeout(() => { setActiveItemAnimation(null); setAnimationLocked(false); }, 2000);
+            }}>HANDCUFF OPP</button>
+
+          {/* Handsaw Debug */}
+          <button className="px-2 py-1 bg-orange-700 text-white text-[9px] font-bold rounded cursor-pointer"
+            onClick={() => {
+              if (animationLocked) return;
+              setAnimationLocked(true);
+              setActiveItemAnimation({ itemId: 'handsaw', userId: userId || 'local', targetId: null });
+              setTimeout(() => { setActiveItemAnimation(null); setAnimationLocked(false); }, 3000);
+            }}>HANDSAW</button>
+
+          {/* Other Items Debug */}
+          {['magnifier', 'inverter', 'medkit'].map(itemId => {
+            const meta = ITEM_META[itemId];
+            return (
+              <button key={itemId} className="px-2 py-1 bg-emerald-800 text-white text-[9px] font-bold rounded cursor-pointer"
+                onClick={() => {
+                  if (animationLocked) return;
+                  setAnimationLocked(true);
+                  if (itemId === 'magnifier') setPrivatePayload({ shellType: 'LIVE' });
+                  setActiveItemAnimation({ itemId, userId: userId || 'local', targetId: null });
+                  setTimeout(() => { setActiveItemAnimation(null); setAnimationLocked(false); setPrivatePayload(null); }, 2000);
+                }}>
+                {meta?.icon} {meta?.name?.toUpperCase() || itemId.toUpperCase()}
+              </button>
+            );
+          })}
+        </div>
         {/* ── Ambient Dust ── */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-20 z-0">
           {dustParticles.map(p => (
@@ -827,7 +1043,7 @@ function ChamberClashGameContent() {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => {
                 setStealingFromPlayerId(null);
-                setStealModeActive(false);
+                setTargetingAction(null);
               }}
               className="absolute inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
               <motion.div initial={{ scale: 0.95, y: 15 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 10 }}
@@ -837,7 +1053,7 @@ function ChamberClashGameContent() {
                 {/* Close button */}
                 <button onClick={() => {
                   setStealingFromPlayerId(null);
-                  setStealModeActive(false);
+                  setTargetingAction(null);
                 }} className="absolute top-4 right-4 p-1.5 hover:bg-white/10 rounded-lg text-zinc-500 hover:text-zinc-200 transition-colors">
                   <X className="w-5 h-5" />
                 </button>
@@ -860,7 +1076,7 @@ function ChamberClashGameContent() {
                           useItem(gameState.gameId, userId, 'adrenaline', stealingFromPlayerId, itemId);
                         }
                         setStealingFromPlayerId(null);
-                        setStealModeActive(false);
+                        setTargetingAction(null);
                       }}
                       className="w-full p-2.5 bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.04] hover:border-amber-500/30 rounded-xl flex items-center justify-between text-left transition-all hover:scale-[1.01]">
                       <div className="flex items-center gap-3">
@@ -927,8 +1143,55 @@ function ChamberClashGameContent() {
             userId={userId}
             eventQueue={eventQueue}
             isAnimating={isAnimating}
-            onUseItem={(itemId) => useItem(gameState.gameId, userId || '', itemId)}
-            onShootTarget={(targetId) => shootTarget(gameState.gameId, userId || '', targetId)}
+            targetingAction={targetingAction}
+            gunState={gunState}
+            gunTarget={gunTarget}
+            shellType={currentShellType}
+            activeItemAnimation={activeItemAnimation}
+            ejectedShellType={ejectedShellType as any}
+            isBarrelShortened={isBarrelShortened}
+            privatePayload={privatePayload}
+            onUseItem={(itemId) => {
+              if (animationLocked || isPendingAction) return;
+              if (itemId === 'adrenaline') {
+                setTargetingAction('adrenaline');
+              } else if (itemId === 'handcuffs') {
+                setTargetingAction('handcuffs');
+              } else {
+                useItem(gameState.gameId, userId || '', itemId);
+              }
+            }}
+            onSelectTarget={(targetId) => {
+              if (animationLocked) return;
+              if (targetingAction === 'shoot') {
+                shootTarget(gameState.gameId, userId || '', targetId);
+                setTargetingAction(null);
+              } else if (targetingAction === 'handcuffs') {
+                useItem(gameState.gameId, userId || '', 'handcuffs', targetId);
+                setTargetingAction(null);
+              } else if (targetingAction === 'adrenaline') {
+                setStealingFromPlayerId(targetId);
+              }
+            }}
+            onAnimationComplete={() => {
+              setActiveItemAnimation(null);
+              setAnimationLocked(false);
+            }}
+            onBarrelCut={() => {
+              setIsBarrelShortened(true);
+            }}
+            onShotgunPump={() => {
+              sounds.playPump();
+            }}
+            onFireMoment={() => {
+              // Sound/flash triggered by state machine / event handler
+            }}
+            onShotgunSequenceComplete={() => {
+              setGunState('idle');
+              setGunTarget(null);
+              setCurrentShellType(null);
+              setAnimationLocked(false);
+            }}
           />
         </div>
 
@@ -945,7 +1208,7 @@ function ChamberClashGameContent() {
                       <p className="text-[10px] text-zinc-400">Select any living opponent with items to steal from.</p>
                     </div>
                   </div>
-                  <button onClick={() => setStealModeActive(false)} className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors">
+                  <button onClick={() => setTargetingAction(null)} className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors">
                     Cancel
                   </button>
                 </div>
@@ -955,27 +1218,32 @@ function ChamberClashGameContent() {
                     <span className="text-xl animate-pulse">⛓️</span>
                     <div className="text-left">
                       <div className="text-xs font-bold text-zinc-200 uppercase tracking-widest leading-normal">{isPendingHandcuffs ? 'Stolen Handcuffs Active' : 'Handcuffs Active'}</div>
-                      <p className="text-[10px] text-zinc-400">Select any living opponent to skip their next turn.</p>
+                      <p className="text-[10px] text-zinc-400">Select an opponent to handcuff.</p>
                     </div>
                   </div>
-                  {!isPendingHandcuffs && (
-                    <button onClick={() => setHandcuffModeActive(false)} className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors">
-                      Cancel
-                    </button>
-                  )}
+                  <button onClick={() => setTargetingAction(null)} className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors">
+                    Cancel
+                  </button>
                 </div>
               ) : (
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 w-full">
                   {/* Shoot buttons */}
                   <div className="flex gap-2 w-full sm:w-auto">
-                    <button disabled={!selectedTargetId || isPendingAction}
-                      onClick={() => selectedTargetId && !isPendingAction && shootTarget(gameState.gameId, userId, selectedTargetId)}
+                    <button disabled={targetingAction !== 'shoot' && !selectedTargetId || isPendingAction}
+                      onClick={() => {
+                        if (targetingAction === 'shoot' && selectedTargetId && !isPendingAction) {
+                          shootTarget(gameState.gameId, userId, selectedTargetId);
+                          setTargetingAction(null);
+                        } else {
+                          setTargetingAction('shoot');
+                        }
+                      }}
                       className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all ${
-                        selectedTargetId
+                        targetingAction === 'shoot'
                           ? 'bg-red-600 hover:bg-red-500 text-white shadow-[0_0_20px_rgba(239,68,68,0.4)] hover:scale-[1.02]'
-                          : 'bg-zinc-900 border border-white/[0.05] text-zinc-600 cursor-not-allowed'
+                          : 'bg-zinc-900 border border-white/[0.05] text-zinc-600 hover:text-white hover:border-white/10'
                       }`}>
-                      {selectedTargetId ? `Shoot ${getPlayerName(gameState.players, selectedTargetId)}` : 'Select Target'}
+                      {targetingAction === 'shoot' ? (selectedTargetId ? `Shoot ${getPlayerName(gameState.players, selectedTargetId)}` : 'Select Target') : 'Shoot Target'}
                     </button>
                     <button disabled={isPendingAction} onClick={() => { if (!isPendingAction) shootTarget(gameState.gameId, userId, userId); }}
                       className={`flex-1 sm:flex-none px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all ${
@@ -999,11 +1267,9 @@ function ChamberClashGameContent() {
                           onClick={() => {
                             if (isPendingAction) return;
                             if (itemId === 'adrenaline') {
-                              setStealModeActive(true);
-                              setHandcuffModeActive(false);
+                              setTargetingAction('adrenaline');
                             } else if (itemId === 'handcuffs') {
-                              setHandcuffModeActive(true);
-                              setStealModeActive(false);
+                              setTargetingAction('handcuffs');
                             } else {
                               useItem(gameState.gameId, userId, itemId, userId);
                             }

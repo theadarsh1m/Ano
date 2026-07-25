@@ -12,6 +12,10 @@ export default function Test3DPage() {
         userId={"test"} 
         eventQueue={[]} 
         isAnimating={false} 
+        targetingAction={null}
+        gunState="idle"
+        gunTarget={null}
+        activeItemAnimation={null}
       />
     </div>
   );

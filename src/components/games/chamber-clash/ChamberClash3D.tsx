@@ -19,8 +19,25 @@ interface ChamberClash3DProps {
   userId: string | null;
   eventQueue: any[];
   isAnimating: boolean;
+  targetingAction: 'shoot' | 'handcuffs' | 'adrenaline' | null;
+  gunState: 'idle' | 'pointing' | 'pump' | 'firing';
+  gunTarget: 'local' | 'opponent' | null;
+  shellType?: 'LIVE' | 'BLANK' | null;
+  activeItemAnimation: { itemId: string; userId: string; targetId: string | null } | null;
+  /** Shell type for the beer ejection animation */
+  ejectedShellType?: 'LIVE' | 'BLANK' | null;
+  /** Whether the handsaw barrel-cut is active */
+  isBarrelShortened?: boolean;
+  showDebugArrows?: boolean;
+  privatePayload?: any;
   onUseItem?: (itemId: string, targetId?: string) => void;
   onShootTarget?: (targetId: string) => void;
+  onSelectTarget?: (targetId: string) => void;
+  onAnimationComplete?: () => void;
+  onBarrelCut?: () => void;
+  onShotgunPump?: () => void;
+  onFireMoment?: () => void;
+  onShotgunSequenceComplete?: () => void;
 }
 
 // Hardcoded STATIC positions from Blender
@@ -36,8 +53,6 @@ const ITEM_MESH_MAP: Record<string, string> = {
 };
 
 const ITEM_ROTATIONS: Record<string, [number, number, number]> = {
-  // Blender rot: (x, y, z)
-  // Three.js rot is standard Euler Y-up. But since they are directly applied:
   magnifier: [0, 0, 0],
   medkit: [0, Math.PI, 0],
   handcuffs: [0, 0, 0],
@@ -50,6 +65,17 @@ const ITEM_ROTATIONS: Record<string, [number, number, number]> = {
 
 import { TableSurface } from "./TableSurface";
 import { InteractiveItem } from "./InteractiveItem";
+import { InteractiveOpponent } from "./InteractiveOpponent";
+import { InteractiveShotgun } from "./InteractiveShotgun";
+import { AnimatedGhostItem } from "./AnimatedGhostItem";
+import { BeerAnimation } from "./BeerAnimation";
+import { HandsawAnimation } from "./HandsawAnimation";
+import { BurnerPhoneAnimation } from "./BurnerPhoneAnimation";
+import { AdrenalineAnimation } from "./AdrenalineAnimation";
+import { HandcuffsAnimation, RestrainedHandcuffs } from "./HandcuffsAnimation";
+import { MagnifierAnimation } from "./MagnifierAnimation";
+import { InverterAnimation } from "./InverterAnimation";
+import { MedkitAnimation } from "./MedkitAnimation";
 
 const WEAPON_TABLE_REST = {
   position: [0, 0.77, 0.05] as [number, number, number],
@@ -93,7 +119,45 @@ function LoaderOverlay() {
   );
 }
 
-function StaticScene({ gameState, userId }: { gameState: ChamberClashState | null, userId: string | null }) {
+function StaticScene({ 
+  gameState, 
+  userId, 
+  targetingAction,
+  gunState,
+  gunTarget,
+  shellType,
+  activeItemAnimation,
+  ejectedShellType,
+  isBarrelShortened,
+  showDebugArrows,
+  privatePayload,
+  onUseItem,
+  onSelectTarget,
+  onAnimationComplete,
+  onBarrelCut,
+  onShotgunPump,
+  onFireMoment,
+  onShotgunSequenceComplete
+}: { 
+  gameState: ChamberClashState | null, 
+  userId: string | null,
+  targetingAction: 'shoot' | 'handcuffs' | 'adrenaline' | null,
+  gunState: 'idle' | 'pointing' | 'pump' | 'firing',
+  gunTarget: 'local' | 'opponent' | null,
+  shellType?: 'LIVE' | 'BLANK' | null,
+  activeItemAnimation: { itemId: string; userId: string; targetId: string | null } | null,
+  ejectedShellType?: 'LIVE' | 'BLANK' | null,
+  isBarrelShortened?: boolean,
+  showDebugArrows?: boolean,
+  privatePayload?: any,
+  onUseItem?: (itemId: string) => void,
+  onSelectTarget?: (targetId: string) => void,
+  onAnimationComplete?: () => void,
+  onBarrelCut?: () => void,
+  onShotgunPump?: () => void,
+  onFireMoment?: () => void,
+  onShotgunSequenceComplete?: () => void,
+}) {
   const envGLTF = useGLTF("/chamber-clash/3d/environment.glb");
   const charGLTF = useGLTF("/chamber-clash/3d/character-upper.glb");
   const shotgunGLTF = useGLTF("/chamber-clash/3d/shotgun-clean.glb");
@@ -107,8 +171,128 @@ function StaticScene({ gameState, userId }: { gameState: ChamberClashState | nul
   const opponentInventory = opponent?.inventory || [];
 
   const handleItemClick = (itemId: string) => {
-    console.log(`[Interaction] Selected physical item: ${itemId}`);
+    if (onUseItem) {
+      onUseItem(itemId);
+    }
   };
+
+  const handleOpponentClick = () => {
+    if (opponent && onSelectTarget && targetingAction) {
+      onSelectTarget(opponent.userId);
+    }
+  };
+
+  // Determine which animation component to render for the active item
+  const renderItemAnimation = () => {
+    if (!activeItemAnimation) return null;
+
+    const meshName = ITEM_MESH_MAP[activeItemAnimation.itemId];
+    const sourceMesh = itemsGLTF.nodes[meshName] as THREE.Mesh;
+    if (!sourceMesh) return null;
+
+    const baseRot = ITEM_ROTATIONS[activeItemAnimation.itemId] || [0, 0, 0];
+
+    // Dedicated component dispatch for all 8 items
+    switch (activeItemAnimation.itemId) {
+      case 'beer':
+        return (
+          <BeerAnimation
+            animation={activeItemAnimation}
+            sourceMesh={sourceMesh}
+            localUserId={userId}
+            baseRotation={baseRot}
+            ejectedShellType={ejectedShellType}
+            onShotgunPump={onShotgunPump}
+            onComplete={onAnimationComplete}
+          />
+        );
+      case 'burner_phone':
+        return (
+          <BurnerPhoneAnimation
+            animation={activeItemAnimation}
+            sourceMesh={sourceMesh}
+            localUserId={userId}
+            privatePayload={privatePayload}
+            onComplete={onAnimationComplete}
+          />
+        );
+      case 'adrenaline':
+        return (
+          <AdrenalineAnimation
+            animation={activeItemAnimation}
+            sourceMesh={sourceMesh}
+            localUserId={userId}
+            baseRotation={baseRot}
+            onComplete={onAnimationComplete}
+          />
+        );
+      case 'handcuffs':
+        return (
+          <HandcuffsAnimation
+            animation={activeItemAnimation}
+            sourceMesh={sourceMesh}
+            localUserId={userId}
+            baseRotation={baseRot}
+            onComplete={onAnimationComplete}
+          />
+        );
+      case 'handsaw':
+        return (
+          <HandsawAnimation
+            animation={activeItemAnimation}
+            sourceMesh={sourceMesh}
+            localUserId={userId}
+            baseRotation={baseRot}
+            onBarrelCut={onBarrelCut}
+            onComplete={onAnimationComplete}
+          />
+        );
+      case 'magnifier':
+        return (
+          <MagnifierAnimation
+            animation={activeItemAnimation}
+            sourceMesh={sourceMesh}
+            localUserId={userId}
+            baseRotation={baseRot}
+            privatePayload={privatePayload}
+            onComplete={onAnimationComplete}
+          />
+        );
+      case 'inverter':
+        return (
+          <InverterAnimation
+            animation={activeItemAnimation}
+            sourceMesh={sourceMesh}
+            localUserId={userId}
+            baseRotation={baseRot}
+            onComplete={onAnimationComplete}
+          />
+        );
+      case 'medkit':
+        return (
+          <MedkitAnimation
+            animation={activeItemAnimation}
+            sourceMesh={sourceMesh}
+            localUserId={userId}
+            baseRotation={baseRot}
+            onComplete={onAnimationComplete}
+          />
+        );
+      default:
+        return (
+          <AnimatedGhostItem
+            animation={activeItemAnimation}
+            sourceMesh={sourceMesh}
+            localUserId={userId}
+            baseRotation={baseRot}
+            onComplete={onAnimationComplete}
+          />
+        );
+    }
+  };
+
+  const isHandcuffedLocal = localPlayer?.statusEffects?.some((e: any) => e.type === 'SKIP_TURN') || false;
+  const isHandcuffedOpponent = opponent?.statusEffects?.some((e: any) => e.type === 'SKIP_TURN') || false;
 
   return (
     <>
@@ -151,10 +335,8 @@ function StaticScene({ gameState, userId }: { gameState: ChamberClashState | nul
         
         c.position.set(-center.x, -center.y, -center.z);
         
-        // We scale the opponent up slightly to make them feel more human-sized across the table
-        // We push Z further back (-0.9) to sit behind the opponent inventory and far edge
         const scale = 1.15;
-        const groupY = 0.77 - (size.y * scale) * 0.25; // Push them slightly lower so table cuts chest
+        const groupY = 0.77 - (size.y * scale) * 0.25;
         
         return (
           <group 
@@ -172,25 +354,18 @@ function StaticScene({ gameState, userId }: { gameState: ChamberClashState | nul
       })()}
 
       {/* Shotgun */}
-      {(() => {
-        const s = shotgunGLTF.scene.clone();
-        
-        // Auto-center the shotgun
-        const box = new THREE.Box3().setFromObject(s);
-        const center = new THREE.Vector3();
-        box.getCenter(center);
-        s.position.set(-center.x, -center.y, -center.z);
-
-        return (
-          <group 
-            position={WEAPON_TABLE_REST.position} 
-            scale={WEAPON_TABLE_REST.scale} 
-            rotation={WEAPON_TABLE_REST.rotation}
-          >
-            <primitive object={s} />
-          </group>
-        );
-      })()}
+      <InteractiveShotgun
+        sourceScene={shotgunGLTF.scene}
+        position={WEAPON_TABLE_REST.position}
+        scale={WEAPON_TABLE_REST.scale}
+        gunState={gunState}
+        target={gunTarget}
+        shellType={shellType}
+        isBarrelShortened={isBarrelShortened}
+        showDebugArrows={showDebugArrows}
+        onFireMoment={onFireMoment}
+        onSequenceComplete={onShotgunSequenceComplete}
+      />
 
       {/* Opponent Items */}
       {opponentInventory.map((itemId, idx) => {
@@ -209,10 +384,17 @@ function StaticScene({ gameState, userId }: { gameState: ChamberClashState | nul
             position={slot.position}
             rotation={rot}
             isLocal={false}
-            tableY={0.771} // Rest exactly on new table plane
+            tableY={0.771}
           />
         );
       })}
+
+      {/* Item Animation (Beer/Phone/Adrenaline/Handcuffs/Handsaw/Magnifier/Inverter/Medkit) */}
+      {renderItemAnimation()}
+
+      {/* Persistent Restrained Handcuffs Props */}
+      {isHandcuffedLocal && <RestrainedHandcuffs isLocal={true} />}
+      {isHandcuffedOpponent && <RestrainedHandcuffs isLocal={false} />}
 
       {/* Local Items */}
       {localInventory.map((itemId, idx) => {
@@ -232,7 +414,7 @@ function StaticScene({ gameState, userId }: { gameState: ChamberClashState | nul
             rotation={rot}
             isLocal={true}
             onClick={handleItemClick}
-            tableY={0.771} // Rest exactly on new table plane
+            tableY={0.771}
           />
         );
       })}
@@ -271,7 +453,26 @@ export function ChamberClash3D(props: ChamberClash3DProps) {
         gl={{ antialias: true, alpha: false }}
       >
         <Suspense fallback={<LoaderOverlay />}>
-          <StaticScene gameState={props.gameState} userId={props.userId} />
+          <StaticScene 
+            gameState={props.gameState} 
+            userId={props.userId}
+            targetingAction={props.targetingAction}
+            gunState={props.gunState}
+            gunTarget={props.gunTarget}
+            shellType={props.shellType}
+            activeItemAnimation={props.activeItemAnimation}
+            ejectedShellType={props.ejectedShellType}
+            isBarrelShortened={props.isBarrelShortened}
+            showDebugArrows={props.showDebugArrows}
+            privatePayload={props.privatePayload}
+            onUseItem={props.onUseItem}
+            onSelectTarget={props.onSelectTarget}
+            onAnimationComplete={props.onAnimationComplete}
+            onBarrelCut={props.onBarrelCut}
+            onShotgunPump={props.onShotgunPump}
+            onFireMoment={props.onFireMoment}
+            onShotgunSequenceComplete={props.onShotgunSequenceComplete}
+          />
         </Suspense>
       </Canvas>
     </div>
