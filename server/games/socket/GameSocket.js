@@ -52,7 +52,8 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
       userId: p.userId,
       nickname: p.nickname,
       isReady: p.isReady,
-      role: p.role
+      role: p.role,
+      assetReady: p.assetReady ?? false
     }));
     return {
       id: lobby.id,
@@ -194,6 +195,29 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
     }
   });
 
+  // ── CHAMBER CLASH: Client reports all assets finished loading ──
+  socket.on('chamber_clash_assets_ready', ({ gameId, userId, assetVersion }) => {
+    const EXPECTED_ASSET_VERSION = 'v1';
+    const lobby = LobbyService.getLobby(gameId);
+    if (!lobby) return;
+    let player = lobby.players.get(userId);
+    if (!player && userId) {
+      player = Array.from(lobby.players.values()).find(p => p.userId === userId);
+    }
+    if (!player) return;
+
+    if (assetVersion !== EXPECTED_ASSET_VERSION) {
+      console.warn(`[ASSET READY] Player ${userId} sent wrong asset version: ${assetVersion}, expected ${EXPECTED_ASSET_VERSION}`);
+      player.assetReady = false;
+    } else {
+      player.assetReady = true;
+      console.log(`[ASSET READY] Player ${userId} assets ready (${assetVersion}) in lobby ${gameId}`);
+    }
+
+    io.to(gameId).emit('lobby_state', serializeLobby(lobby));
+    broadcastLobbies();
+  });
+
   socket.on('lobby_kick', ({ gameId, hostId, targetUserId }) => {
     const lobby = LobbyService.kickPlayer(gameId, hostId, targetUserId);
     if (lobby) {
@@ -290,6 +314,15 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
     const allReady = playersList.every(p => p.role === 'HOST' || p.isReady);
     if (!allReady) {
       return socket.emit('game_error', { message: 'Wait for all players to be ready!' });
+    }
+
+    // For Chamber Clash, every player must have finished loading assets
+    if (lobby.gameType === 'CHAMBER_CLASH') {
+      const allAssetsReady = playersList.every(p => p.assetReady === true);
+      if (!allAssetsReady) {
+        const notReady = playersList.filter(p => !p.assetReady).map(p => p.nickname).join(', ');
+        return socket.emit('game_error', { message: `PLAYERS_NOT_ASSET_READY: Waiting for ${notReady} to finish loading game assets.` });
+      }
     }
 
     const EngineClass = ENGINE_MAP[lobby.gameType];

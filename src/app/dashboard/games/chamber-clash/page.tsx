@@ -11,6 +11,7 @@ import { GlassCard } from "@/components/layout/GlassCard";
 import { TurnIndicator } from "@/components/games/TurnIndicator";
 import dynamic from "next/dynamic";
 import { useExitWarning } from "@/hooks/useExitWarning";
+import { useChamberClashPreloader } from "@/hooks/useChamberClashPreloader";
 import { sounds } from "@/lib/sounds";
 import { getItemAnimConfig } from "@/components/games/chamber-clash/animationConfigs";
 import { PlayerHealthIndicator } from "@/components/games/chamber-clash/PlayerHealthIndicator";
@@ -46,9 +47,9 @@ function ChamberClashGameContent() {
   const {
     lobby, gameState, eventQueue, isAnimating, availableLobbies, error,
     actionLog, revealedShell, burnerPhoneReveal,
-    createLobby, joinLobby, leaveLobby, toggleReady, startGame, startPracticeGame, start3PlayerPracticeGame, start4PlayerPracticeGame,
+    createLobby, joinLobby, leaveLobby, toggleReady, startGame,
     shootTarget, useItem, resolvePendingItem,
-    setupListeners, dequeueEvent, setAnimating, addLogEntry, clearState
+    setupListeners, dequeueEvent, setAnimating, addLogEntry, clearState, reportAssetsReady
   } = useChamberClashStore();
 
   // ─── Local UI State ───
@@ -107,6 +108,20 @@ function ChamberClashGameContent() {
     })), []);
 
   const { bypassWarning } = useExitWarning(!!lobby || !!gameState);
+
+  // ─── Asset preloader — starts immediately when this page mounts ───
+  const { progress: assetProgress, isReady: assetsReady, isError: assetError, failedAssets, retry: retryAssets } = useChamberClashPreloader();
+
+  const localPlayerLobbyAssetReady = useMemo(() => {
+    return lobby?.players?.find((p: any) => p.userId === userId)?.assetReady;
+  }, [lobby?.players, userId]);
+
+  // ─── Report readiness to lobby when assets finish loading or already ready when joining ───
+  useEffect(() => {
+    if (assetsReady && lobby?.id && userId && !localPlayerLobbyAssetReady) {
+      reportAssetsReady(lobby.id, userId);
+    }
+  }, [assetsReady, lobby?.id, userId, localPlayerLobbyAssetReady, reportAssetsReady]);
 
   // ─── Clear on mount and force mute by default ───
   useEffect(() => {
@@ -232,7 +247,6 @@ function ChamberClashGameContent() {
     }, 0);
 
     if (totalStealableItems === 0) {
-      console.log('[ADRENALINE] No valid stealable items remain among living opponents. Exiting steal mode.');
       setIsStealSelectionMode(false);
       setStealingFromPlayerId(null);
       setStolenItemPending(null);
@@ -608,7 +622,6 @@ function ChamberClashGameContent() {
             if (firstKey) processedShellEvents.current.delete(firstKey);
           }
 
-          console.log(`[BEER] shell_ejected received eventId=${eventKey} type=${evt.data.shellType}`);
           setEjectedShellType(evt.data.shellType);
           sounds.playShellEject();
           setTimeout(() => setEjectedShellType(null), 4500);
@@ -806,15 +819,6 @@ function ChamberClashGameContent() {
             <button onClick={() => createLobby(userId, nickname)} className="w-full py-4 bg-gradient-to-r from-red-600 to-rose-700 text-white rounded-xl font-bold shadow-lg hover:scale-[1.02] transition-transform cursor-pointer">
               Create Lobby
             </button>
-            <button onClick={() => startPracticeGame(userId, nickname || "Player")} className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl font-bold text-sm transition-colors cursor-pointer">
-              Practice Mode (2 Player)
-            </button>
-            <button onClick={() => start3PlayerPracticeGame(userId, nickname || "Player")} className="w-full py-2 bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/30 text-cyan-300 rounded-xl font-bold text-sm transition-colors cursor-pointer">
-              Practice Mode (3 Player)
-            </button>
-            <button onClick={() => start4PlayerPracticeGame(userId, nickname || "Player")} className="w-full py-2 bg-purple-950/80 hover:bg-purple-900 border border-purple-500/30 text-purple-300 rounded-xl font-bold text-sm transition-colors cursor-pointer">
-              Practice Mode (4 Player)
-            </button>
           </GlassCard>
 
           <GlassCard className="p-6 flex flex-col space-y-4">
@@ -834,6 +838,32 @@ function ChamberClashGameContent() {
             </div>
           </GlassCard>
         </div>
+
+        {/* Asset preload indicator */}
+        <div className="max-w-4xl mx-auto w-full mt-2 mb-4">
+          {!assetsReady ? (
+            <div className="p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] text-amber-300/80 font-bold uppercase tracking-wider">CHAMBER CLASH ASSETS</span>
+                <span className="text-[11px] text-amber-400 font-mono">{assetProgress}%</span>
+              </div>
+              <div className="h-1 bg-white/[0.05] rounded-full overflow-hidden">
+                <div className="h-full bg-amber-500/70 rounded-full transition-all duration-300" style={{ width: `${assetProgress}%` }} />
+              </div>
+              <p className="text-[10px] text-zinc-600 mt-1">Loading game assets in background...</p>
+              {assetError && (
+                <div className="mt-1.5 flex items-center justify-between">
+                  <span className="text-[10px] text-red-400">⚠ Failed to load: {failedAssets.join(', ')}</span>
+                  <button onClick={retryAssets} className="text-[10px] px-2 py-0.5 bg-red-600/20 hover:bg-red-600/40 text-red-300 rounded font-bold">RETRY</button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="p-2 text-center">
+              <span className="text-[11px] text-green-400/70 font-bold uppercase tracking-wider">✓ Game Assets Ready</span>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -843,7 +873,12 @@ function ChamberClashGameContent() {
   // ═══════════════════
   if (lobby && !gameState) {
     const isHost = lobby.hostId === userId;
-    const canStart = isHost && lobby.players.length >= 2 && lobby.players.every((p: any) => p.isReady || p.role === 'HOST');
+    const allPlayersAssetsReady = lobby.players.every((p: any) => p.assetReady === true);
+    const allPlayersGameReady = lobby.players.every((p: any) => p.isReady || p.role === 'HOST');
+    const canStart = isHost && lobby.players.length >= 2 && allPlayersGameReady && allPlayersAssetsReady;
+    const waitingFor = !allPlayersAssetsReady
+      ? lobby.players.filter((p: any) => !p.assetReady).map((p: any) => p.nickname).join(', ')
+      : null;
     return (
       <div className="flex flex-col h-screen bg-[#050607] text-white p-4">
         <div className="max-w-4xl mx-auto w-full space-y-6 mt-8">
@@ -870,9 +905,36 @@ function ChamberClashGameContent() {
                   <div className="w-10 h-10 sm:w-12 sm:h-12 bg-zinc-800 rounded-full flex items-center justify-center font-black text-base sm:text-lg">{p.nickname.substring(0, 2).toUpperCase()}</div>
                   <span className="font-semibold text-xs sm:text-sm truncate w-full text-center">{p.nickname}</span>
                   <span className="text-[11px] sm:text-xs text-zinc-500">{p.role === 'HOST' ? '👑 Host' : (p.isReady ? '✅ Ready' : '⏳ Not Ready')}</span>
+                  <span className={`text-[10px] font-bold uppercase tracking-wide ${p.assetReady ? 'text-green-400' : 'text-amber-400'}`}>
+                    {p.assetReady ? '✓ Assets Ready' : '⏳ Loading...'}
+                  </span>
                 </div>
               ))}
             </div>
+            {/* Asset loading progress for local player */}
+            {!assetsReady && (
+              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs text-amber-300 font-bold uppercase tracking-wider">Loading Game Assets...</span>
+                  <span className="text-xs text-amber-400 font-mono">{assetProgress}%</span>
+                </div>
+                <div className="h-1.5 bg-amber-500/10 rounded-full overflow-hidden">
+                  <div className="h-full bg-amber-500 rounded-full transition-all duration-300" style={{ width: `${assetProgress}%` }} />
+                </div>
+                {assetError && (
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="text-[10px] text-red-400">⚠ Failed to load: {failedAssets.join(', ')}</span>
+                    <button onClick={retryAssets} className="text-[10px] px-2 py-0.5 bg-red-600/20 hover:bg-red-600/40 text-red-300 rounded font-bold">RETRY</button>
+                  </div>
+                )}
+              </div>
+            )}
+            {assetsReady && (
+              <div className="p-2.5 bg-green-500/10 border border-green-500/20 rounded-xl text-center">
+                <span className="text-xs text-green-400 font-bold uppercase tracking-wider">✓ GAME ASSETS READY</span>
+              </div>
+            )}
+
             <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-white/[0.06]">
               {!isHost && (
                 <button onClick={() => toggleReady(lobby.id, userId, !lobby.players.find((p: any) => p.userId === userId)?.isReady)} className="w-full sm:w-auto px-6 py-2.5 bg-zinc-800 hover:bg-zinc-700 rounded-xl font-bold transition-colors cursor-pointer">
@@ -881,11 +943,21 @@ function ChamberClashGameContent() {
               )}
               {isHost && (
                 <div className="flex gap-2">
-                  <button onClick={() => startPracticeGame(userId || 'p1', nickname || 'You')} className="px-5 py-2.5 bg-amber-600/80 hover:bg-amber-500 rounded-xl font-bold transition-all text-white text-xs cursor-pointer">
-                    Practice 3D View (Dev)
-                  </button>
-                  <button onClick={() => startGame(lobby.id, userId)} disabled={!canStart} className={`px-8 py-2.5 rounded-xl font-bold transition-all cursor-pointer text-xs ${canStart ? 'bg-red-600 hover:bg-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)]' : 'bg-zinc-900 text-zinc-600 cursor-not-allowed'}`}>
-                    Start Match
+                  <button
+                    onClick={() => startGame(lobby.id, userId)}
+                    disabled={!canStart}
+                    title={waitingFor ? `Waiting for ${waitingFor} to load assets` : undefined}
+                    className={`px-8 py-2.5 rounded-xl font-bold transition-all cursor-pointer text-xs ${
+                      canStart
+                        ? 'bg-red-600 hover:bg-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)]'
+                        : 'bg-zinc-900 text-zinc-600 cursor-not-allowed'
+                    }`}
+                  >
+                    {!allPlayersGameReady
+                      ? 'Waiting for Players...'
+                      : !allPlayersAssetsReady
+                      ? `Waiting for Assets...`
+                      : 'Start Match'}
                   </button>
                 </div>
               )}
@@ -915,202 +987,7 @@ function ChamberClashGameContent() {
     return (
       <div className={`flex flex-col h-screen bg-[#060709] text-white overflow-hidden select-none relative ${screenShake ? 'cc-shake' : ''}`}>
         
-        {/* DEBUG BUTTONS — Expanded Animation Controls */}
-        <div className="absolute top-2 left-2 z-[9999] flex flex-wrap gap-1 max-w-[720px] pointer-events-auto bg-black/80 p-2 rounded-xl border border-white/10 backdrop-blur-md">
-          {/* Shotgun Debug */}
-          <button className="px-2 py-1 bg-red-800 text-white text-[9px] font-bold rounded cursor-pointer"
-            onClick={() => {
-              setAnimationLocked(true);
-              setManualTargetId(userId);
-              setCurrentShellType('LIVE');
-              setGunTarget('local');
-              setGunState('pointing');
-              setTimeout(() => setGunState('firing'), 900);
-              setTimeout(() => { setGunState('idle'); setGunTarget(null); setManualTargetId(null); setAnimationLocked(false); }, 2800);
-            }}>SHOOT SELF LIVE</button>
-
-          {gameState?.players.filter(p => p.userId !== userId).map(p => (
-            <button key={`shoot-${p.userId}`} className="px-2 py-1 bg-red-600 text-white text-[9px] font-bold rounded cursor-pointer"
-              onClick={() => {
-                setAnimationLocked(true);
-                setManualTargetId(p.userId);
-                setCurrentShellType('LIVE');
-                setGunTarget('opponent');
-                setGunState('pointing');
-                setTimeout(() => setGunState('firing'), 900);
-                setTimeout(() => { setGunState('idle'); setGunTarget(null); setManualTargetId(null); setAnimationLocked(false); }, 2800);
-              }}>
-              SHOOT {p.nickname.toUpperCase()}
-            </button>
-          ))}
-
-          {/* Beer Debug (Local Live/Blank, Opponent Live/Blank) */}
-          <button className="px-2 py-1 bg-amber-700 text-white text-[9px] font-bold rounded cursor-pointer"
-            onClick={() => {
-              if (animationLocked) return;
-              setAnimationLocked(true);
-              setEjectedShellType('LIVE');
-              setActiveItemAnimation({ itemId: 'beer', userId: userId || 'local', targetId: null });
-              setTimeout(() => { setEjectedShellType(null); }, 4500);
-              setTimeout(() => { setActiveItemAnimation(null); setAnimationLocked(false); }, 3200);
-            }}>LOCAL BEER LIVE</button>
-
-          <button className="px-2 py-1 bg-amber-900 text-white text-[9px] font-bold rounded cursor-pointer"
-            onClick={() => {
-              if (animationLocked) return;
-              setAnimationLocked(true);
-              setEjectedShellType('BLANK');
-              setActiveItemAnimation({ itemId: 'beer', userId: userId || 'local', targetId: null });
-              setTimeout(() => { setEjectedShellType(null); }, 4500);
-              setTimeout(() => { setActiveItemAnimation(null); setAnimationLocked(false); }, 3200);
-            }}>LOCAL BEER BLANK</button>
-
-          <button className="px-2 py-1 bg-amber-600 text-white text-[9px] font-bold rounded cursor-pointer"
-            onClick={() => {
-              if (animationLocked) return;
-              setAnimationLocked(true);
-              setEjectedShellType('LIVE');
-              const oppId = gameState?.players.find(p => p.userId !== userId)?.userId || 'opp';
-              setActiveItemAnimation({ itemId: 'beer', userId: oppId, targetId: null });
-              setTimeout(() => { setEjectedShellType(null); }, 4500);
-              setTimeout(() => { setActiveItemAnimation(null); setAnimationLocked(false); }, 3200);
-            }}>OPP BEER LIVE</button>
-
-          {/* Burner Phone Debug (Local vs Opponent) */}
-          <button className="px-2 py-1 bg-amber-500 text-black text-[9px] font-bold rounded cursor-pointer"
-            onClick={() => {
-              if (animationLocked) return;
-              setAnimationLocked(true);
-              const payload = { displayShellNumber: 4, shellType: 'LIVE' };
-              setPrivatePayload(payload);
-              useChamberClashStore.setState({ burnerPhoneReveal: payload });
-              setActiveItemAnimation({ itemId: 'burner_phone', userId: userId || 'local', targetId: null });
-              setTimeout(() => {
-                setActiveItemAnimation(null);
-                setAnimationLocked(false);
-                setPrivatePayload(null);
-                useChamberClashStore.setState({ burnerPhoneReveal: null });
-              }, 2800);
-            }}>LOCAL PHONE</button>
-
-          <button className="px-2 py-1 bg-amber-700 text-white text-[9px] font-bold rounded cursor-pointer"
-            onClick={() => {
-              if (animationLocked) return;
-              setAnimationLocked(true);
-              const oppId = gameState?.players.find(p => p.userId !== userId)?.userId || 'opp';
-              setActiveItemAnimation({ itemId: 'burner_phone', userId: oppId, targetId: null });
-              setTimeout(() => { setActiveItemAnimation(null); setAnimationLocked(false); setPrivatePayload(null); }, 2800);
-            }}>OPP PHONE (SECRET)</button>
-
-          {/* Adrenaline Steal Debug */}
-          <button className="px-2 py-1 bg-purple-600 text-white text-[9px] font-bold rounded cursor-pointer"
-            onClick={() => {
-              if (animationLocked) return;
-              setAnimationLocked(true);
-              setEjectedShellType('LIVE');
-              // Populate opponent inventory in debug mode for testing
-              useChamberClashStore.setState(state => {
-                if (!state.gameState) return state;
-                const newPlayers = state.gameState.players.map(p => {
-                  if (p.userId !== userId) {
-                    return { ...p, inventory: ['beer', 'magnifier', 'handsaw', 'medkit'] };
-                  }
-                  return p;
-                });
-                return { gameState: { ...state.gameState, players: newPlayers } };
-              });
-              // Step 1: Self injection
-              setActiveItemAnimation({ itemId: 'adrenaline', userId: userId || 'local', targetId: null });
-              setTimeout(() => {
-                // Step 2: Transition camera to top-down view and expose opponent items for 3D click selection
-                setActiveItemAnimation(null);
-                setIsStealSelectionMode(true);
-              }, 1500);
-            }}>TOP-DOWN STEAL MODE</button>
-
-          <button className="px-2 py-1 bg-purple-700 text-white text-[9px] font-bold rounded cursor-pointer"
-            onClick={() => {
-              if (animationLocked) return;
-              setAnimationLocked(true);
-              setEjectedShellType('LIVE');
-              setActiveItemAnimation({ itemId: 'adrenaline', userId: userId || 'local', targetId: null });
-              setTimeout(() => {
-                setActiveItemAnimation({ itemId: 'beer', userId: userId || 'local', targetId: null });
-              }, 1500);
-              setTimeout(() => { setActiveItemAnimation(null); setAnimationLocked(false); }, 4500);
-            }}>STEAL BEER</button>
-
-          <button className="px-2 py-1 bg-purple-900 text-white text-[9px] font-bold rounded cursor-pointer"
-            onClick={() => {
-              if (animationLocked) return;
-              setAnimationLocked(true);
-              setPrivatePayload({ shellType: 'BLANK' });
-              setActiveItemAnimation({ itemId: 'adrenaline', userId: userId || 'local', targetId: null });
-              setTimeout(() => {
-                setActiveItemAnimation({ itemId: 'magnifier', userId: userId || 'local', targetId: null });
-              }, 1500);
-              setTimeout(() => { setActiveItemAnimation(null); setAnimationLocked(false); setPrivatePayload(null); }, 3800);
-            }}>STEAL MAGNIFIER</button>
-
-          <button className="px-2 py-1 bg-purple-950 text-white text-[9px] font-bold rounded cursor-pointer"
-            onClick={() => {
-              if (animationLocked) return;
-              setAnimationLocked(true);
-              setActiveItemAnimation({ itemId: 'adrenaline', userId: userId || 'local', targetId: null });
-              setTimeout(() => {
-                setActiveItemAnimation(null);
-                setStolenItemPending('handcuffs');
-                setTargetingAction('handcuffs');
-                setAnimationLocked(false);
-              }, 1500);
-            }}>STEAL HANDCUFFS</button>
-
-          {/* Handcuffs Debug */}
-          <button className="px-2 py-1 bg-zinc-700 text-white text-[9px] font-bold rounded cursor-pointer"
-            onClick={() => {
-              if (animationLocked) return;
-              setAnimationLocked(true);
-              const oppId = gameState?.players.find(p => p.userId !== userId)?.userId || 'opp';
-              setActiveItemAnimation({ itemId: 'handcuffs', userId: userId || 'local', targetId: oppId });
-              setTimeout(() => { setActiveItemAnimation(null); setAnimationLocked(false); }, 2000);
-            }}>HANDCUFF OPP</button>
-
-          {/* Handsaw Debug */}
-          <button className="px-2 py-1 bg-orange-700 text-white text-[9px] font-bold rounded cursor-pointer"
-            onClick={() => {
-              if (animationLocked) return;
-              setAnimationLocked(true);
-              setActiveItemAnimation({ itemId: 'handsaw', userId: userId || 'local', targetId: null });
-              setTimeout(() => { setActiveItemAnimation(null); setAnimationLocked(false); }, 3000);
-            }}>HANDSAW</button>
-
-          {/* Other Items Debug */}
-          {['magnifier', 'inverter', 'medkit'].map(itemId => {
-            const meta = ITEM_META[itemId];
-            return (
-              <button key={itemId} className="px-2 py-1 bg-emerald-800 text-white text-[9px] font-bold rounded cursor-pointer"
-                onClick={() => {
-                  if (animationLocked) return;
-                  setAnimationLocked(true);
-                  if (itemId === 'magnifier') setPrivatePayload({ shellType: 'LIVE' });
-                  setActiveItemAnimation({ itemId, userId: userId || 'local', targetId: null });
-                  setTimeout(() => { setActiveItemAnimation(null); setAnimationLocked(false); setPrivatePayload(null); }, 2000);
-                }}>
-                {meta?.icon} {meta?.name?.toUpperCase() || itemId.toUpperCase()}
-              </button>
-            );
-          })}
-
-          <button className="px-2 py-1 bg-cyan-700 text-white text-[9px] font-bold rounded cursor-pointer"
-            onClick={() => {
-              useChamberClashStore.getState().start3PlayerPracticeGame(userId || 'local-p1', 'Player A');
-            }}>3-PLAYER PRACTICE</button>
-
-          <button className="px-2 py-1 bg-purple-700 text-white text-[9px] font-bold rounded cursor-pointer"
-            onClick={() => {
-              useChamberClashStore.getState().start4PlayerPracticeGame(userId || 'local-p1', 'Player A');
-            }}>4-PLAYER PRACTICE</button>
-        </div>
+        
         {/* ── Ambient Dust ── */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-20 z-0">
           {dustParticles.map(p => (
@@ -1388,8 +1265,6 @@ function ChamberClashGameContent() {
               const itemIndex = (ownerPlayer.inventory || []).indexOf(stolenItemId);
               if (itemIndex === -1) return;
 
-              console.log('[ADRENALINE 3D STEAL CLICKED]', stolenItemId, 'ownerPlayerId:', ownerPlayerId);
-
               setIsStealSelectionMode(false);
               setStealingFromPlayerId(null);
               setStolenItemPending(stolenItemId);
@@ -1409,7 +1284,6 @@ function ChamberClashGameContent() {
               }
             }}
             onCameraReturned={() => {
-              console.log('[CAMERA RETURNED TO FP]', stolenItemPending);
               setStolenItemPending(null);
             }}
             onUseItem={(itemId) => {

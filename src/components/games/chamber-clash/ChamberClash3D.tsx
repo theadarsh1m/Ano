@@ -5,6 +5,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useGLTF, Html, useProgress } from "@react-three/drei";
 import * as THREE from "three";
 import { dampV3 } from "./animationConfigs";
+import { CHAMBER_CLASH_ASSETS } from "@/lib/chamberClashAssets";
 import { useChamberClashStore, type ChamberClashState } from "@/store/useChamberClashStore";
 
 import { PlayerTargetSelector } from "./PlayerTargetSelector";
@@ -13,11 +14,9 @@ import { PlayerHealthIndicator } from "./PlayerHealthIndicator";
 import { getClientRelativeSeats, type SeatLayout } from "./seatLayout";
 
 export function preloadChamberClashAssets() {
-  useGLTF.preload("/chamber-clash/3d/environment.glb");
-  useGLTF.preload("/chamber-clash/3d/character-upper.glb");
-  useGLTF.preload("/chamber-clash/3d/shotgun-clean.glb");
-  useGLTF.preload("/chamber-clash/3d/items-clean.glb");
-  useGLTF.preload("/chamber-clash/3d/fp-arms.glb");
+  Object.values(CHAMBER_CLASH_ASSETS).forEach((url) => {
+    useGLTF.preload(url);
+  });
 }
 
 interface ChamberClash3DProps {
@@ -36,7 +35,6 @@ interface ChamberClash3DProps {
   ejectedShellType?: 'LIVE' | 'BLANK' | null;
   /** Whether the handsaw barrel-cut is active */
   isBarrelShortened?: boolean;
-  showDebugArrows?: boolean;
   privatePayload?: any;
   burnerPhoneResult?: any;
   isStealSelectionMode?: boolean;
@@ -224,7 +222,6 @@ function StaticScene({
   activeItemAnimation,
   ejectedShellType,
   isBarrelShortened,
-  showDebugArrows,
   privatePayload,
   burnerPhoneResult,
   isStealSelectionMode,
@@ -251,7 +248,6 @@ function StaticScene({
   activeItemAnimation: { itemId: string; userId: string; targetId: string | null } | null,
   ejectedShellType?: 'LIVE' | 'BLANK' | null,
   isBarrelShortened?: boolean,
-  showDebugArrows?: boolean,
   privatePayload?: any,
   burnerPhoneResult?: any,
   isStealSelectionMode?: boolean,
@@ -267,11 +263,11 @@ function StaticScene({
   onFireMoment?: () => void,
   onShotgunSequenceComplete?: () => void,
 }) {
-  const envGLTF = useGLTF("/chamber-clash/3d/environment.glb");
-  const charGLTF = useGLTF("/chamber-clash/3d/character-upper.glb");
-  const shotgunGLTF = useGLTF("/chamber-clash/3d/shotgun-clean.glb");
-  const itemsGLTF = useGLTF("/chamber-clash/3d/items-clean.glb");
-  const fpArmsGLTF = useGLTF("/chamber-clash/3d/fp-arms.glb");
+  const envGLTF = useGLTF(CHAMBER_CLASH_ASSETS.environment);
+  const charGLTF = useGLTF(CHAMBER_CLASH_ASSETS.characterUpper);
+  const shotgunGLTF = useGLTF(CHAMBER_CLASH_ASSETS.shotgun);
+  const itemsGLTF = useGLTF(CHAMBER_CLASH_ASSETS.items);
+  const fpArmsGLTF = useGLTF(CHAMBER_CLASH_ASSETS.fpArms);
 
   const seatMap = useMemo(() => {
     return getClientRelativeSeats(gameState?.players || [], userId);
@@ -503,7 +499,6 @@ function StaticScene({
         customTargetPos={customTargetPos}
         shellType={shellType}
         isBarrelShortened={isBarrelShortened}
-        showDebugArrows={showDebugArrows}
         isClickable={gunState === 'idle' && !activeItemAnimation && !isSpectating}
         onClick={onShotgunClick}
         onFireMoment={onFireMoment}
@@ -714,7 +709,6 @@ export function ChamberClash3D(props: ChamberClash3DProps) {
             activeItemAnimation={props.activeItemAnimation}
             ejectedShellType={props.ejectedShellType}
             isBarrelShortened={props.isBarrelShortened}
-            showDebugArrows={props.showDebugArrows}
             privatePayload={props.privatePayload}
             burnerPhoneResult={props.burnerPhoneResult}
             isStealSelectionMode={props.isStealSelectionMode}

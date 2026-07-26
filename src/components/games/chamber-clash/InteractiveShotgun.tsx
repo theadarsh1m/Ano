@@ -21,7 +21,6 @@ interface InteractiveShotgunProps {
   customTargetPos?: THREE.Vector3;
   shellType?: 'LIVE' | 'BLANK' | null;
   isBarrelShortened?: boolean;
-  showDebugArrows?: boolean;
   isClickable?: boolean;
   onClick?: () => void;
   onFireMoment?: () => void;
@@ -44,7 +43,6 @@ export function InteractiveShotgun({
   customTargetPos,
   shellType = 'LIVE',
   isBarrelShortened = false,
-  showDebugArrows = true,
   isClickable = true,
   onClick,
   onFireMoment,
@@ -106,11 +104,6 @@ export function InteractiveShotgun({
   const pickupPos = useMemo(() => new THREE.Vector3(0, TABLE_Y + 0.15, 0.05), []);
   const aimOpponentPos = useMemo(() => new THREE.Vector3(0, TABLE_Y + 0.18, -0.05), []);
   const aimSelfPos = useMemo(() => new THREE.Vector3(0, TABLE_Y + 0.16, 0.22), []);
-
-  // Debug ArrowHelpers
-  const actualArrowRef = useRef<THREE.ArrowHelper>(null);
-  const desiredArrowRef = useRef<THREE.ArrowHelper>(null);
-  const topArrowRef = useRef<THREE.ArrowHelper>(null);
 
   // Barrel-only clipping plane at local X = 0.32
   const clipPlanes = useMemo(() => {
@@ -201,19 +194,6 @@ export function InteractiveShotgun({
     const actualForward = SHOTGUN_LOCAL_FORWARD.clone().applyQuaternion(currentQuat).normalize();
     const desiredForward = new THREE.Vector3().subVectors(targetWorldPos, groupRef.current.position).normalize();
     const alignment = actualForward.dot(desiredForward);
-
-    // Local top direction (+Y) for debugging 90° roll
-    const actualUp = new THREE.Vector3(0, 1, 0).applyQuaternion(currentQuat).normalize();
-
-    // Update debug arrows if rendered
-    if (actualArrowRef.current && desiredArrowRef.current && topArrowRef.current) {
-      actualArrowRef.current.setDirection(actualForward);
-      desiredArrowRef.current.setDirection(desiredForward);
-      topArrowRef.current.setDirection(actualUp);
-      actualArrowRef.current.position.copy(groupRef.current.position);
-      desiredArrowRef.current.position.copy(groupRef.current.position);
-      topArrowRef.current.position.copy(groupRef.current.position);
-    }
 
     // ── State Machine Phase Logic ──
     switch (state) {
@@ -457,14 +437,6 @@ export function InteractiveShotgun({
         </group>
       </group>
 
-      {/* Visual Debug Arrows for Aim & Roll Direction */}
-      {showDebugArrows && (
-        <>
-          <arrowHelper ref={actualArrowRef} args={[SHOTGUN_LOCAL_FORWARD, new THREE.Vector3(), 0.4, 0x00ff00]} />
-          <arrowHelper ref={desiredArrowRef} args={[SHOTGUN_LOCAL_FORWARD, new THREE.Vector3(), 0.4, 0xff0000]} />
-          <arrowHelper ref={topArrowRef} args={[new THREE.Vector3(0, 1, 0), new THREE.Vector3(), 0.3, 0x0088ff]} />
-        </>
-      )}
     </>
   );
 }
