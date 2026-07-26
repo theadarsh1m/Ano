@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Html } from '@react-three/drei';
 import type { ChamberClashState } from '@/store/useChamberClashStore';
+import type { SeatLayout } from './seatLayout';
 
 type Player = ChamberClashState['players'][number];
 
@@ -8,64 +9,79 @@ interface PlayerTargetSelectorProps {
   action: 'shoot' | 'handcuffs' | 'adrenaline' | null;
   localUserId: string | null;
   gameState: ChamberClashState | null;
+  seatMap?: Record<string, SeatLayout>;
+  isStealSelectionMode?: boolean;
   onSelectTarget: (targetId: string) => void;
 }
 
 /**
- * Reusable In-World Interactive Player Target Markers.
+ * Dynamic In-World Interactive Player Target Markers for 2P, 3P & 4P Matches.
  * 
- * Renders 3D Html markers for valid target players, displaying authoritative health:
- * - For Shotgun ('shoot'): "YOU" (local player) AND opponent are selectable.
- * - For Handcuffs ('handcuffs'): ONLY opponent is selectable (YOU is excluded).
+ * Renders 3D Html markers for valid target players using seat layout anchors:
+ * - Shotgun ('shoot'): "YOU" (local player) AND every living opponent are selectable.
+ * - Handcuffs ('handcuffs'): ONLY living opponents are selectable (YOU is excluded).
+ * - Adrenaline victim selection ('adrenaline'): ONLY living opponents with stealable items are selectable.
  */
 export function PlayerTargetSelector({
   action,
   localUserId,
   gameState,
+  seatMap,
+  isStealSelectionMode,
   onSelectTarget
 }: PlayerTargetSelectorProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
-  console.log('[PlayerTargetSelector LOG]', {
-    action,
-    localUserId,
-    hasGameState: Boolean(gameState),
-    playersCount: gameState?.players?.length,
-    players: gameState?.players?.map(p => ({ userId: p.userId, name: p.nickname }))
-  });
+  if (!action || !gameState || !gameState.players || gameState.players.length === 0 || isStealSelectionMode) return null;
 
-  if (!action || !gameState || !gameState.players || gameState.players.length === 0) return null;
-
-  // Resolve local player and opponent with robust fallbacks for practice/debug/offline modes
   const localPlayer = gameState.players.find(p => p.userId === localUserId) || gameState.players[0];
-  const opponentPlayer = gameState.players.find(p => p.userId !== localPlayer.userId) || gameState.players[1];
 
   const validTargets: Array<{ player: Player; isLocal: boolean; pos: [number, number, number] }> = [];
 
-  // For Shotgun: Local player is ALWAYS a valid target ("SHOOT SELF")
-  if (localPlayer && action === 'shoot') {
+  // For Shotgun: Local player is ALWAYS a valid target ("SHOOT SELF") if alive
+  if (localPlayer && localPlayer.isAlive && action === 'shoot') {
+    const defaultPos: [number, number, number] = [0, 0.84, 0.28];
+    const pos = seatMap?.[localPlayer.userId]?.anchors?.targetButton || defaultPos;
     validTargets.push({
       player: localPlayer,
       isLocal: true,
-      pos: [0, 0.84, 0.28] // Local camera-side table anchor (in front of shotgun)
+      pos
     });
   }
 
-  // Opponent is a valid target for all targeted actions
-  if (opponentPlayer) {
+  // Opponents: Living opponents are valid targets for shooting, handcuffs, or adrenaline steal
+  const opponents = gameState.players.filter(p => p.userId !== localPlayer.userId && p.isAlive);
+
+  opponents.forEach((oppPlayer) => {
+    // If Adrenaline steal, verify opponent has at least 1 non-adrenaline stealable item
+    if (action === 'adrenaline') {
+      const stealableItems = (oppPlayer.inventory || []).filter(item => item !== 'adrenaline');
+      if (stealableItems.length === 0) return; // Skip opponents with no stealable items
+    }
+
+    const defaultPos: [number, number, number] = [0, 0.94, -0.42];
+    const pos = seatMap?.[oppPlayer.userId]?.anchors?.targetButton || defaultPos;
+
     validTargets.push({
-      player: opponentPlayer,
+      player: oppPlayer,
       isLocal: false,
-      pos: [0, 0.94, -0.42] // Across table near opponent
+      pos
     });
-  }
-
-  const maxHp = gameState.settings?.startingHp || 4;
+  });
 
   return (
     <group>
       {validTargets.map(({ player, isLocal, pos }) => {
         const isHovered = hoveredId === player.userId;
+
+        let labelText = '';
+        if (action === 'shoot') {
+          labelText = isLocal ? 'SHOOT SELF →' : `SHOOT ${player.nickname || 'OPPONENT'} →`;
+        } else if (action === 'handcuffs') {
+          labelText = `HANDCUFF ${player.nickname || 'OPPONENT'} →`;
+        } else if (action === 'adrenaline') {
+          labelText = `STEAL FROM ${player.nickname || 'OPPONENT'} →`;
+        }
 
         return (
           <Html
@@ -97,7 +113,7 @@ export function PlayerTargetSelector({
                 {isLocal ? (player.nickname ? `YOU (${player.nickname})` : 'YOU') : (player.nickname || 'OPPONENT')}
               </span>
               <span className="text-[9px] tracking-widest text-amber-400 font-bold uppercase">
-                {action === 'shoot' ? (isLocal ? 'SHOOT SELF →' : 'SHOOT OPPONENT →') : 'TARGET HANDCUFFS →'}
+                {labelText}
               </span>
             </button>
           </Html>

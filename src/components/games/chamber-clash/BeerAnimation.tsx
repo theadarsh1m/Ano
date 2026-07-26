@@ -1,13 +1,15 @@
 import React, { useRef, useMemo } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
-import { applyEasing, TABLE_Y, LOCAL_FACE, OPPONENT_FACE } from './animationConfigs';
+import { applyEasing, TABLE_Y } from './animationConfigs';
 import { BeerCanMesh } from './CustomItemMeshes';
+import type { SeatLayout } from './seatLayout';
 
 interface BeerAnimationProps {
   animation: { itemId: string; userId: string; targetId: string | null };
   sourceMesh?: THREE.Mesh;
-  localUserId: string | null;
+  localUserId?: string | null;
+  actorSeat?: SeatLayout;
   baseRotation?: [number, number, number];
   ejectedShellType?: 'LIVE' | 'BLANK' | null;
   onShotgunPump?: () => void;
@@ -15,11 +17,11 @@ interface BeerAnimationProps {
 }
 
 /**
- * Dedicated Beer animation:
+ * Dedicated Seat-Relative Beer animation:
  * 
- * 1. LIFT off table
+ * 1. LIFT off actor's inventory
  * 2. MOVE to actor face
- * 3. TILT back (drinking, top opening toward actor mouth)
+ * 3. TILT back toward actor mouth
  * 4. HOLD/DRINK
  * 5. LOWER beer
  * 6. SHOTGUN PUMP / EJECTION
@@ -27,7 +29,7 @@ interface BeerAnimationProps {
  */
 export function BeerAnimation({
   animation,
-  localUserId,
+  actorSeat,
   onShotgunPump,
   onComplete
 }: BeerAnimationProps) {
@@ -37,22 +39,23 @@ export function BeerAnimation({
   const completed = useRef(false);
   const pumpTriggered = useRef(false);
 
-  const isLocalActor = animation.userId === localUserId;
-  const face = isLocalActor ? LOCAL_FACE : OPPONENT_FACE;
+  const face = actorSeat?.anchors.face || new THREE.Vector3(0, 1.20, -0.85);
+  const startCenter = actorSeat?.inventoryCenter || new THREE.Vector3(0, TABLE_Y, -0.52);
 
   // Phase definitions with cumulative times
   const phases = useMemo(() => {
-    const startZ = isLocalActor ? 0.35 : -0.35;
+    const startX = startCenter.x;
+    const startZ = startCenter.z;
     return [
-      { name: 'LIFT',          start: 0,   end: 0.3,  from: [0, TABLE_Y, startZ],            to: [0, TABLE_Y + 0.15, startZ] },
-      { name: 'TO_FACE',       start: 0.3, end: 0.8,  from: [0, TABLE_Y + 0.15, startZ],     to: [face.x, face.y, face.z] },
+      { name: 'LIFT',          start: 0,   end: 0.3,  from: [startX, TABLE_Y, startZ],            to: [startX, TABLE_Y + 0.15, startZ] },
+      { name: 'TO_FACE',       start: 0.3, end: 0.8,  from: [startX, TABLE_Y + 0.15, startZ],     to: [face.x, face.y, face.z] },
       { name: 'TILT',          start: 0.8, end: 1.2,  from: [face.x, face.y, face.z],         to: [face.x, face.y, face.z] },
       { name: 'DRINK_HOLD',    start: 1.2, end: 1.7,  from: [face.x, face.y, face.z],         to: [face.x, face.y, face.z] },
       { name: 'LOWER',         start: 1.7, end: 2.0,  from: [face.x, face.y, face.z],         to: [face.x, face.y - 0.3, face.z] },
       { name: 'EJECT',         start: 2.0, end: 2.5,  from: [face.x, face.y - 0.3, face.z],   to: [0, TABLE_Y - 0.5, 0] },
       { name: 'DONE',          start: 2.5, end: 2.8,  from: [0, TABLE_Y - 0.5, 0],            to: [0, TABLE_Y - 1.0, 0] },
     ] as const;
-  }, [isLocalActor, face]);
+  }, [startCenter, face]);
 
   const totalDuration = 2.8;
 
@@ -91,7 +94,11 @@ export function BeerAnimation({
       THREE.MathUtils.lerp(from[2], to[2], eased)
     );
 
-    // Phase-specific behavior (Actor-relative tilt direction)
+    if (actorSeat?.characterRotation) {
+      groupRef.current.rotation.set(0, actorSeat.characterRotation[1], 0);
+    }
+
+    const isLocalActor = actorSeat ? actorSeat.role === 'LOCAL' : false;
     const tiltDirection = isLocalActor ? 1.1 : -1.1;
 
     switch (currentPhase.name) {

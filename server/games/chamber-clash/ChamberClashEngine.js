@@ -116,26 +116,23 @@ class ChamberClashEngine extends BaseGameEngine {
       blankShells: blankCount
     });
 
-    // Distribute items (1 to 3 items per round)
-    this.distributeItems(RandomService.randomInt(1, 3));
+    // Distribute items: 2 items in round 1, 3 items in subsequent rounds (max cap 5)
+    const itemAmount = this.roundNumber === 1 ? 2 : 3;
+    this.distributeItems(itemAmount);
     
     this.startTurnSequence();
   }
   
   distributeItems(amount) {
     const given = {};
+    const maxInv = this.settings.maxInventory || 5;
+
     this.players.forEach(p => {
       if (!p.isAlive) return;
       given[p.userId] = [];
-      
-      // Forcefully add a beer
-      if (p.inventory.length < this.settings.maxInventory) {
-        p.inventory.push('beer');
-        given[p.userId].push('beer');
-      }
 
       for (let i = 0; i < amount; i++) {
-        if (p.inventory.length >= this.settings.maxInventory) break;
+        if (p.inventory.length >= maxInv) break;
         const itemId = RandomService.drawItem(ItemRegistry);
         if (itemId) {
           p.inventory.push(itemId);

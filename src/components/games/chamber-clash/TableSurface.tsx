@@ -86,7 +86,7 @@ export function TableSurface({ yPos }: TableSurfaceProps) {
     <group position={[0, yPos, 0]}>
       {/* Table Surface */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[2.4, 1.8]} />
+        <planeGeometry args={[2.8, 2.4]} />
         <meshStandardMaterial 
           map={tableTexture} 
           roughness={0.9} 
@@ -96,18 +96,18 @@ export function TableSurface({ yPos }: TableSurfaceProps) {
       </mesh>
 
       {/* Near Edge Trim (Physical thickness) */}
-      <mesh position={[0, -0.05, 0.9]}>
-        <boxGeometry args={[2.4, 0.1, 0.05]} />
+      <mesh position={[0, -0.05, 1.2]}>
+        <boxGeometry args={[2.8, 0.1, 0.05]} />
         <meshStandardMaterial color="#0a0a0a" roughness={0.7} metalness={0.5} />
       </mesh>
       
       {/* Side Edges */}
-      <mesh position={[-1.2, -0.05, 0]}>
-        <boxGeometry args={[0.05, 0.1, 1.8]} />
+      <mesh position={[-1.4, -0.05, 0]}>
+        <boxGeometry args={[0.05, 0.1, 2.4]} />
         <meshStandardMaterial color="#0a0a0a" roughness={0.7} metalness={0.5} />
       </mesh>
-      <mesh position={[1.2, -0.05, 0]}>
-        <boxGeometry args={[0.05, 0.1, 1.8]} />
+      <mesh position={[1.4, -0.05, 0]}>
+        <boxGeometry args={[0.05, 0.1, 2.4]} />
         <meshStandardMaterial color="#0a0a0a" roughness={0.7} metalness={0.5} />
       </mesh>
     </group>

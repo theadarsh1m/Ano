@@ -2,13 +2,15 @@ import React, { useRef, useState, useMemo } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
-import { applyEasing, TABLE_Y, LOCAL_EAR, OPPONENT_EAR } from './animationConfigs';
+import { applyEasing, TABLE_Y } from './animationConfigs';
 import { BurnerPhoneMesh } from './CustomItemMeshes';
+import type { SeatLayout } from './seatLayout';
 
 interface BurnerPhoneAnimationProps {
   animation: { itemId: string; userId: string; targetId: string | null };
   sourceMesh?: THREE.Mesh;
-  localUserId: string | null;
+  localUserId?: string | null;
+  actorSeat?: SeatLayout;
   /** Single Authoritative Result from server event — { displayShellNumber: number, shellType: 'LIVE' | 'BLANK' } */
   burnerPhoneResult?: { displayShellNumber?: number; position?: number; shellType?: string; shell?: string } | null;
   privatePayload?: any;
@@ -27,6 +29,7 @@ interface BurnerPhoneAnimationProps {
 export function BurnerPhoneAnimation({
   animation,
   localUserId,
+  actorSeat,
   burnerPhoneResult,
   privatePayload,
   onComplete
@@ -37,8 +40,8 @@ export function BurnerPhoneAnimation({
   const [hingeAngle, setHingeAngle] = useState(0);
 
   const isLocalActor = animation.userId === localUserId;
-  const ear = isLocalActor ? LOCAL_EAR : OPPONENT_EAR;
-  const startZ = isLocalActor ? 0.35 : -0.35;
+  const ear = actorSeat?.anchors.ear || new THREE.Vector3(-0.15, 1.15, -0.78);
+  const startCenter = actorSeat?.inventoryCenter || new THREE.Vector3(0, TABLE_Y, -0.52);
 
   // Determine authoritative private message values (1-based human display number)
   const displayNo = useMemo(() => {
@@ -57,14 +60,18 @@ export function BurnerPhoneAnimation({
   const isLive = rawShellType === 'LIVE';
 
   // Timings (total 2.8s)
-  const phases = useMemo(() => [
-    { name: 'LIFT',        start: 0,   end: 0.3, from: [0, TABLE_Y, startZ],            to: [0, TABLE_Y + 0.15, startZ] },
-    { name: 'TO_EAR',      start: 0.3, end: 0.8, from: [0, TABLE_Y + 0.15, startZ],     to: [ear.x, ear.y, ear.z] },
-    { name: 'FLIP_OPEN',   start: 0.8, end: 1.2, from: [ear.x, ear.y, ear.z],         to: [ear.x, ear.y, ear.z] },
-    { name: 'READ_HOLD',   start: 1.2, end: 2.1, from: [ear.x, ear.y, ear.z],         to: [ear.x, ear.y, ear.z] },
-    { name: 'FLIP_CLOSE',  start: 2.1, end: 2.4, from: [ear.x, ear.y, ear.z],         to: [ear.x, ear.y, ear.z] },
-    { name: 'LOWER',       start: 2.4, end: 2.8, from: [ear.x, ear.y, ear.z],         to: [0, TABLE_Y - 0.5, startZ] },
-  ] as const, [startZ, ear]);
+  const phases = useMemo(() => {
+    const startX = startCenter.x;
+    const startZ = startCenter.z;
+    return [
+      { name: 'LIFT',        start: 0,   end: 0.3, from: [startX, TABLE_Y, startZ],            to: [startX, TABLE_Y + 0.15, startZ] },
+      { name: 'TO_EAR',      start: 0.3, end: 0.8, from: [startX, TABLE_Y + 0.15, startZ],     to: [ear.x, ear.y, ear.z] },
+      { name: 'FLIP_OPEN',   start: 0.8, end: 1.2, from: [ear.x, ear.y, ear.z],         to: [ear.x, ear.y, ear.z] },
+      { name: 'READ_HOLD',   start: 1.2, end: 2.1, from: [ear.x, ear.y, ear.z],         to: [ear.x, ear.y, ear.z] },
+      { name: 'FLIP_CLOSE',  start: 2.1, end: 2.4, from: [ear.x, ear.y, ear.z],         to: [ear.x, ear.y, ear.z] },
+      { name: 'LOWER',       start: 2.4, end: 2.8, from: [ear.x, ear.y, ear.z],         to: [startX, TABLE_Y - 0.5, startZ] },
+    ] as const;
+  }, [startCenter, ear]);
 
   const totalDuration = 2.8;
 

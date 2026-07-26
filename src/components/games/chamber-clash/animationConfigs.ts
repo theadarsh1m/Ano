@@ -108,7 +108,15 @@ export function computeShotgunAimQuaternion(
   return baseAimQ.multiply(rollQ);
 }
 
-export function getActorAnchors(isLocalActor: boolean) {
+export function getActorAnchors(isLocalActor: boolean, actorSeatAnchors?: any) {
+  if (actorSeatAnchors) {
+    return {
+      face: actorSeatAnchors.face,
+      chest: actorSeatAnchors.chest,
+      ear: actorSeatAnchors.ear,
+      wrist: actorSeatAnchors.wrist,
+    };
+  }
   return {
     face: isLocalActor ? LOCAL_FACE : OPPONENT_FACE,
     chest: isLocalActor ? LOCAL_CHEST : OPPONENT_CHEST,
@@ -134,46 +142,48 @@ export interface ItemAnimConfig {
   hasDedicatedComponent?: boolean;
 }
 
-function getActorFace(isLocalActor: boolean): [number, number, number] {
-  const v = isLocalActor ? LOCAL_FACE : OPPONENT_FACE;
+function getActorFace(isLocalActor: boolean, customFace?: THREE.Vector3): [number, number, number] {
+  const v = customFace || (isLocalActor ? LOCAL_FACE : OPPONENT_FACE);
   return [v.x, v.y, v.z];
 }
 
-function getActorChest(isLocalActor: boolean): [number, number, number] {
-  const v = isLocalActor ? LOCAL_CHEST : OPPONENT_CHEST;
+function getActorChest(isLocalActor: boolean, customChest?: THREE.Vector3): [number, number, number] {
+  const v = customChest || (isLocalActor ? LOCAL_CHEST : OPPONENT_CHEST);
   return [v.x, v.y, v.z];
 }
 
-function getActorEar(isLocalActor: boolean): [number, number, number] {
-  const v = isLocalActor ? LOCAL_EAR : OPPONENT_EAR;
+function getActorEar(isLocalActor: boolean, customEar?: THREE.Vector3): [number, number, number] {
+  const v = customEar || (isLocalActor ? LOCAL_EAR : OPPONENT_EAR);
   return [v.x, v.y, v.z];
 }
 
-function getTargetChest(isLocalTarget: boolean): [number, number, number] {
-  const v = isLocalTarget ? LOCAL_CHEST : OPPONENT_CHEST;
+function getTargetChest(isLocalTarget: boolean, customChest?: THREE.Vector3): [number, number, number] {
+  const v = customChest || (isLocalTarget ? LOCAL_CHEST : OPPONENT_CHEST);
   return [v.x, v.y, v.z];
 }
 
-function getTargetWrist(isLocalTarget: boolean): [number, number, number] {
-  const v = isLocalTarget ? LOCAL_WRIST : OPPONENT_WRIST;
+function getTargetWrist(isLocalTarget: boolean, customWrist?: THREE.Vector3): [number, number, number] {
+  const v = customWrist || (isLocalTarget ? LOCAL_WRIST : OPPONENT_WRIST);
   return [v.x, v.y, v.z];
 }
 
-function startPos(isLocalActor: boolean): [number, number, number] {
+function startPos(isLocalActor: boolean, customStart?: THREE.Vector3): [number, number, number] {
+  if (customStart) return [customStart.x, customStart.y, customStart.z];
   return [0, TABLE_Y, isLocalActor ? 0.35 : -0.35];
 }
 
 export function getItemAnimConfig(
   itemId: string,
   isLocalActor: boolean,
-  isLocalTarget: boolean
+  isLocalTarget: boolean,
+  customAnchors?: { actor?: any; target?: any }
 ): ItemAnimConfig {
-  const start = startPos(isLocalActor);
+  const start = startPos(isLocalActor, customAnchors?.actor?.inventory);
   const liftPos: [number, number, number] = [start[0], start[1] + 0.15, start[2]];
 
   switch (itemId) {
     case 'beer': {
-      const face = getActorFace(isLocalActor);
+      const face = getActorFace(isLocalActor, customAnchors?.actor?.face);
       return {
         hasDedicatedComponent: true,
         totalDuration: 2.8,

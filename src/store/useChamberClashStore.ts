@@ -48,6 +48,8 @@ interface ChamberClashStore {
   actionLog: ActionLogEntry[];
   revealedShell: string | null;
   burnerPhoneReveal: { displayShellNumber: number; shellType: string } | null;
+  selectedTargetId: string | null;
+  setSelectedTargetId: (targetId: string | null) => void;
   
   // Lobby Actions
   fetchLobbies: () => void;
@@ -57,6 +59,8 @@ interface ChamberClashStore {
   toggleReady: (gameId: string, userId: string, isReady: boolean) => void;
   startGame: (gameId: string, hostId: string) => void;
   startPracticeGame: (userId: string, nickname: string) => void;
+  start3PlayerPracticeGame: (userId: string, nickname: string) => void;
+  start4PlayerPracticeGame: (userId: string, nickname: string) => void;
   
   // Game Actions
   shootTarget: (gameId: string, userId: string, targetId: string) => void;
@@ -86,6 +90,8 @@ export const useChamberClashStore = create<ChamberClashStore>((set, get) => ({
   actionLog: [],
   revealedShell: null,
   burnerPhoneReveal: null,
+  selectedTargetId: null,
+  setSelectedTargetId: (targetId) => set({ selectedTargetId: targetId }),
 
   fetchLobbies: () => {
     const socket = socketService.getSocket();
@@ -119,16 +125,17 @@ export const useChamberClashStore = create<ChamberClashStore>((set, get) => ({
   },
 
   startPracticeGame: (userId, nickname) => {
+    const resolvedId = userId || 'local-p1';
     const mockState: ChamberClashState = {
       gameId: 'practice-game',
       gameType: 'CHAMBER_CLASH',
       status: 'IN_ROUND',
       roundNumber: 1,
-      currentTurnPlayerId: userId || 'local-p1',
+      currentTurnPlayerId: resolvedId,
       winnerId: null,
       players: [
-        { userId: userId || 'local-p1', nickname: nickname || 'You', hp: 5, inventory: ["magnifier", "medkit", "inverter", "beer"], statusEffects: [], isAlive: true },
-        { userId: 'opponent-dealer', nickname: 'Dealer', hp: 5, inventory: ["magnifier", "medkit", "beer", "handsaw"], statusEffects: [], isAlive: true }
+        { userId: resolvedId, nickname: nickname || 'You', hp: 5, inventory: ["magnifier", "beer"], statusEffects: [], isAlive: true },
+        { userId: 'opponent-dealer', nickname: 'Dealer', hp: 5, inventory: ["medkit", "inverter"], statusEffects: [], isAlive: true }
       ],
       liveShells: 3,
       blankShells: 3,
@@ -138,19 +145,119 @@ export const useChamberClashStore = create<ChamberClashStore>((set, get) => ({
     set({ gameState: mockState, pendingGameState: mockState, lobby: null });
   },
 
+  start3PlayerPracticeGame: (userId, nickname) => {
+    const resolvedId = userId || 'local-p1';
+    const mockState: ChamberClashState = {
+      gameId: 'practice-game-3p',
+      gameType: 'CHAMBER_CLASH',
+      status: 'IN_ROUND',
+      roundNumber: 1,
+      currentTurnPlayerId: resolvedId,
+      winnerId: null,
+      players: [
+        { userId: resolvedId, nickname: nickname || 'You', hp: 5, inventory: ["magnifier", "beer"], statusEffects: [], isAlive: true },
+        { userId: 'opponent-dealer-1', nickname: 'Dealer Left', hp: 5, inventory: ["handsaw", "handcuffs"], statusEffects: [], isAlive: true },
+        { userId: 'opponent-dealer-2', nickname: 'Dealer Right', hp: 5, inventory: ["medkit", "inverter"], statusEffects: [], isAlive: true }
+      ],
+      liveShells: 3,
+      blankShells: 3,
+      pendingItemAction: undefined,
+      settings: { startingHp: 5, turnTimer: 30, chamberSize: 6, maxInventory: 5, maxPlayers: 6, isPrivate: false }
+    };
+    set({ gameState: mockState, pendingGameState: mockState, lobby: null });
+  },
+
+  start4PlayerPracticeGame: (userId, nickname) => {
+    const resolvedId = userId || 'local-p1';
+    const mockState: ChamberClashState = {
+      gameId: 'practice-game-4p',
+      gameType: 'CHAMBER_CLASH',
+      status: 'IN_ROUND',
+      roundNumber: 1,
+      currentTurnPlayerId: resolvedId,
+      winnerId: null,
+      players: [
+        { userId: resolvedId, nickname: nickname || 'You', hp: 5, inventory: ["magnifier", "beer"], statusEffects: [], isAlive: true },
+        { userId: 'opponent-dealer-1', nickname: 'Dealer Left', hp: 5, inventory: ["handsaw", "handcuffs"], statusEffects: [], isAlive: true },
+        { userId: 'opponent-dealer-2', nickname: 'Dealer Far', hp: 5, inventory: ["medkit", "inverter"], statusEffects: [], isAlive: true },
+        { userId: 'opponent-dealer-3', nickname: 'Dealer Right', hp: 5, inventory: ["burner_phone", "adrenaline"], statusEffects: [], isAlive: true }
+      ],
+      liveShells: 4,
+      blankShells: 4,
+      pendingItemAction: undefined,
+      settings: { startingHp: 5, turnTimer: 30, chamberSize: 8, maxInventory: 5, maxPlayers: 6, isPrivate: false }
+    };
+    set({ gameState: mockState, pendingGameState: mockState, lobby: null });
+  },
+
   shootTarget: (gameId, userId, targetId) => {
     const socket = socketService.getSocket();
-    if (socket) socket.emit('game_action', { gameId, userId, action: 'shoot_target', data: { targetId } });
+    if (socket && socket.connected && !gameId.startsWith('practice-game')) {
+      socket.emit('game_action', { gameId, userId, action: 'shoot_target', data: { targetId } });
+    }
   },
 
   useItem: (gameId, userId, itemId, targetId, stolenItemId) => {
     const socket = socketService.getSocket();
-    if (socket) socket.emit('game_action', { gameId, userId, action: 'use_item', data: { itemId, targetId, stolenItemId } });
+    if (socket && socket.connected && !gameId.startsWith('practice-game')) {
+      socket.emit('game_action', { gameId, userId, action: 'use_item', data: { itemId, targetId, stolenItemId } });
+      return;
+    }
+
+    // Local Practice Mode item handling
+    set((state) => {
+      if (!state.gameState) return state;
+      const currentPlayers = state.gameState.players.map(p => {
+        if (p.userId !== userId) return p;
+        const newInv = [...p.inventory];
+        const idx = newInv.indexOf(itemId);
+        if (idx > -1) newInv.splice(idx, 1);
+        return { ...p, inventory: newInv };
+      });
+
+      let liveShells = state.gameState.liveShells;
+      let blankShells = state.gameState.blankShells;
+      const newEvents = [...state.eventQueue];
+
+      if (itemId === 'inverter') {
+        // Invert live / blank shells in practice mode
+        const oldLive = liveShells;
+        liveShells = blankShells;
+        blankShells = oldLive;
+
+        newEvents.push({
+          type: 'item_used',
+          data: { playerId: userId, itemId: 'inverter', targetId },
+          id: Date.now() + Math.random()
+        });
+        newEvents.push({
+          type: 'shell_inverted',
+          data: { playerId: userId, newShell: 'INVERTED', remainingLive: liveShells, remainingBlank: blankShells },
+          id: Date.now() + Math.random()
+        });
+      } else {
+        newEvents.push({
+          type: 'item_used',
+          data: { playerId: userId, itemId, targetId, stolenItem: stolenItemId },
+          id: Date.now() + Math.random()
+        });
+      }
+
+      return {
+        gameState: {
+          ...state.gameState,
+          players: currentPlayers,
+          liveShells,
+          blankShells
+        },
+        eventQueue: newEvents
+      };
+    });
   },
 
   resolvePendingItem: (gameId, userId, targetId, stolenItemId) => {
     const socket = socketService.getSocket();
-    if (socket) {
+    if (socket && socket.connected && !gameId.startsWith('practice-game')) {
       socket.emit('game_action', { gameId, userId, action: 'resolve_pending_item', data: { targetId, stolenItemId } });
     } else {
       // Local / Practice Mode state resolution

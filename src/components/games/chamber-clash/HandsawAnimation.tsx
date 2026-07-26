@@ -4,10 +4,13 @@ import { useFrame } from '@react-three/fiber';
 import { applyEasing, TABLE_Y } from './animationConfigs';
 import { HandsawMesh } from './CustomItemMeshes';
 
+import type { SeatLayout } from './seatLayout';
+
 interface HandsawAnimationProps {
   animation: { itemId: string; userId: string; targetId: string | null };
   sourceMesh?: THREE.Mesh;
-  localUserId: string | null;
+  localUserId?: string | null;
+  actorSeat?: SeatLayout;
   baseRotation?: [number, number, number];
   /** Called when the sawing is complete — ChamberClash3D uses this to shorten the barrel */
   onBarrelCut?: () => void;
@@ -55,7 +58,7 @@ export function DetachedBarrelPiece({ active }: { active: boolean }) {
  */
 export function HandsawAnimation({
   animation,
-  localUserId,
+  actorSeat,
   onBarrelCut,
   onComplete
 }: HandsawAnimationProps) {
@@ -66,20 +69,23 @@ export function HandsawAnimation({
   const cutTriggered = useRef(false);
   const [showDetachedPiece, setShowDetachedPiece] = useState(false);
 
-  const isLocalActor = animation.userId === localUserId;
+  const startCenter = actorSeat?.inventoryCenter || new THREE.Vector3(0, TABLE_Y, -0.52);
 
   // Cut point is at X = 0.32 along the front shotgun barrel
   const barrelCutPoint: [number, number, number] = [0.32, TABLE_Y + 0.04, 0];
-  const startZ = isLocalActor ? 0.35 : -0.35;
 
-  const phases = useMemo(() => [
-    { name: 'LIFT',      start: 0,   end: 0.3,  from: [0.32, TABLE_Y, startZ],             to: [0.32, TABLE_Y + 0.15, startZ] },
-    { name: 'APPROACH',  start: 0.3, end: 0.7,  from: [0.32, TABLE_Y + 0.15, startZ],      to: barrelCutPoint },
-    { name: 'ALIGN',     start: 0.7, end: 0.9,  from: barrelCutPoint,                       to: barrelCutPoint },
-    { name: 'SAWING',    start: 0.9, end: 1.9,  from: barrelCutPoint,                       to: barrelCutPoint },
-    { name: 'CUT_DONE',  start: 1.9, end: 2.1,  from: barrelCutPoint,                       to: [0.32, TABLE_Y + 0.15, startZ * 0.5] },
-    { name: 'REMOVE',    start: 2.1, end: 2.5,  from: [0.32, TABLE_Y + 0.15, startZ * 0.5], to: [0.32, TABLE_Y - 0.5, startZ] },
-  ] as const, [startZ, barrelCutPoint]);
+  const phases = useMemo(() => {
+    const startX = startCenter.x;
+    const startZ = startCenter.z;
+    return [
+      { name: 'LIFT',      start: 0,   end: 0.3,  from: [startX, TABLE_Y, startZ],             to: [startX, TABLE_Y + 0.15, startZ] },
+      { name: 'APPROACH',  start: 0.3, end: 0.7,  from: [startX, TABLE_Y + 0.15, startZ],      to: barrelCutPoint },
+      { name: 'ALIGN',     start: 0.7, end: 0.9,  from: barrelCutPoint,                       to: barrelCutPoint },
+      { name: 'SAWING',    start: 0.9, end: 1.9,  from: barrelCutPoint,                       to: barrelCutPoint },
+      { name: 'CUT_DONE',  start: 1.9, end: 2.1,  from: barrelCutPoint,                       to: [startX * 0.5, TABLE_Y + 0.15, startZ * 0.5] },
+      { name: 'REMOVE',    start: 2.1, end: 2.5,  from: [startX * 0.5, TABLE_Y + 0.15, startZ * 0.5], to: [startX, TABLE_Y - 0.5, startZ] },
+    ] as const;
+  }, [startCenter, barrelCutPoint]);
 
   const totalDuration = 2.5;
   const sawStrokes = 6;

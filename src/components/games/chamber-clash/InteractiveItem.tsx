@@ -155,9 +155,9 @@ export function InteractiveItem({
             onClick={handleClick}
           >
             <boxGeometry args={[
-              Math.max(normalizedMesh.size.x * 1.5, 0.1), 
-              Math.max(normalizedMesh.size.y * 1.5, 0.1), 
-              Math.max(normalizedMesh.size.z * 1.5, 0.1)
+              Math.min(Math.max(normalizedMesh.size.x * 1.2, 0.1), 0.18), 
+              Math.min(Math.max(normalizedMesh.size.y * 1.2, 0.1), 0.18), 
+              Math.min(Math.max(normalizedMesh.size.z * 1.2, 0.1), 0.18)
             ]} />
             <meshBasicMaterial transparent opacity={0.1} color="red" />
           </mesh>

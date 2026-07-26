@@ -18,6 +18,7 @@ interface InteractiveShotgunProps {
   scale: [number, number, number];
   gunState: GunStateInput;
   target: 'local' | 'opponent' | null;
+  customTargetPos?: THREE.Vector3;
   shellType?: 'LIVE' | 'BLANK' | null;
   isBarrelShortened?: boolean;
   showDebugArrows?: boolean;
@@ -40,6 +41,7 @@ export function InteractiveShotgun({
   scale,
   gunState,
   target,
+  customTargetPos,
   shellType = 'LIVE',
   isBarrelShortened = false,
   showDebugArrows = true,
@@ -66,11 +68,13 @@ export function InteractiveShotgun({
     isLive: boolean;
     aimPosition: THREE.Vector3;
     aimQuaternion: THREE.Quaternion;
+    targetWorldPos?: THREE.Vector3;
   }>({
     targetType: null,
     isLive: true,
     aimPosition: new THREE.Vector3(),
     aimQuaternion: new THREE.Quaternion(),
+    targetWorldPos: undefined
   });
 
   // Muzzle flash visibility state
@@ -149,28 +153,33 @@ export function InteractiveShotgun({
       }
     }
 
-    if (gunState === 'pointing' && target && visualState.current === 'RESTING') {
-      // Freeze shot identity
-      activeShot.current.targetType = target;
-      activeShot.current.isLive = shellType !== 'BLANK';
+    if (gunState === 'pointing' && target) {
+      if (visualState.current === 'RESTING' || visualState.current === 'RECOVERING' || visualState.current === 'RETURNING') {
+        // Freeze shot identity
+        activeShot.current.targetType = target;
+        activeShot.current.isLive = shellType !== 'BLANK';
+        const isSelf = target === 'local';
+        const defaultTargetPos = isSelf ? SELF_SHOT_TARGET : OPPONENT_SHOT_TARGET;
+        activeShot.current.targetWorldPos = (customTargetPos || defaultTargetPos).clone();
 
-      phaseElapsed.current = 0;
-      firedThisSequence.current = false;
-      sequenceComplete.current = false;
-      triggerFireRequested.current = false;
-      visualState.current = 'PICKING_UP';
+        phaseElapsed.current = 0;
+        firedThisSequence.current = false;
+        sequenceComplete.current = false;
+        triggerFireRequested.current = false;
+        visualState.current = 'PICKING_UP';
 
-      targetPosition.current.copy(pickupPos);
-      targetQuaternion.current.copy(restQuaternion);
-      currentLerpSpeed.current = 8;
+        targetPosition.current.copy(pickupPos);
+        targetQuaternion.current.copy(restQuaternion);
+        currentLerpSpeed.current = 8;
 
-      console.log(`[SHOTGUN] START SEQUENCE: Target=${target}, ShellType=${shellType}`);
+        console.log(`[SHOTGUN] START SEQUENCE: Target=${target}, ShellType=${shellType}, targetWorldPos:`, activeShot.current.targetWorldPos.toArray());
+      }
     }
 
     if (gunState === 'firing') {
       triggerFireRequested.current = true;
     }
-  }, [gunState, target, shellType, position, restPosition, restQuaternion, pickupPos]);
+  }, [gunState, target, shellType, customTargetPos, position, restPosition, restQuaternion, pickupPos]);
 
   // Main animation frame loop
   useFrame((_, delta) => {
@@ -183,8 +192,9 @@ export function InteractiveShotgun({
     const isSelf = (activeShot.current.targetType || target) === 'local';
     const isLive = activeShot.current.isLive;
 
+    const targetWorldPos = activeShot.current.targetWorldPos || (isSelf ? SELF_SHOT_TARGET : OPPONENT_SHOT_TARGET);
+
     const aimPos = isSelf ? aimSelfPos : aimOpponentPos;
-    const targetWorldPos = isSelf ? SELF_SHOT_TARGET : OPPONENT_SHOT_TARGET;
 
     // Calculate current vectors for alignment check
     const currentQuat = groupRef.current.quaternion;

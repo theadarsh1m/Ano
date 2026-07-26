@@ -4,10 +4,13 @@ import { useFrame } from '@react-three/fiber';
 import { applyEasing, TABLE_Y, SHOTGUN_BREECH } from './animationConfigs';
 import { InverterMesh } from './CustomItemMeshes';
 
+import type { SeatLayout } from './seatLayout';
+
 interface InverterAnimationProps {
   animation: { itemId: string; userId: string; targetId: string | null };
   sourceMesh?: THREE.Mesh;
-  localUserId: string | null;
+  localUserId?: string | null;
+  actorSeat?: SeatLayout;
   baseRotation?: [number, number, number];
   onComplete?: () => void;
 }
@@ -18,7 +21,7 @@ interface InverterAnimationProps {
  */
 export function InverterAnimation({
   animation,
-  localUserId,
+  actorSeat,
   onComplete
 }: InverterAnimationProps) {
   const groupRef = useRef<THREE.Group>(null);
@@ -26,16 +29,19 @@ export function InverterAnimation({
   const completed = useRef(false);
   const [toggleRot, setToggleRot] = useState(0);
 
-  const isLocalActor = animation.userId === localUserId;
-  const startZ = isLocalActor ? 0.35 : -0.35;
+  const startCenter = actorSeat?.inventoryCenter || new THREE.Vector3(0, TABLE_Y, -0.52);
   const breech = SHOTGUN_BREECH;
 
-  const phases = useMemo(() => [
-    { name: 'LIFT',        start: 0,   end: 0.25, from: [0, TABLE_Y, startZ],                to: [0, TABLE_Y + 0.15, startZ] },
-    { name: 'TO_BREECH',   start: 0.25, end: 0.60, from: [0, TABLE_Y + 0.15, startZ],        to: [breech.x, breech.y + 0.1, breech.z] },
-    { name: 'FLIP_SWITCH', start: 0.60, end: 1.20, from: [breech.x, breech.y + 0.1, breech.z], to: [breech.x, breech.y + 0.1, breech.z] },
-    { name: 'REMOVE',      start: 1.20, end: 1.45, from: [breech.x, breech.y + 0.1, breech.z], to: [0, TABLE_Y - 0.5, startZ] },
-  ] as const, [startZ, breech]);
+  const phases = useMemo(() => {
+    const startX = startCenter.x;
+    const startZ = startCenter.z;
+    return [
+      { name: 'LIFT',        start: 0,   end: 0.25, from: [startX, TABLE_Y, startZ],                to: [startX, TABLE_Y + 0.15, startZ] },
+      { name: 'TO_BREECH',   start: 0.25, end: 0.60, from: [startX, TABLE_Y + 0.15, startZ],        to: [breech.x, breech.y + 0.1, breech.z] },
+      { name: 'FLIP_SWITCH', start: 0.60, end: 1.20, from: [breech.x, breech.y + 0.1, breech.z], to: [breech.x, breech.y + 0.1, breech.z] },
+      { name: 'REMOVE',      start: 1.20, end: 1.45, from: [breech.x, breech.y + 0.1, breech.z], to: [startX, TABLE_Y - 0.5, startZ] },
+    ] as const;
+  }, [startCenter, breech]);
 
   const totalDuration = 1.45;
 

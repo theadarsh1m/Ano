@@ -1,25 +1,31 @@
 import React, { useRef, useMemo } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
-import { applyEasing, TABLE_Y, LOCAL_WRIST, OPPONENT_WRIST } from './animationConfigs';
+import { applyEasing, TABLE_Y } from './animationConfigs';
+import type { SeatLayout } from './seatLayout';
 
 interface HandcuffsAnimationProps {
   animation: { itemId: string; userId: string; targetId: string | null };
   sourceMesh?: THREE.Mesh;
-  localUserId: string | null;
+  localUserId?: string | null;
+  actorSeat?: SeatLayout;
+  targetSeat?: SeatLayout;
   baseRotation?: [number, number, number];
+  targetWristPos?: THREE.Vector3;
   onComplete?: () => void;
 }
 
 /**
  * Handcuffs Animation Component:
- * Flies from actor inventory -> locks onto target wrist.
+ * Flies from actor inventory/wrist -> locks onto target seat wrist.
  */
 export function HandcuffsAnimation({
   animation,
   sourceMesh,
-  localUserId,
+  actorSeat,
+  targetSeat,
   baseRotation = [0, 0, 0],
+  targetWristPos,
   onComplete
 }: HandcuffsAnimationProps) {
   const groupRef = useRef<THREE.Group>(null);
@@ -27,10 +33,8 @@ export function HandcuffsAnimation({
   const elapsed = useRef(0);
   const completed = useRef(false);
 
-  const isLocalActor = animation.userId === localUserId;
-  const isLocalTarget = animation.targetId === localUserId;
-  const startZ = isLocalActor ? 0.35 : -0.35;
-  const targetWrist = isLocalTarget ? LOCAL_WRIST : OPPONENT_WRIST;
+  const startCenter = actorSeat?.anchors.wrist || actorSeat?.inventoryCenter || new THREE.Vector3(0, TABLE_Y, -0.52);
+  const targetWrist = targetSeat?.anchors.wrist || targetWristPos || new THREE.Vector3(0, 0.95, -0.65);
 
   const normalizedMesh = useMemo(() => {
     if (!sourceMesh) return null;
@@ -48,12 +52,17 @@ export function HandcuffsAnimation({
     return rotGroup;
   }, [sourceMesh, baseRotation]);
 
-  const phases = useMemo(() => [
-    { name: 'LIFT',        start: 0,   end: 0.25, from: [0, TABLE_Y, startZ],                           to: [0, TABLE_Y + 0.15, startZ] },
-    { name: 'FLY',         start: 0.25, end: 0.75, from: [0, TABLE_Y + 0.15, startZ],                    to: [targetWrist.x, targetWrist.y + 0.1, targetWrist.z] },
-    { name: 'CLAMP_LOCK',  start: 0.75, end: 1.25, from: [targetWrist.x, targetWrist.y + 0.1, targetWrist.z], to: [targetWrist.x, targetWrist.y, targetWrist.z] },
-    { name: 'REMOVE',      start: 1.25, end: 1.50, from: [targetWrist.x, targetWrist.y, targetWrist.z],   to: [targetWrist.x, TABLE_Y - 0.5, targetWrist.z] },
-  ] as const, [startZ, targetWrist]);
+  const phases = useMemo(() => {
+    const startX = startCenter.x;
+    const startY = startCenter.y || TABLE_Y;
+    const startZ = startCenter.z;
+    return [
+      { name: 'LIFT',        start: 0,   end: 0.25, from: [startX, startY, startZ],                             to: [startX, startY + 0.15, startZ] },
+      { name: 'FLY',         start: 0.25, end: 0.75, from: [startX, startY + 0.15, startZ],                    to: [targetWrist.x, targetWrist.y + 0.1, targetWrist.z] },
+      { name: 'CLAMP_LOCK',  start: 0.75, end: 1.25, from: [targetWrist.x, targetWrist.y + 0.1, targetWrist.z], to: [targetWrist.x, targetWrist.y, targetWrist.z] },
+      { name: 'REMOVE',      start: 1.25, end: 1.50, from: [targetWrist.x, targetWrist.y, targetWrist.z],   to: [targetWrist.x, TABLE_Y - 0.5, targetWrist.z] },
+    ] as const;
+  }, [startCenter, targetWrist]);
 
   const totalDuration = 1.50;
 
@@ -120,15 +129,23 @@ export function HandcuffsAnimation({
 
 /**
  * Persistent Handcuff Prop for Restrained Players.
- * Renders on local side (first-person lower view) or opponent side while handcuffed.
+ * Renders at player seat's handcuffProp anchor position with seat rotation.
  */
-export function RestrainedHandcuffs({ isLocal }: { isLocal: boolean }) {
-  const groupPos: [number, number, number] = isLocal
+export function RestrainedHandcuffs({
+  position,
+  rotation = [0, 0, 0],
+  isLocal = false
+}: {
+  position?: [number, number, number];
+  rotation?: [number, number, number];
+  isLocal?: boolean;
+}) {
+  const groupPos: [number, number, number] = position || (isLocal
     ? [0.0, 0.85, 0.42]  // Low in local camera view
-    : [0.0, 0.78, -0.55]; // Opponent side of table
+    : [0.0, 0.78, -0.55]); // Opponent side of table
 
   return (
-    <group position={groupPos} scale={[1.2, 1.2, 1.2]}>
+    <group position={groupPos} rotation={rotation} scale={[1.2, 1.2, 1.2]}>
       {/* Left cuff ring */}
       <mesh position={[-0.06, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
         <torusGeometry args={[0.035, 0.007, 12, 24]} />

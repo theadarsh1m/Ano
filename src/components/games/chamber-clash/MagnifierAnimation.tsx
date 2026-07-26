@@ -4,10 +4,13 @@ import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import { applyEasing, TABLE_Y, SHOTGUN_BREECH } from './animationConfigs';
 
+import type { SeatLayout } from './seatLayout';
+
 interface MagnifierAnimationProps {
   animation: { itemId: string; userId: string; targetId: string | null };
   sourceMesh?: THREE.Mesh;
-  localUserId: string | null;
+  localUserId?: string | null;
+  actorSeat?: SeatLayout;
   baseRotation?: [number, number, number];
   privatePayload?: { shellType?: 'LIVE' | 'BLANK' } | null;
   onComplete?: () => void;
@@ -22,6 +25,7 @@ export function MagnifierAnimation({
   animation,
   sourceMesh,
   localUserId,
+  actorSeat,
   baseRotation = [0, 0, 0],
   privatePayload,
   onComplete
@@ -32,7 +36,7 @@ export function MagnifierAnimation({
   const completed = useRef(false);
 
   const isLocalActor = animation.userId === localUserId;
-  const startZ = isLocalActor ? 0.35 : -0.35;
+  const startCenter = actorSeat?.inventoryCenter || new THREE.Vector3(0, TABLE_Y, -0.52);
   const chamberPos = SHOTGUN_BREECH;
 
   const shellType = privatePayload?.shellType || 'LIVE';
@@ -54,12 +58,16 @@ export function MagnifierAnimation({
     return rotGroup;
   }, [sourceMesh, baseRotation]);
 
-  const phases = useMemo(() => [
-    { name: 'LIFT',        start: 0,   end: 0.25, from: [0, TABLE_Y, startZ],                    to: [0, TABLE_Y + 0.15, startZ] },
-    { name: 'TO_CHAMBER',  start: 0.25, end: 0.65, from: [0, TABLE_Y + 0.15, startZ],            to: [chamberPos.x, chamberPos.y + 0.1, chamberPos.z] },
-    { name: 'PEER',        start: 0.65, end: 1.55, from: [chamberPos.x, chamberPos.y + 0.1, chamberPos.z], to: [chamberPos.x, chamberPos.y + 0.08, chamberPos.z] },
-    { name: 'REMOVE',      start: 1.55, end: 1.80, from: [chamberPos.x, chamberPos.y + 0.08, chamberPos.z], to: [0, TABLE_Y - 0.5, startZ] },
-  ] as const, [startZ, chamberPos]);
+  const phases = useMemo(() => {
+    const startX = startCenter.x;
+    const startZ = startCenter.z;
+    return [
+      { name: 'LIFT',        start: 0,    end: 0.25, from: [startX, TABLE_Y, startZ],                    to: [startX, TABLE_Y + 0.15, startZ] },
+      { name: 'TO_CHAMBER',  start: 0.25, end: 0.75, from: [startX, TABLE_Y + 0.15, startZ],             to: [chamberPos.x, chamberPos.y + 0.12, chamberPos.z] },
+      { name: 'INSPECT',     start: 0.75, end: 1.65, from: [chamberPos.x, chamberPos.y + 0.12, chamberPos.z], to: [chamberPos.x, chamberPos.y + 0.08, chamberPos.z] },
+      { name: 'REMOVE',      start: 1.65, end: 1.95, from: [chamberPos.x, chamberPos.y + 0.08, chamberPos.z], to: [startX, TABLE_Y - 0.5, startZ] },
+    ] as const;
+  }, [startCenter, chamberPos]);
 
   const totalDuration = 1.80;
 
@@ -97,7 +105,7 @@ export function MagnifierAnimation({
       THREE.MathUtils.lerp(from[2], to[2], eased)
     );
 
-    if (innerRef.current && currentPhase.name === 'PEER') {
+    if (innerRef.current && currentPhase.name === 'INSPECT') {
       // Peer lens wobble
       innerRef.current.rotation.z = Math.sin(t * 3) * 0.15;
     }

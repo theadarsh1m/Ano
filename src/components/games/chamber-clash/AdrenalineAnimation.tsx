@@ -1,14 +1,15 @@
 import React, { useRef, useMemo } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
-import { applyEasing, TABLE_Y, LOCAL_CHEST, OPPONENT_CHEST } from './animationConfigs';
-
+import { applyEasing, TABLE_Y } from './animationConfigs';
 import { AdrenalineMesh } from './CustomItemMeshes';
+import type { SeatLayout } from './seatLayout';
 
 interface AdrenalineAnimationProps {
   animation: { itemId: string; userId: string; targetId: string | null };
   sourceMesh?: THREE.Mesh;
-  localUserId: string | null;
+  localUserId?: string | null;
+  actorSeat?: SeatLayout;
   baseRotation?: [number, number, number];
   onSelfInjectComplete?: () => void;
   onComplete?: () => void;
@@ -19,7 +20,7 @@ interface AdrenalineAnimationProps {
  */
 export function AdrenalineAnimation({
   animation,
-  localUserId,
+  actorSeat,
   onSelfInjectComplete,
   onComplete
 }: AdrenalineAnimationProps) {
@@ -28,17 +29,20 @@ export function AdrenalineAnimation({
   const elapsed = useRef(0);
   const completed = useRef(false);
 
-  const isLocalActor = animation.userId === localUserId;
-  const chest = isLocalActor ? LOCAL_CHEST : OPPONENT_CHEST;
-  const startZ = isLocalActor ? 0.35 : -0.35;
+  const chest = actorSeat?.anchors.chest || new THREE.Vector3(0, 1.00, -0.78);
+  const startCenter = actorSeat?.inventoryCenter || new THREE.Vector3(0, TABLE_Y, -0.52);
 
-  const phases = useMemo(() => [
-    { name: 'LIFT',       start: 0,    end: 0.25, from: [0, TABLE_Y, startZ],            to: [0, TABLE_Y + 0.15, startZ] },
-    { name: 'TO_CHEST',   start: 0.25, end: 0.65, from: [0, TABLE_Y + 0.15, startZ],     to: [chest.x, chest.y, chest.z] },
-    { name: 'INJECT',     start: 0.65, end: 0.95, from: [chest.x, chest.y, chest.z],     to: [chest.x, chest.y - 0.04, chest.z + (isLocalActor ? -0.04 : 0.04)] },
-    { name: 'HOLD',       start: 0.95, end: 1.25, from: [chest.x, chest.y - 0.04, chest.z + (isLocalActor ? -0.04 : 0.04)], to: [chest.x, chest.y - 0.04, chest.z + (isLocalActor ? -0.04 : 0.04)] },
-    { name: 'REMOVE',     start: 1.25, end: 1.50, from: [chest.x, chest.y - 0.04, chest.z + (isLocalActor ? -0.04 : 0.04)], to: [0, TABLE_Y - 0.5, startZ] },
-  ] as const, [startZ, chest, isLocalActor]);
+  const phases = useMemo(() => {
+    const startX = startCenter.x;
+    const startZ = startCenter.z;
+    return [
+      { name: 'LIFT',       start: 0,    end: 0.25, from: [startX, TABLE_Y, startZ],            to: [startX, TABLE_Y + 0.15, startZ] },
+      { name: 'TO_CHEST',   start: 0.25, end: 0.65, from: [startX, TABLE_Y + 0.15, startZ],     to: [chest.x, chest.y, chest.z] },
+      { name: 'INJECT',     start: 0.65, end: 0.95, from: [chest.x, chest.y, chest.z],     to: [chest.x, chest.y - 0.04, chest.z] },
+      { name: 'HOLD',       start: 0.95, end: 1.25, from: [chest.x, chest.y - 0.04, chest.z], to: [chest.x, chest.y - 0.04, chest.z] },
+      { name: 'REMOVE',     start: 1.25, end: 1.50, from: [chest.x, chest.y - 0.04, chest.z], to: [startX, TABLE_Y - 0.5, startZ] },
+    ] as const;
+  }, [startCenter, chest]);
 
   const totalDuration = 1.50;
 
@@ -77,6 +81,7 @@ export function AdrenalineAnimation({
       THREE.MathUtils.lerp(from[2], to[2], eased)
     );
 
+    const isLocalActor = actorSeat ? actorSeat.role === 'LOCAL' : false;
     if (innerRef.current) {
       if (currentPhase.name === 'INJECT') {
         innerRef.current.rotation.x = THREE.MathUtils.lerp(0, isLocalActor ? 0.6 : -0.6, applyEasing(progress, 'easeOut'));

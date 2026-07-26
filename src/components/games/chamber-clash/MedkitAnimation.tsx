@@ -1,25 +1,26 @@
 import React, { useRef, useMemo } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
-import { applyEasing, TABLE_Y, LOCAL_CHEST, OPPONENT_CHEST } from './animationConfigs';
+import { applyEasing, TABLE_Y } from './animationConfigs';
 import { MedkitBottleMesh } from './CustomItemMeshes';
+import type { SeatLayout } from './seatLayout';
 
 interface MedkitAnimationProps {
   animation: { itemId: string; userId: string; targetId: string | null };
   sourceMesh?: THREE.Mesh;
-  localUserId: string | null;
+  localUserId?: string | null;
+  actorSeat?: SeatLayout;
   baseRotation?: [number, number, number];
   onComplete?: () => void;
 }
 
 /**
  * Medkit Bottle Animation Component:
- * Picks up medical bottle, brings to actor, tilts bottle to apply/drink emergency medicine,
- * with green healing aura feedback.
+ * Picks up medical bottle, brings to actor chest, tilts bottle to apply/drink emergency medicine.
  */
 export function MedkitAnimation({
   animation,
-  localUserId,
+  actorSeat,
   onComplete
 }: MedkitAnimationProps) {
   const groupRef = useRef<THREE.Group>(null);
@@ -27,16 +28,19 @@ export function MedkitAnimation({
   const elapsed = useRef(0);
   const completed = useRef(false);
 
-  const isLocalActor = animation.userId === localUserId;
-  const chest = isLocalActor ? LOCAL_CHEST : OPPONENT_CHEST;
-  const startZ = isLocalActor ? 0.35 : -0.35;
+  const chest = actorSeat?.anchors.chest || new THREE.Vector3(0, 1.00, -0.78);
+  const startCenter = actorSeat?.inventoryCenter || new THREE.Vector3(0, TABLE_Y, -0.52);
 
-  const phases = useMemo(() => [
-    { name: 'LIFT',        start: 0,    end: 0.25, from: [0, TABLE_Y, startZ],            to: [0, TABLE_Y + 0.15, startZ] },
-    { name: 'TO_CHEST',    start: 0.25, end: 0.65, from: [0, TABLE_Y + 0.15, startZ],     to: [chest.x, chest.y + 0.05, chest.z] },
-    { name: 'DRINK',       start: 0.65, end: 1.30, from: [chest.x, chest.y + 0.05, chest.z], to: [chest.x, chest.y + 0.08, chest.z] },
-    { name: 'REMOVE',      start: 1.30, end: 1.55, from: [chest.x, chest.y + 0.08, chest.z], to: [0, TABLE_Y - 0.5, startZ] },
-  ] as const, [startZ, chest]);
+  const phases = useMemo(() => {
+    const startX = startCenter.x;
+    const startZ = startCenter.z;
+    return [
+      { name: 'LIFT',        start: 0,    end: 0.25, from: [startX, TABLE_Y, startZ],            to: [startX, TABLE_Y + 0.15, startZ] },
+      { name: 'TO_CHEST',    start: 0.25, end: 0.65, from: [startX, TABLE_Y + 0.15, startZ],     to: [chest.x, chest.y + 0.05, chest.z] },
+      { name: 'DRINK',       start: 0.65, end: 1.30, from: [chest.x, chest.y + 0.05, chest.z], to: [chest.x, chest.y + 0.08, chest.z] },
+      { name: 'REMOVE',      start: 1.30, end: 1.55, from: [chest.x, chest.y + 0.08, chest.z], to: [startX, TABLE_Y - 0.5, startZ] },
+    ] as const;
+  }, [startCenter, chest]);
 
   const totalDuration = 1.55;
 
@@ -74,6 +78,7 @@ export function MedkitAnimation({
       THREE.MathUtils.lerp(from[2], to[2], eased)
     );
 
+    const isLocalActor = actorSeat ? actorSeat.role === 'LOCAL' : false;
     if (innerRef.current) {
       if (currentPhase.name === 'DRINK') {
         const tiltDirection = isLocalActor ? 1.0 : -1.0;
