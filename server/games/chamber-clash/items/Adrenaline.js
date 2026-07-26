@@ -29,8 +29,8 @@ const BaseItem = {
     }
     
     const target = engine.players.get(targetId);
-    if (!target || !target.isAlive || targetId === playerId) {
-      return { success: false, error: 'Invalid target player' };
+    if (!target || !target.isAlive || target.hp <= 0 || targetId === playerId) {
+      return { success: false, error: 'ITEM_NOT_AVAILABLE' };
     }
     
     const stolenItemId = data?.stolenItemId;
@@ -44,7 +44,7 @@ const BaseItem = {
     
     const itemIndex = target.inventory.findIndex(id => id === stolenItemId);
     if (itemIndex === -1) {
-      return { success: false, error: 'Target does not have this item' };
+      return { success: false, error: 'ITEM_NOT_AVAILABLE' };
     }
     
     const ItemRegistry = require('./ItemRegistry');

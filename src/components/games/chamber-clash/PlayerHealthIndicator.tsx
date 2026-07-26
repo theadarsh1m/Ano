@@ -43,6 +43,26 @@ export function PlayerHealthIndicator({
   const currentHp = Math.max(0, player.hp);
   const displayName = isLocal ? 'YOU' : player.nickname || 'OPPONENT';
 
+  const isEliminated = player.hp <= 0 || player.isAlive === false;
+
+  if (isEliminated) {
+    return (
+      <div className={`
+        inline-flex flex-col items-center justify-center backdrop-blur-md transition-all duration-300 select-none
+        ${compact ? 'px-2 py-1 rounded-lg' : 'px-3.5 py-1.5 rounded-xl'}
+        bg-red-950/40 border border-red-900/60 shadow-lg opacity-80
+        ${className}
+      `}>
+        <div className="flex items-center gap-1.5 text-[11px] font-mono font-bold tracking-wider uppercase text-zinc-400">
+          <span className="truncate max-w-[120px]">{displayName}</span>
+        </div>
+        <div className="flex items-center gap-1 mt-0.5 text-xs font-mono font-black text-red-500 tracking-wider">
+          <span>💀</span> ELIMINATED
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`
       inline-flex flex-col items-center justify-center backdrop-blur-md transition-all duration-300 select-none

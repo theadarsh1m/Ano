@@ -21,6 +21,7 @@ interface InteractiveItemProps {
   position: [number, number, number];
   rotation: [number, number, number];
   isLocal: boolean;
+  interactionMode?: 'USE' | 'STEAL' | 'DISABLED';
   isSelectable?: boolean;
   isDisabled?: boolean;
   onClick?: (id: string) => void;
@@ -33,6 +34,7 @@ export function InteractiveItem({
   position,
   rotation,
   isLocal,
+  interactionMode,
   isSelectable = false,
   isDisabled = false,
   onClick,
@@ -43,7 +45,12 @@ export function InteractiveItem({
   const [hovered, setHovered] = useState(false);
   const [clickScale, setClickScale] = useState(1);
 
-  const canInteract = !isDisabled && (isLocal || isSelectable);
+  const resolvedMode = interactionMode 
+    ? interactionMode 
+    : (!isDisabled && (isLocal || isSelectable) ? (isSelectable ? 'STEAL' : 'USE') : 'DISABLED');
+
+  const canInteract = resolvedMode !== 'DISABLED';
+  const isStealable = resolvedMode === 'STEAL';
 
   const normalizedMesh = useMemo(() => {
     const cloned = sourceMesh.clone();
@@ -84,9 +91,9 @@ export function InteractiveItem({
     meshRef.current.traverse((child) => {
       if (child instanceof THREE.Mesh && child.material) {
         if (child.material.emissive !== undefined) {
-          const targetEmissive = (canInteract && hovered) ? (isSelectable ? 0.4 : 0.2) : 0;
+          const targetEmissive = (canInteract && hovered) ? (isStealable ? 0.4 : 0.2) : 0;
           const currentIntensity = child.material.emissiveIntensity || 0;
-          child.material.emissive.setHex(isSelectable ? 0x00f0ff : 0xffffff);
+          child.material.emissive.setHex(isStealable ? 0x00f0ff : 0xffffff);
           child.material.emissiveIntensity = currentIntensity + (targetEmissive - currentIntensity) * 10 * delta;
         }
       }
@@ -163,7 +170,7 @@ export function InteractiveItem({
           </mesh>
 
           {/* Floating Tooltip when hovered during steal selection */}
-          {isSelectable && hovered && (
+          {isStealable && hovered && (
             <Html position={[0, normalizedMesh.size.y + 0.08, 0]} center style={{ pointerEvents: 'none' }}>
               <div className="bg-cyan-950/95 border border-cyan-400 p-1.5 rounded-lg font-mono text-[9px] font-bold text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.6)] uppercase tracking-wider whitespace-nowrap">
                 STEAL {ITEM_NAMES[id] || id.toUpperCase()} ➔

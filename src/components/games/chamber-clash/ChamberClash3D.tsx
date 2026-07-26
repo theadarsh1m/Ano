@@ -40,6 +40,7 @@ interface ChamberClash3DProps {
   privatePayload?: any;
   burnerPhoneResult?: any;
   isStealSelectionMode?: boolean;
+  isSpectating?: boolean;
   onShotgunClick?: () => void;
   onSelectStolenItem?: (payload: { ownerPlayerId: string; itemId: string } | string) => void;
   onCameraReturned?: () => void;
@@ -105,11 +106,11 @@ const LOCAL_ITEM_SLOTS = [
 ];
 
 const OPPONENT_ITEM_SLOTS = [
-  { id: "opp-slot-0", position: [-0.4, 0.77, -0.35] as [number, number, number] },
-  { id: "opp-slot-1", position: [-0.2, 0.77, -0.35] as [number, number, number] },
-  { id: "opp-slot-2", position: [0.0, 0.77, -0.35] as [number, number, number] },
-  { id: "opp-slot-3", position: [0.2, 0.77, -0.35] as [number, number, number] },
-  { id: "opp-slot-4", position: [0.4, 0.77, -0.35] as [number, number, number] },
+  { id: "slot-0", position: [0.4, 0.77, -0.35] as [number, number, number] },
+  { id: "slot-1", position: [0.2, 0.77, -0.35] as [number, number, number] },
+  { id: "slot-2", position: [0.0, 0.77, -0.35] as [number, number, number] },
+  { id: "slot-3", position: [-0.2, 0.77, -0.35] as [number, number, number] },
+  { id: "slot-4", position: [-0.4, 0.77, -0.35] as [number, number, number] },
 ];
 
 const OPPONENT_TARGET_HITBOX = {
@@ -136,12 +137,14 @@ function TargetSelectionCamera({
   targetingAction,
   isStealSelectionMode,
   stealingFromPlayerId,
+  isSpectating,
   seatMap,
   onCameraReturned
 }: {
   targetingAction: 'shoot' | 'handcuffs' | 'adrenaline' | null;
   isStealSelectionMode: boolean;
   stealingFromPlayerId?: string | null;
+  isSpectating?: boolean;
   seatMap: Record<string, SeatLayout>;
   onCameraReturned?: () => void;
 }) {
@@ -149,6 +152,9 @@ function TargetSelectionCamera({
 
   const normalPos = useMemo(() => new THREE.Vector3(0, 1.3, 1.2), []);
   const normalLookAt = useMemo(() => new THREE.Vector3(0, 0.77, -0.4), []);
+
+  const spectatorPos = useMemo(() => new THREE.Vector3(0, 1.85, 1.45), []);
+  const spectatorLookAt = useMemo(() => new THREE.Vector3(0, 0.75, -0.30), []);
 
   const victimSeat = stealingFromPlayerId ? seatMap[stealingFromPlayerId] : null;
 
@@ -178,7 +184,10 @@ function TargetSelectionCamera({
   useFrame((_, delta) => {
     const dt = Math.min(delta, 0.05);
 
-    if (isActive) {
+    if (isSpectating) {
+      targetPos.current.copy(spectatorPos);
+      targetLookAt.current.copy(spectatorLookAt);
+    } else if (isActive) {
       targetPos.current.copy(selectionPos);
       targetLookAt.current.copy(selectionLookAt);
       wasActive.current = true;
@@ -219,6 +228,7 @@ function StaticScene({
   privatePayload,
   burnerPhoneResult,
   isStealSelectionMode,
+  isSpectating,
   onShotgunClick,
   onSelectStolenItem,
   onCameraReturned,
@@ -245,10 +255,11 @@ function StaticScene({
   privatePayload?: any,
   burnerPhoneResult?: any,
   isStealSelectionMode?: boolean,
+  isSpectating?: boolean,
   onShotgunClick?: () => void,
   onSelectStolenItem?: (payload: { ownerPlayerId: string; itemId: string } | string) => void,
   onCameraReturned?: () => void,
-  onUseItem?: (itemId: string) => void,
+  onUseItem?: (itemId: string, targetId?: string) => void,
   onSelectTarget?: (targetId: string) => void,
   onAnimationComplete?: () => void,
   onBarrelCut?: () => void,
@@ -279,7 +290,6 @@ function StaticScene({
 
   const customTargetPos = useMemo(() => {
     const activeTargetId = targetPlayerId || storeSelectedTargetId;
-    console.log('[CUSTOM TARGET POS DEBUG]', { targetPlayerId, storeSelectedTargetId, activeTargetId, seatKeys: Object.keys(seatMap), hasSeat: activeTargetId ? Boolean(seatMap[activeTargetId]) : false });
     if (activeTargetId && seatMap[activeTargetId]) {
       return seatMap[activeTargetId].anchors.chest;
     }
@@ -422,9 +432,6 @@ function StaticScene({
     }
   };
 
-  const isHandcuffedLocal = localPlayer?.statusEffects?.some((e: any) => e.type === 'SKIP_TURN') || false;
-  const isHandcuffedOpponent = opponents.some(p => p.statusEffects?.some((e: any) => e.type === 'SKIP_TURN'));
-
   return (
     <>
       {/* Moody atmospheric lighting */}
@@ -464,7 +471,6 @@ function StaticScene({
         box.getCenter(center);
         const size = new THREE.Vector3();
         box.getSize(size);
-        
         c.position.set(-center.x, -center.y, -center.z);
         
         const scale = 1.15;
@@ -498,7 +504,7 @@ function StaticScene({
         shellType={shellType}
         isBarrelShortened={isBarrelShortened}
         showDebugArrows={showDebugArrows}
-        isClickable={gunState === 'idle' && !activeItemAnimation}
+        isClickable={gunState === 'idle' && !activeItemAnimation && !isSpectating}
         onClick={onShotgunClick}
         onFireMoment={onFireMoment}
         onSequenceComplete={onShotgunSequenceComplete}
@@ -509,6 +515,7 @@ function StaticScene({
         targetingAction={targetingAction || null}
         isStealSelectionMode={Boolean(isStealSelectionMode)}
         stealingFromPlayerId={stealingFromPlayerId}
+        isSpectating={Boolean(isSpectating)}
         seatMap={seatMap}
         onCameraReturned={onCameraReturned}
       />
@@ -520,6 +527,7 @@ function StaticScene({
         gameState={gameState}
         seatMap={seatMap}
         isStealSelectionMode={Boolean(isStealSelectionMode)}
+        isSpectating={Boolean(isSpectating)}
         onSelectTarget={(targetId) => {
           onSelectTarget?.(targetId);
         }}
@@ -531,6 +539,7 @@ function StaticScene({
         const oppInv = oppPlayer.inventory || [];
         const isVictimSelected = stealingFromPlayerId ? stealingFromPlayerId === oppPlayer.userId : true;
         const isStealActive = Boolean(isStealSelectionMode || targetingAction === 'adrenaline');
+        const isMyTurn = gameState?.currentTurnPlayerId === userId;
 
         return oppInv.map((itemId, idx) => {
           const meshName = ITEM_MESH_MAP[itemId];
@@ -542,7 +551,17 @@ function StaticScene({
           const seatRotY = seat?.characterRotation?.[1] || 0;
           const baseRot = ITEM_ROTATIONS[itemId] || [0, 0, 0];
           const rot: [number, number, number] = [baseRot[0], baseRot[1] + seatRotY, baseRot[2]];
-          const isSelectable = isStealActive && isVictimSelected && itemId !== 'adrenaline';
+          
+          const canStealItem =
+            isStealActive &&
+            isVictimSelected &&
+            isMyTurn &&
+            !isSpectating &&
+            oppPlayer.isAlive &&
+            oppPlayer.hp > 0 &&
+            itemId !== 'adrenaline';
+
+          const interactionMode = canStealItem ? 'STEAL' : 'DISABLED';
 
           return (
             <InteractiveItem 
@@ -552,9 +571,9 @@ function StaticScene({
               position={slotPos}
               rotation={rot}
               isLocal={false}
-              isSelectable={isSelectable}
+              interactionMode={interactionMode}
               onClick={(stolenItemId) => {
-                if (isSelectable) {
+                if (canStealItem) {
                   onSelectStolenItem?.({ ownerPlayerId: oppPlayer.userId, itemId: stolenItemId });
                 }
               }}
@@ -590,7 +609,7 @@ function StaticScene({
         );
       })}
 
-      {/* Local Items — Non-interactive during Adrenaline steal-selection mode */}
+      {/* Local Physical Items — Positioned strictly along local player's outer edge */}
       {localInventory.map((itemId, idx) => {
         const meshName = ITEM_MESH_MAP[itemId];
         const sourceMesh = itemsGLTF.nodes[meshName] as THREE.Mesh;
@@ -600,6 +619,10 @@ function StaticScene({
         const slotPos = seatMap[userId || '']?.inventorySlots?.[idx] || LOCAL_ITEM_SLOTS[idx]?.position || [0, 0.771, 0.48];
         const rot = ITEM_ROTATIONS[itemId] || [0, 0, 0];
         const isStealActive = Boolean(isStealSelectionMode || targetingAction === 'adrenaline');
+        const isMyTurn = gameState?.currentTurnPlayerId === userId;
+        const canUseNormally = isMyTurn && !isSpectating && !isStealActive;
+
+        const interactionMode = canUseNormally ? 'USE' : 'DISABLED';
 
         return (
           <InteractiveItem 
@@ -609,9 +632,9 @@ function StaticScene({
             position={slotPos}
             rotation={rot}
             isLocal={true}
-            isDisabled={isStealActive}
+            interactionMode={interactionMode}
             onClick={(clickedItemId) => {
-              if (!isStealActive) {
+              if (canUseNormally) {
                 handleItemClick(clickedItemId);
               }
             }}
@@ -644,9 +667,11 @@ function StaticScene({
       })}
 
       {/* FP Arms - Pushed back and down to avoid covering the local inventory */}
-      <group position={[0, -0.3, 0.4]}>
-        <primitive object={fpArmsGLTF.scene} />
-      </group>
+      {!isSpectating && (
+        <group position={[0, -0.3, 0.4]}>
+          <primitive object={fpArmsGLTF.scene} />
+        </group>
+      )}
     </>
   );
 }
@@ -693,6 +718,7 @@ export function ChamberClash3D(props: ChamberClash3DProps) {
             privatePayload={props.privatePayload}
             burnerPhoneResult={props.burnerPhoneResult}
             isStealSelectionMode={props.isStealSelectionMode}
+            isSpectating={props.isSpectating}
             onShotgunClick={props.onShotgunClick}
             onSelectStolenItem={props.onSelectStolenItem}
             onCameraReturned={props.onCameraReturned}

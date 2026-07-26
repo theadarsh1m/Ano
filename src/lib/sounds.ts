@@ -18,6 +18,10 @@ class SoundEngine {
     return this.ctx;
   }
 
+  playError() {
+    this.playTone(150, 'sawtooth', 0.3, 0.2);
+  }
+
   playTone(frequency: number, type: OscillatorType, duration: number, vol: number = 0.1) {
     const ctx = this.getContext();
     if (!ctx) return;

@@ -28,6 +28,10 @@ export interface ChamberClashState {
     playerId: string;
     stage: string;
   };
+  turnToken: string | null;
+  turnStartedAt: number | null;
+  turnDeadline: number | null;
+  stateVersion: number;
 }
 
 export interface ActionLogEntry {
@@ -140,7 +144,11 @@ export const useChamberClashStore = create<ChamberClashStore>((set, get) => ({
       liveShells: 3,
       blankShells: 3,
       pendingItemAction: undefined,
-      settings: { startingHp: 5, turnTimer: 30, chamberSize: 6, maxInventory: 5, maxPlayers: 6, isPrivate: false }
+      settings: { startingHp: 5, turnTimer: 30, chamberSize: 6, maxInventory: 5, maxPlayers: 6, isPrivate: false },
+      turnToken: 'practice-token',
+      turnStartedAt: Date.now(),
+      turnDeadline: Date.now() + 30000,
+      stateVersion: 1
     };
     set({ gameState: mockState, pendingGameState: mockState, lobby: null });
   },
@@ -162,7 +170,11 @@ export const useChamberClashStore = create<ChamberClashStore>((set, get) => ({
       liveShells: 3,
       blankShells: 3,
       pendingItemAction: undefined,
-      settings: { startingHp: 5, turnTimer: 30, chamberSize: 6, maxInventory: 5, maxPlayers: 6, isPrivate: false }
+      settings: { startingHp: 5, turnTimer: 30, chamberSize: 6, maxInventory: 5, maxPlayers: 6, isPrivate: false },
+      turnToken: 'practice-token-3p',
+      turnStartedAt: Date.now(),
+      turnDeadline: Date.now() + 30000,
+      stateVersion: 1
     };
     set({ gameState: mockState, pendingGameState: mockState, lobby: null });
   },
@@ -185,7 +197,11 @@ export const useChamberClashStore = create<ChamberClashStore>((set, get) => ({
       liveShells: 4,
       blankShells: 4,
       pendingItemAction: undefined,
-      settings: { startingHp: 5, turnTimer: 30, chamberSize: 8, maxInventory: 5, maxPlayers: 6, isPrivate: false }
+      settings: { startingHp: 5, turnTimer: 30, chamberSize: 8, maxInventory: 5, maxPlayers: 6, isPrivate: false },
+      turnToken: 'practice-token-4p',
+      turnStartedAt: Date.now(),
+      turnDeadline: Date.now() + 30000,
+      stateVersion: 1
     };
     set({ gameState: mockState, pendingGameState: mockState, lobby: null });
   },
@@ -193,14 +209,16 @@ export const useChamberClashStore = create<ChamberClashStore>((set, get) => ({
   shootTarget: (gameId, userId, targetId) => {
     const socket = socketService.getSocket();
     if (socket && socket.connected && !gameId.startsWith('practice-game')) {
-      socket.emit('game_action', { gameId, userId, action: 'shoot_target', data: { targetId } });
+      const turnToken = get().gameState?.turnToken;
+      socket.emit('game_action', { gameId, userId, action: 'shoot_target', data: { targetId, turnToken } });
     }
   },
 
   useItem: (gameId, userId, itemId, targetId, stolenItemId) => {
     const socket = socketService.getSocket();
     if (socket && socket.connected && !gameId.startsWith('practice-game')) {
-      socket.emit('game_action', { gameId, userId, action: 'use_item', data: { itemId, targetId, stolenItemId } });
+      const turnToken = get().gameState?.turnToken;
+      socket.emit('game_action', { gameId, userId, action: 'use_item', data: { itemId, targetId, stolenItemId, turnToken } });
       return;
     }
 
@@ -258,7 +276,8 @@ export const useChamberClashStore = create<ChamberClashStore>((set, get) => ({
   resolvePendingItem: (gameId, userId, targetId, stolenItemId) => {
     const socket = socketService.getSocket();
     if (socket && socket.connected && !gameId.startsWith('practice-game')) {
-      socket.emit('game_action', { gameId, userId, action: 'resolve_pending_item', data: { targetId, stolenItemId } });
+      const turnToken = get().gameState?.turnToken;
+      socket.emit('game_action', { gameId, userId, action: 'resolve_pending_item', data: { targetId, stolenItemId, turnToken } });
     } else {
       // Local / Practice Mode state resolution
       set((state) => {

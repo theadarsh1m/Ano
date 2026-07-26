@@ -11,6 +11,7 @@ interface PlayerTargetSelectorProps {
   gameState: ChamberClashState | null;
   seatMap?: Record<string, SeatLayout>;
   isStealSelectionMode?: boolean;
+  isSpectating?: boolean;
   onSelectTarget: (targetId: string) => void;
 }
 
@@ -28,11 +29,12 @@ export function PlayerTargetSelector({
   gameState,
   seatMap,
   isStealSelectionMode,
+  isSpectating,
   onSelectTarget
 }: PlayerTargetSelectorProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
-  if (!action || !gameState || !gameState.players || gameState.players.length === 0 || isStealSelectionMode) return null;
+  if (!action || !gameState || !gameState.players || gameState.players.length === 0 || isStealSelectionMode || isSpectating) return null;
 
   const localPlayer = gameState.players.find(p => p.userId === localUserId) || gameState.players[0];
 

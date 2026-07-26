@@ -30,6 +30,13 @@ class ChamberClashEngine extends BaseGameEngine {
     this.winnerId = null;
     this.actionQueue = [];
     this.pendingItemAction = null;
+
+    // Authoritative Timer State
+    this.stateVersion = 0;
+    this.turnToken = null;
+    this.turnStartedAt = null;
+    this.turnDeadline = null;
+    this.TURN_DURATION_MS = process.env.TURN_DURATION_MS ? Number(process.env.TURN_DURATION_MS) : 60000;
   }
 
   // --- EVENTS SYSTEM ---
@@ -190,10 +197,24 @@ class ChamberClashEngine extends BaseGameEngine {
     }
 
     this.status = 'PLAYER_TURN';
-    this.startTurnTimer(currentTurnId);
+    this.beginActionableTurn(currentTurnId);
+  }
+
+  beginActionableTurn(playerId) {
+    this.turnToken = 'turn_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+    this.turnStartedAt = Date.now();
+    this.turnDeadline = this.turnStartedAt + this.TURN_DURATION_MS;
+    this.stateVersion++;
+
+    console.log(`[TURN TIMER] started for ${playerId} with token ${this.turnToken}`);
+    this.startTurnTimer(playerId, this.turnToken);
+    
     this.emitPublicEvent('turn_started', {
-      playerId: currentTurnId,
-      timer: this.settings.turnTimer,
+      playerId,
+      timer: this.settings.turnTimer, // legacy field, clients should use turnDeadline
+      turnToken: this.turnToken,
+      turnStartedAt: this.turnStartedAt,
+      turnDeadline: this.turnDeadline,
       ...this.getRemainingShellCounts()
     });
   }
@@ -204,13 +225,45 @@ class ChamberClashEngine extends BaseGameEngine {
     this.startTurnSequence();
   }
 
-  startTurnTimer(playerId) {
+  startTurnTimer(playerId, token) {
     this.clearTurnTimer();
-    const seconds = Number(this.settings.turnTimer) || 30;
-    this.turnTimerId = setTimeout(() => {
-      this.emitPublicEvent('turn_timeout', { playerId });
-      this.advanceTurn();
-    }, seconds * 1000);
+    const duration = Math.max(0, this.turnDeadline - Date.now());
+    this.turnTimerId = setTimeout(() => this.executeTimeout(playerId, token), duration);
+  }
+
+  executeTimeout(playerId, token) {
+    console.log(`[TURN TIMER] expired for ${playerId}`);
+    if (this.turnToken !== token) {
+      console.log(`[TURN TIMER] invalid token (expected ${this.turnToken}, got ${token})`);
+      return; 
+    }
+    console.log(`[TURN TIMER] token valid`);
+    if (this.status !== 'PLAYER_TURN') {
+      console.log(`[TURN TIMER] invalid state ${this.status}`);
+      return; 
+    }
+
+    // Claim the turn so no manual action can race us now
+    this.turnToken = null;
+    this.clearTurnTimer();
+
+    // Cancel any pending interactions
+    if (this.pendingItemAction) {
+      this.pendingItemAction = null;
+    }
+
+    this.emitPublicEvent('turn_timeout', { playerId });
+
+    console.log(`[TIMEOUT] forcing self-shot for ${playerId}`);
+    
+    // Execute automatic self-shot
+    const result = this.actionShoot(playerId, playerId);
+    
+    if (result.success) {
+      // actionShoot internally calls advanceTurn() or startTurnSequence().
+      // It also emits events synchronously.
+      // So we don't need to do anything else here.
+    }
   }
 
   clearTurnTimer() {
@@ -225,6 +278,11 @@ class ChamberClashEngine extends BaseGameEngine {
   handlePlayerAction(playerId, action, data) {
     if (this.status === 'FINISHED') return { success: false, error: 'Game finished' };
     
+    const player = this.players.get(playerId);
+    if (!player || !player.isAlive || player.hp <= 0) {
+      return { success: false, error: 'PLAYER_ELIMINATED' };
+    }
+
     const activePlayerId = this.turnOrder[this.currentTurnIndex];
     if (playerId !== activePlayerId) {
       return { success: false, error: 'Not your turn' };
@@ -232,6 +290,10 @@ class ChamberClashEngine extends BaseGameEngine {
 
     if (this.status !== 'PLAYER_TURN') {
       return { success: false, error: 'Invalid state for actions' };
+    }
+
+    if (data && data.turnToken && data.turnToken !== this.turnToken) {
+      return { success: false, error: 'Stale turn token. Action rejected.' };
     }
 
     if (this.pendingItemAction && this.pendingItemAction.playerId === playerId) {
@@ -283,7 +345,21 @@ class ChamberClashEngine extends BaseGameEngine {
     return result;
   }
 
+  eliminatePlayer(player, reason = 'ELIMINATED') {
+    if (!player || !player.isAlive) return;
+    player.isAlive = false;
+    player.hp = Math.max(0, player.hp);
+    const discardedItems = [...(player.inventory || [])];
+    player.inventory = [];
+    this.emitPublicEvent('player_eliminated', {
+      playerId: player.userId,
+      discardedItemCount: discardedItems.length,
+      reason
+    });
+  }
+
   actionShoot(playerId, targetId) {
+    console.log(`[ACTION SHOOT] entered for shooter: ${playerId}, target: ${targetId}`);
     if (!targetId) return { success: false, error: 'No target specified' };
     
     const target = this.players.get(targetId);
@@ -291,6 +367,8 @@ class ChamberClashEngine extends BaseGameEngine {
 
     const shell = this.chamber[this.currentChamberIndex];
     this.currentChamberIndex++;
+    
+    console.log(`[SHOT] shell resolved: ${shell}`);
 
     const shooter = this.players.get(playerId);
     let damageAmount = 1;
@@ -307,6 +385,7 @@ class ChamberClashEngine extends BaseGameEngine {
 
     const shellCounts = this.getRemainingShellCounts();
 
+    console.log(`[SHOT] emitting shot_fired`);
     this.emitPublicEvent('shot_fired', {
       shooterId: playerId,
       targetId: targetId,
@@ -322,8 +401,7 @@ class ChamberClashEngine extends BaseGameEngine {
       this.emitPublicEvent('player_damaged', { playerId: targetId, damage: damageAmount, newHp: target.hp });
       
       if (target.hp <= 0) {
-        target.isAlive = false;
-        this.emitPublicEvent('player_eliminated', { playerId: targetId });
+        this.eliminatePlayer(target, 'ELIMINATED');
       }
     } else {
       // Blank: self-shot grants extra turn
@@ -360,7 +438,7 @@ class ChamberClashEngine extends BaseGameEngine {
       source
     });
 
-    this.startTurnTimer(playerId);
+    this.startTurnTimer(playerId, this.turnToken);
 
     const effectResult = itemDef.serverEffect(this, playerId, targetId, data);
     
@@ -432,8 +510,7 @@ class ChamberClashEngine extends BaseGameEngine {
     if (this.players.has(userId)) {
       const p = this.players.get(userId);
       if (p.isAlive) {
-        p.isAlive = false;
-        this.emitPublicEvent('player_eliminated', { playerId: userId, reason: 'disconnected' });
+        this.eliminatePlayer(p, 'disconnected');
         
         this.turnOrder = this.turnOrder.filter(id => id !== userId);
         
@@ -491,7 +568,11 @@ class ChamberClashEngine extends BaseGameEngine {
       blankShells: counts.remainingBlank,
       currentChamberIndex: this.currentChamberIndex,
       winnerId: this.winnerId,
-      pendingItemAction: this.pendingItemAction
+      pendingItemAction: this.pendingItemAction,
+      turnToken: this.turnToken,
+      turnStartedAt: this.turnStartedAt,
+      turnDeadline: this.turnDeadline,
+      stateVersion: this.stateVersion
     };
   }
 }

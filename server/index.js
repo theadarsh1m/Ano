@@ -555,11 +555,9 @@ io.on('connection', (socket) => {
 
     if (!onlineUsers.has(userId)) {
       onlineUsers.set(userId, new Set());
-      try {
-        await userService.setOnlineStatus(userId, true);
-      } catch (err) {
+      userService.setOnlineStatus(userId, true).catch(err => {
         console.error('Failed to set online status:', err.message);
-      }
+      });
     }
     onlineUsers.get(userId).add(socket.id);
     socket.join(userId);

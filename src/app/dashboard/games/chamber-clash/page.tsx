@@ -91,6 +91,7 @@ function ChamberClashGameContent() {
   const [ejectedShellType, setEjectedShellType] = useState<string | null>(null);
   const [extraTurnPlayerId, setExtraTurnPlayerId] = useState<string | null>(null);
   const [skippedPlayerId, setSkippedPlayerId] = useState<string | null>(null);
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
   const isAnimatingRef = useRef(false);
   const processedShellEvents = useRef<Set<string>>(new Set());
@@ -151,9 +152,93 @@ function ChamberClashGameContent() {
       setVisualTurnPlayerId(gameState.currentTurnPlayerId);
       if (gameState.currentTurnPlayerId !== userId) {
         setTargetingAction(null);
+        setIsStealSelectionMode(false);
+        setStolenItemPending(null);
       }
     }
   }, [isAnimating, eventQueue.length, gameState?.currentTurnPlayerId, userId]);
+
+  // ─── Timer Update Loop ───
+  useEffect(() => {
+    if (gameState?.turnDeadline && gameState?.status === 'PLAYER_TURN' && !isAnimating && eventQueue.length === 0) {
+      const updateTimer = () => {
+        const remaining = Math.max(0, Math.ceil((gameState.turnDeadline! - Date.now()) / 1000));
+        setTimeLeft(remaining);
+      };
+      updateTimer();
+      const interval = setInterval(updateTimer, 200);
+      return () => clearInterval(interval);
+    } else {
+      setTimeLeft(null);
+    }
+  }, [gameState?.turnDeadline, gameState?.status, isAnimating, eventQueue.length]);
+
+  const isMyTurn = gameState?.currentTurnPlayerId === userId;
+
+  // ─── Spectator & Elimination derivations ───
+  const localPlayer = useMemo(() => {
+    return gameState?.players?.find(p => p.userId === userId) || null;
+  }, [gameState?.players, userId]);
+
+  const isSpectating = useMemo(() => {
+    if (!gameState || !localPlayer) return false;
+    const isDead = localPlayer.hp <= 0 || localPlayer.isAlive === false;
+    return isDead && gameState.status !== 'FINISHED';
+  }, [gameState, localPlayer]);
+
+  const canStartAction = useMemo(() => {
+    return isMyTurn && !isSpectating && !animationLocked && gameState?.status === 'PLAYER_TURN';
+  }, [isMyTurn, isSpectating, animationLocked, gameState?.status]);
+
+  const canContinuePendingAction = useMemo(() => {
+    return isMyTurn && !isSpectating && gameState?.status === 'PLAYER_TURN' && Boolean(
+      isStealSelectionMode || targetingAction === 'handcuffs' || stolenItemPending
+    );
+  }, [isMyTurn, isSpectating, gameState?.status, isStealSelectionMode, targetingAction, stolenItemPending]);
+
+  const handleLeave = useCallback(() => {
+    bypassWarning();
+    const currentId = lobby?.id || gameState?.gameId;
+    if (currentId && userId) {
+      leaveLobby(currentId, userId);
+    } else {
+      clearState();
+    }
+    setTargetingAction(null);
+    setIsStealSelectionMode(false);
+    setStealingFromPlayerId(null);
+    setStolenItemPending(null);
+    router.push('/dashboard/games');
+  }, [bypassWarning, lobby?.id, gameState?.gameId, userId, leaveLobby, clearState, router]);
+
+  // ─── Clear active targeting on local player elimination ───
+  useEffect(() => {
+    if (isSpectating) {
+      setTargetingAction(null);
+      setIsStealSelectionMode(false);
+      setStealingFromPlayerId(null);
+      setStolenItemPending(null);
+    }
+  }, [isSpectating]);
+
+  // ─── Auto-exit steal mode if no valid stealable items remain among living opponents ───
+  useEffect(() => {
+    if (!isStealSelectionMode || !gameState) return;
+
+    const livingOpponents = gameState.players.filter(p => p.userId !== userId && p.isAlive && p.hp > 0);
+    const totalStealableItems = livingOpponents.reduce((acc, p) => {
+      const validItems = (p.inventory || []).filter(itemId => itemId !== 'adrenaline');
+      return acc + validItems.length;
+    }, 0);
+
+    if (totalStealableItems === 0) {
+      console.log('[ADRENALINE] No valid stealable items remain among living opponents. Exiting steal mode.');
+      setIsStealSelectionMode(false);
+      setStealingFromPlayerId(null);
+      setStolenItemPending(null);
+      addLogEntry("NO ITEMS AVAILABLE TO STEAL", "⚠️", "text-amber-400");
+    }
+  }, [isStealSelectionMode, gameState?.players, userId, addLogEntry]);
 
   // ─── Heartbeat for low HP ───
   const me = useMemo(() => gameState?.players.find((p) => p.userId === userId), [gameState?.players, userId]);
@@ -181,14 +266,11 @@ function ChamberClashGameContent() {
     const x = Math.cos(angle);
     const y = Math.sin(angle);
     
-    // Position outside the table
-    // Table is 82% width, so radius is 41%. We put players at 46% radius.
-    // Table aspect is 1.7, so Y radius is 41% / 1.7 = 24%. We put players at 35% Y radius.
     return {
       left: `${50 + 46 * x}%`,
       top: `${50 + 35 * y}%`,
-      rotateX: -y * 25, // Bottom tilts up, top tilts down
-      rotateY: x * 25    // Left tilts right, right tilts left
+      rotateX: -y * 25,
+      rotateY: x * 25
     };
   }, []);
 
@@ -271,6 +353,21 @@ function ChamberClashGameContent() {
           setShellCounterBlank(evt.data.remainingBlank);
         }
         addLogEntry(`${getPlayerName(players, evt.data.playerId)}'s turn`, "🎲", "text-white");
+        break;
+      }
+
+      // ──── TURN TIMEOUT ────
+      case 'turn_timeout': {
+        duration = 1500;
+        // Aggressively clear active UI state
+        if (evt.data.playerId === userId) {
+           setTargetingAction(null);
+           setIsStealSelectionMode(false);
+           setStolenItemPending(null);
+        }
+        
+        sounds.playError(); // Or an alarm sound
+        addLogEntry(`Time Expired for ${getPlayerName(players, evt.data.playerId)}!`, "⏰", "text-red-500");
         break;
       }
 
@@ -416,7 +513,7 @@ function ChamberClashGameContent() {
         useChamberClashStore.setState(state => {
           if (!state.gameState) return state;
           const newPlayers = state.gameState.players.map(p => 
-            p.userId === evt.data.playerId ? { ...p, isAlive: false } : p
+            p.userId === evt.data.playerId ? { ...p, isAlive: false, hp: 0, inventory: [] } : p
           );
           return { gameState: { ...state.gameState, players: newPlayers } };
         });
@@ -665,13 +762,6 @@ function ChamberClashGameContent() {
   }, [eventQueue[0]?.id]);
 
   // ─── Navigation ───
-  const handleLeave = () => {
-    bypassWarning();
-    const gid = gameState?.gameId || lobby?.id;
-    if (gid && userId) leaveLobby(gid, userId);
-    router.push("/dashboard/games");
-  };
-
   const toggleMute = () => {
     const muted = sounds.toggleMute();
     setIsMuted(muted);
@@ -1236,6 +1326,27 @@ function ChamberClashGameContent() {
           </div>
         )}
 
+        {/* ── Spectator Top HUD ── */}
+        {isSpectating && gameState?.status !== 'FINISHED' && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2 pointer-events-auto">
+            <div className="px-6 py-2 bg-black/85 backdrop-blur-md border border-red-500/40 rounded-2xl flex flex-col items-center text-center shadow-[0_0_30px_rgba(239,68,68,0.2)]">
+              <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.25em] text-red-500">
+                <span className="animate-pulse">👁</span> SPECTATING
+              </div>
+              <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mt-0.5">
+                {gameState?.players.filter(p => p.isAlive && p.hp > 0).length || 0} PLAYERS REMAINING
+              </div>
+            </div>
+            
+            <button
+              onClick={handleLeave}
+              className="px-4 py-1.5 bg-red-950/90 hover:bg-red-900 border border-red-500/50 text-red-200 text-xs font-black uppercase tracking-wider rounded-xl shadow-lg transition-all hover:scale-105 active:scale-95 cursor-pointer"
+            >
+              🚪 LEAVE GAME
+            </button>
+          </div>
+        )}
+
         {/* ── MAIN GAME AREA ── */}
         <div className="flex-1 relative z-20 flex items-center justify-center overflow-hidden w-full h-full">
           <ChamberClash3D
@@ -1255,24 +1366,35 @@ function ChamberClashGameContent() {
             privatePayload={privatePayload}
             burnerPhoneResult={burnerPhoneReveal || privatePayload}
             isStealSelectionMode={isStealSelectionMode}
+            isSpectating={isSpectating}
             onShotgunClick={() => {
-              if (animationLocked || isPendingAction || !isMyTurn) return;
+              if (!canStartAction || isPendingAction) return;
               setTargetingAction('shoot');
             }}
             onSelectStolenItem={(payload: { ownerPlayerId: string; itemId: string } | string) => {
+              if (!isMyTurn || isSpectating || !isStealSelectionMode) return;
+
               const stolenItemId = typeof payload === 'string' ? payload : payload.itemId;
               const ownerPlayerId = typeof payload === 'string' 
-                ? (stealingFromPlayerId || gameState?.players.find(p => p.userId !== userId)?.userId || 'opp')
+                ? (stealingFromPlayerId || gameState?.players.find(p => p.userId !== userId && p.isAlive)?.userId || 'opp')
                 : payload.ownerPlayerId;
 
+              if (!ownerPlayerId || ownerPlayerId === userId) return;
+              if (stolenItemId === 'adrenaline') return; // Cannot steal Adrenaline
+
+              const ownerPlayer = gameState?.players.find(p => p.userId === ownerPlayerId);
+              if (!ownerPlayer || !ownerPlayer.isAlive || ownerPlayer.hp <= 0) return;
+
+              const itemIndex = (ownerPlayer.inventory || []).indexOf(stolenItemId);
+              if (itemIndex === -1) return;
+
               console.log('[ADRENALINE 3D STEAL CLICKED]', stolenItemId, 'ownerPlayerId:', ownerPlayerId);
-              if (stolenItemId === 'adrenaline') {
-                return;
-              }
 
               setIsStealSelectionMode(false);
               setStealingFromPlayerId(null);
               setStolenItemPending(stolenItemId);
+
+              const turnToken = gameState?.turnToken;
 
               if (stolenItemId === 'handcuffs') {
                 // 2-Stage Stolen Item (Handcuffs): Transition directly into player target selection
@@ -1291,7 +1413,7 @@ function ChamberClashGameContent() {
               setStolenItemPending(null);
             }}
             onUseItem={(itemId) => {
-              if (animationLocked || isPendingAction) return;
+              if (!canStartAction || isPendingAction) return;
               if (itemId === 'adrenaline') {
                 const opponents = gameState?.players.filter(p => p.userId !== userId && p.isAlive) || [];
                 const stealableCount = opponents.reduce((acc, p) => acc + (p.inventory?.filter((id: string) => id !== 'adrenaline')?.length || 0), 0);
@@ -1308,7 +1430,7 @@ function ChamberClashGameContent() {
                 });
                 setTimeout(() => {
                   setActiveItemAnimation(null);
-                  // Go directly to global steal selection — show ALL opponents' items
+                  setAnimationLocked(false); // Unlocks animation lock for item steal selection!
                   setStealingFromPlayerId(null);
                   setIsStealSelectionMode(true);
                 }, 1500);
@@ -1319,9 +1441,10 @@ function ChamberClashGameContent() {
               }
             }}
             onSelectTarget={(targetId) => {
+              if (!canStartAction && !canContinuePendingAction) return;
               setManualTargetId(targetId);
-              if (animationLocked) return;
               if (targetingAction === 'shoot') {
+                if (animationLocked) return;
                 shootTarget(gameState.gameId, userId || '', targetId);
                 setTargetingAction(null);
               } else if (targetingAction === 'handcuffs') {
@@ -1331,7 +1454,7 @@ function ChamberClashGameContent() {
                   setStolenItemPending(null);
                   setTargetingAction(null);
                 } else {
-                  // Direct Handcuffs resolution
+                  if (animationLocked) return;
                   useItem(gameState.gameId, userId || '', 'handcuffs', targetId);
                   setTargetingAction(null);
                 }
@@ -1360,6 +1483,28 @@ function ChamberClashGameContent() {
           />
         </div>
 
+        {/* ── Top Center Turn & Timer Indicator ── */}
+        {gameState?.status === 'PLAYER_TURN' && !isAnimating && eventQueue.length === 0 && (
+          <div className={`absolute left-1/2 -translate-x-1/2 z-50 pointer-events-none flex flex-col items-center drop-shadow-xl ${
+            isSpectating ? 'top-32' : 'top-8'
+          }`}>
+            <div className="text-white/60 uppercase tracking-[0.2em] text-xs font-semibold mb-1">
+              {isMyTurn ? "IT'S YOUR TURN" : `${gameState.players.find(p => p.userId === gameState.currentTurnPlayerId)?.nickname?.toUpperCase() || 'PLAYER'}'S TURN`}
+            </div>
+            {isMyTurn && !isSpectating && (
+               <div className="text-white/50 text-xs mb-2">SELECT AN OBJECT TO INTERACT WITH</div>
+            )}
+            {timeLeft !== null && (
+              <div className={`text-4xl font-black tabular-nums transition-colors duration-300 ${
+                timeLeft <= 10 ? 'text-red-500 animate-pulse' :
+                timeLeft <= 20 ? 'text-amber-400' : 'text-white'
+              }`}>
+                {timeLeft > 0 ? timeLeft : 'TIME EXPIRED'}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ── Persistent Local Player Health Indicator HUD ── */}
         {gameState?.players && (
           <div className="absolute bottom-28 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
@@ -1380,7 +1525,20 @@ function ChamberClashGameContent() {
         {/* ── Bottom Action Bar ── */}
         <div className="relative z-30 bg-black/70 border-t border-white/[0.04] backdrop-blur-md px-4 py-3">
           <div className="max-w-4xl mx-auto">
-            {isMyTurn ? (
+            {isSpectating ? (
+              <div className="flex items-center justify-between max-w-4xl mx-auto py-1 px-2 text-zinc-400 text-xs font-mono">
+                <span className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                  SPECTATOR MODE — WATCHING MATCH IN PROGRESS
+                </span>
+                <button
+                  onClick={handleLeave}
+                  className="px-3 py-1 bg-red-900/40 hover:bg-red-900/80 border border-red-500/30 text-red-300 rounded text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                >
+                  LEAVE GAME
+                </button>
+              </div>
+            ) : isMyTurn ? (
               <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 w-full">
                 {targetingAction === 'shoot' ? (
                   <div className="flex items-center justify-between w-full bg-red-950/30 border border-red-500/40 rounded-xl p-3 shadow-[0_0_20px_rgba(239,68,68,0.15)]">
@@ -1445,9 +1603,9 @@ function ChamberClashGameContent() {
                     {me?.inventory.map((itemId, i) => {
                       const meta = ITEM_META[itemId] || { name: itemId, icon: "📦", desc: "", color: "text-zinc-400", sound: () => {} };
                       return (
-                        <button key={i} disabled={isPendingAction}
+                        <button key={i} disabled={!canStartAction || isPendingAction}
                           onClick={() => {
-                            if (isPendingAction) return;
+                            if (!canStartAction || isPendingAction) return;
                             if (itemId === 'adrenaline') {
                               if (animationLocked) return;
                               const opponents = gameState?.players.filter(p => p.userId !== userId && p.isAlive) || [];
@@ -1464,17 +1622,18 @@ function ChamberClashGameContent() {
                               });
                               setTimeout(() => {
                                 setActiveItemAnimation(null);
+                                setAnimationLocked(false);
                                 setStealingFromPlayerId(null);
                                 setIsStealSelectionMode(true);
                               }, 1500);
                             } else if (itemId === 'handcuffs') {
                               setTargetingAction('handcuffs');
                             } else {
-                              useItem(gameState.gameId, userId, itemId, userId);
+                              useItem(gameState.gameId, userId, itemId);
                             }
                           }}
                           className={`min-w-[70px] h-[70px] rounded-xl border flex flex-col items-center justify-center gap-0.5 transition-all ${
-                            isPendingAction
+                            !canStartAction || isPendingAction
                               ? 'bg-zinc-950/80 border-white/[0.02] cursor-not-allowed opacity-50 grayscale'
                               : 'bg-zinc-950/80 border-white/[0.06] hover:border-red-500/30 hover:bg-[#141518] cursor-pointer hover:shadow-[0_0_12px_rgba(239,68,68,0.1)]'
                           }`}
