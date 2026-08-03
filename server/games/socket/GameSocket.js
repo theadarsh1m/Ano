@@ -8,6 +8,7 @@ const InkDeceptionEngine = require('../ink-deception/InkDeceptionEngine');
 const ChamberClashEngine = require('../chamber-clash/ChamberClashEngine');
 const FlappyBirdEngine = require('../flappy-bird/FlappyBirdEngine');
 const SlitherEngine = require('../slither/SlitherEngine');
+const AniGravityEngine = require('../anigravity/AniGravityEngine');
 const userService = require('../../services/userService');
 
 const ENGINE_MAP = {
@@ -20,6 +21,7 @@ const ENGINE_MAP = {
   'CHAMBER_CLASH': ChamberClashEngine,
   'FLAPPY_BIRD': FlappyBirdEngine,
   'SLITHER': SlitherEngine,
+  'ANIGRAVITY': AniGravityEngine,
 };
 
 const GAME_DISPLAY_NAMES = {
@@ -32,6 +34,7 @@ const GAME_DISPLAY_NAMES = {
   'CHAMBER_CLASH': 'Chamber Clash',
   'FLAPPY_BIRD': 'Flappy Bird',
   'SLITHER': 'Slither.io',
+  'ANIGRAVITY': 'AniGravity',
 };
 
 function registerGameSockets(io, socket, onlineUsers, activeGames) {
