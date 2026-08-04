@@ -186,6 +186,20 @@ export const GAMES_REGISTRY: Record<string, GameDefinition> = {
     type: 'singleplayer',
     href: '/dashboard/games/slither',
     component: SlitherGameHub
+  },
+  'anigravity': {
+    id: 'anigravity',
+    name: 'AniGravity',
+    title: 'AniGravity',
+    slug: 'anigravity',
+    description: 'Drop characters and balance them on the platform. The last one standing wins!',
+    icon: '⚖️',
+    color: 'from-pink-500 to-rose-700',
+    supportedModes: 'MULTIPLAYER',
+    enabled: true,
+    displayOrder: 12,
+    type: 'multiplayer',
+    href: '/dashboard/games/anigravity'
   }
 };
 
