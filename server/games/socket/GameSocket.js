@@ -9,6 +9,7 @@ const ChamberClashEngine = require('../chamber-clash/ChamberClashEngine');
 const FlappyBirdEngine = require('../flappy-bird/FlappyBirdEngine');
 const SlitherEngine = require('../slither/SlitherEngine');
 const PaperFallEngine = require('../paper-fall/PaperFallEngine');
+const ArrowMazeEngine = require('../arrow-maze/ArrowMazeEngine');
 const userService = require('../../services/userService');
 
 const ENGINE_MAP = {
@@ -22,6 +23,7 @@ const ENGINE_MAP = {
   'FLAPPY_BIRD': FlappyBirdEngine,
   'SLITHER': SlitherEngine,
   'PAPER_FALL': PaperFallEngine,
+  'ARROW_MAZE': ArrowMazeEngine,
 };
 
 const GAME_DISPLAY_NAMES = {
@@ -35,6 +37,7 @@ const GAME_DISPLAY_NAMES = {
   'FLAPPY_BIRD': 'Flappy Bird',
   'SLITHER': 'Slither.io',
   'PAPER_FALL': 'PaperFall',
+  'ARROW_MAZE': 'Arrow Maze',
 };
 
 function registerGameSockets(io, socket, onlineUsers, activeGames) {
@@ -309,7 +312,7 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
       return socket.emit('game_error', { message: 'Only the host can start the game.' });
     }
 
-    if (lobby.players.size < 2) {
+    if (lobby.players.size < 2 && lobby.gameType !== 'ARROW_MAZE' && lobby.gameType !== 'PAPER_FALL') {
       return socket.emit('game_error', { message: 'You need at least 2 players to start!' });
     }
 
@@ -778,6 +781,75 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
   });
 
   socket.on('paperfall_reset_lobby', ({ gameId }) => {
+    const engine = activeGames.get(gameId);
+    const lobby = restoreLobbyFromEngine(gameId, engine);
+
+    if (lobby) {
+      for (const p of lobby.players.values()) {
+        p.isReady = p.role === 'HOST';
+      }
+      io.to(gameId).emit('lobby_state', serializeLobby(lobby));
+    }
+
+    activeGames.delete(gameId);
+    broadcastLobbies();
+  });
+
+  // ========================
+  // ARROW MAZE SPECIFIC SOCKET EVENTS
+  // ========================
+
+  socket.on('arrowmaze_progress', ({ gameId, userId, ...data }) => {
+    const engine = activeGames.get(gameId);
+    if (engine && engine.gameType === 'ARROW_MAZE') {
+      engine.handlePlayerAction(userId, 'progress', data);
+    }
+  });
+
+  socket.on('arrowmaze_level_cleared', ({ gameId, userId, ...data }) => {
+    const engine = activeGames.get(gameId);
+    if (engine && engine.gameType === 'ARROW_MAZE') {
+      engine.handlePlayerAction(userId, 'level_cleared', data);
+    }
+  });
+
+  socket.on('arrowmaze_life_lost', ({ gameId, userId, ...data }) => {
+    const engine = activeGames.get(gameId);
+    if (engine && engine.gameType === 'ARROW_MAZE') {
+      engine.handlePlayerAction(userId, 'life_lost', data);
+    }
+  });
+
+  socket.on('arrowmaze_finished', ({ gameId, userId, stats }) => {
+    const engine = activeGames.get(gameId);
+    if (engine && engine.gameType === 'ARROW_MAZE') {
+      engine.handlePlayerAction(userId, 'finished', { stats });
+    }
+  });
+
+  socket.on('arrowmaze_return_to_lobby', ({ gameId, userId }) => {
+    const engine = activeGames.get(gameId);
+    if (engine && engine.gameType === 'ARROW_MAZE') {
+      engine.handlePlayerAction(userId, 'return_to_lobby', {});
+    }
+
+    if (!engine || engine.status === 'FINISHED') {
+      const lobby = restoreLobbyFromEngine(gameId, engine);
+      if (lobby) {
+        const player = lobby.players.get(userId);
+        if (player && player.role !== 'HOST') {
+          player.isReady = false;
+        }
+        socket.join(gameId);
+        io.to(gameId).emit('lobby_state', serializeLobby(lobby));
+        broadcastLobbies();
+      }
+    } else {
+      socket.join(gameId);
+    }
+  });
+
+  socket.on('arrowmaze_reset_lobby', ({ gameId }) => {
     const engine = activeGames.get(gameId);
     const lobby = restoreLobbyFromEngine(gameId, engine);
 

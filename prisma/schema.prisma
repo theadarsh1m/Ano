@@ -310,6 +310,8 @@ enum GameType {
   INK_DECEPTION
   CHAMBER_CLASH
   FLAPPY_BIRD
+  PAPER_FALL
+  ARROW_MAZE
 }
 
 enum GameStatus {
@@ -340,6 +342,7 @@ enum MoveType {
   SCRIBBLE_SELECT_WORD
   INK_DECEPTION_SELECT_WORD
   INK_DECEPTION_GUESS
+  CLICK_ARROW
 }
 
 enum UserRole {

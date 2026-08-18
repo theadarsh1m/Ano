@@ -9,6 +9,7 @@ const MAX_PLAYERS = {
   'INK_DECEPTION': 10,
   'FLAPPY_BIRD': 8,
   'PAPER_FALL': 8,
+  'ARROW_MAZE': 8,
 };
 const DEFAULT_MAX_PLAYERS = 6;
 
@@ -32,6 +33,10 @@ class LobbyService {
         mode: gameType === 'PAPER_FALL' ? 'SURVIVAL' : undefined,
         difficulty: gameType === 'PAPER_FALL' ? 'MEDIUM' : undefined,
         matchDuration: gameType === 'PAPER_FALL' ? 60 : undefined,
+        multiplayerMode: gameType === 'ARROW_MAZE' ? 'LEVELS' : undefined,
+        levelCount: gameType === 'ARROW_MAZE' ? 10 : undefined,
+        timedDuration: gameType === 'ARROW_MAZE' ? 180 : undefined,
+        deadTimeLimit: gameType === 'ARROW_MAZE' ? 60 : undefined,
       }
     };
     this.lobbies.set(lobbyId, lobby);
