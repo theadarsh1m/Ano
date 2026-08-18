@@ -8,6 +8,7 @@ const InkDeceptionEngine = require('../ink-deception/InkDeceptionEngine');
 const ChamberClashEngine = require('../chamber-clash/ChamberClashEngine');
 const FlappyBirdEngine = require('../flappy-bird/FlappyBirdEngine');
 const SlitherEngine = require('../slither/SlitherEngine');
+const PaperFallEngine = require('../paper-fall/PaperFallEngine');
 const userService = require('../../services/userService');
 
 const ENGINE_MAP = {
@@ -20,6 +21,7 @@ const ENGINE_MAP = {
   'CHAMBER_CLASH': ChamberClashEngine,
   'FLAPPY_BIRD': FlappyBirdEngine,
   'SLITHER': SlitherEngine,
+  'PAPER_FALL': PaperFallEngine,
 };
 
 const GAME_DISPLAY_NAMES = {
@@ -32,6 +34,7 @@ const GAME_DISPLAY_NAMES = {
   'CHAMBER_CLASH': 'Chamber Clash',
   'FLAPPY_BIRD': 'Flappy Bird',
   'SLITHER': 'Slither.io',
+  'PAPER_FALL': 'PaperFall',
 };
 
 function registerGameSockets(io, socket, onlineUsers, activeGames) {
@@ -715,6 +718,68 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
       const newState = engine.resetToLobby();
       io.to(gameId).emit('game_state', newState);
     }
+
+    if (lobby) {
+      for (const p of lobby.players.values()) {
+        p.isReady = p.role === 'HOST';
+      }
+      io.to(gameId).emit('lobby_state', serializeLobby(lobby));
+    }
+
+    activeGames.delete(gameId);
+    broadcastLobbies();
+  });
+
+  // ========================
+  // PAPER FALL SPECIFIC SOCKET EVENTS
+  // ========================
+
+  socket.on('paperfall_progress', ({ gameId, userId, ...data }) => {
+    const engine = activeGames.get(gameId);
+    if (engine && engine.gameType === 'PAPER_FALL') {
+      engine.handlePlayerAction(userId, 'progress', data);
+    }
+  });
+
+  socket.on('paperfall_word_typed', ({ gameId, userId, word, score }) => {
+    const engine = activeGames.get(gameId);
+    if (engine && engine.gameType === 'PAPER_FALL') {
+      engine.handlePlayerAction(userId, 'word_typed', { word, score });
+    }
+  });
+
+  socket.on('paperfall_finished', ({ gameId, userId, stats }) => {
+    const engine = activeGames.get(gameId);
+    if (engine && engine.gameType === 'PAPER_FALL') {
+      engine.handlePlayerAction(userId, 'finished', { stats });
+    }
+  });
+
+  socket.on('paperfall_return_to_lobby', ({ gameId, userId }) => {
+    const engine = activeGames.get(gameId);
+    if (engine && engine.gameType === 'PAPER_FALL') {
+      engine.handlePlayerAction(userId, 'return_to_lobby', {});
+    }
+
+    if (!engine || engine.status === 'FINISHED') {
+      const lobby = restoreLobbyFromEngine(gameId, engine);
+      if (lobby) {
+        const player = lobby.players.get(userId);
+        if (player && player.role !== 'HOST') {
+          player.isReady = false;
+        }
+        socket.join(gameId);
+        io.to(gameId).emit('lobby_state', serializeLobby(lobby));
+        broadcastLobbies();
+      }
+    } else {
+      socket.join(gameId);
+    }
+  });
+
+  socket.on('paperfall_reset_lobby', ({ gameId }) => {
+    const engine = activeGames.get(gameId);
+    const lobby = restoreLobbyFromEngine(gameId, engine);
 
     if (lobby) {
       for (const p of lobby.players.values()) {

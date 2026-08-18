@@ -8,6 +8,7 @@ const MAX_PLAYERS = {
   'COLOR_WARS': 8,
   'INK_DECEPTION': 10,
   'FLAPPY_BIRD': 8,
+  'PAPER_FALL': 8,
 };
 const DEFAULT_MAX_PLAYERS = 6;
 
@@ -28,6 +29,9 @@ class LobbyService {
         boardSize: gameType === 'COLOR_WARS' ? 7 : (gameType === 'DOTS_AND_BOXES' ? 5 : undefined), // Default 7x7 for Color Wars
         turnTimer: (gameType === 'COLOR_WARS' || gameType === 'DOTS_AND_BOXES' || gameType === 'CHAMBER_CLASH') ? 30 : undefined, // 30s turn timer
         pairCount: gameType === 'MEMORY_MATCH' ? 12 : undefined, // Default 12 pairs (4x6) for Memory Match
+        mode: gameType === 'PAPER_FALL' ? 'SURVIVAL' : undefined,
+        difficulty: gameType === 'PAPER_FALL' ? 'MEDIUM' : undefined,
+        matchDuration: gameType === 'PAPER_FALL' ? 60 : undefined,
       }
     };
     this.lobbies.set(lobbyId, lobby);
