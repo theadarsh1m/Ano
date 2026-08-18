@@ -3,6 +3,7 @@ import { FlappyGameHub } from '@/components/games/flappy-bird/FlappyGameHub';
 import { Game2048 } from '@/components/games/Game2048';
 import { Minesweeper } from '@/components/games/Minesweeper';
 import { SlitherGameHub } from '@/components/games/slither/SlitherGameHub';
+import { PaperFallGameHub } from '@/components/games/paper-fall/PaperFallGameHub';
 
 export type GameSupportedMode = 'SOLO' | 'MULTIPLAYER' | 'BOTH';
 
@@ -186,6 +187,21 @@ export const GAMES_REGISTRY: Record<string, GameDefinition> = {
     type: 'singleplayer',
     href: '/dashboard/games/slither',
     component: SlitherGameHub
+  },
+  'paper-fall': {
+    id: 'paper-fall',
+    name: 'PaperFall',
+    title: 'PaperFall',
+    slug: 'paper-fall',
+    description: 'Words drift down from the sky on paper slips. Type them to fire your cannon before they hit the ground!',
+    icon: '📜',
+    color: 'from-orange-400 to-amber-600',
+    supportedModes: 'BOTH',
+    enabled: true,
+    displayOrder: 12,
+    type: 'singleplayer',
+    href: '/dashboard/games/paper-fall',
+    component: PaperFallGameHub
   }
 };
 
