@@ -13,7 +13,10 @@ import {
   ArrowLeft, Play, RotateCcw, Users, UserPlus, Copy, Check,
   Crown, Trophy, Zap, Target, Clock, ChevronLeft,
   Heart, Lightbulb, ArrowRight, Pause, X, SkipForward,
+  MessageSquare, BookOpen,
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useInviteCooldown } from '@/hooks/useInviteCooldown';
 
 type ActiveView = 'MENU' | 'SINGLEPLAYER' | 'MULTIPLAYER_LOBBY' | 'MULTIPLAYER_MATCH' | 'MATCH_RESULTS';
 
@@ -79,14 +82,17 @@ export function ArrowMazeGameHub() {
   const [hintsLeft, setHintsLeft] = useState(2);
   const [scoreBreakdown, setScoreBreakdown] = useState<ScoreBreakdown | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
-  const [joinCode, setJoinCode] = useState('');
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [onlineFriends, setOnlineFriends] = useState<any[]>([]);
-  const [invitedUsers, setInvitedUsers] = useState<Set<string>>(new Set());
+  const [showRulesModal, setShowRulesModal] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
+  const [friendsList, setFriendsList] = useState<any[]>([]);
+  const [pendingInviteUserId, setPendingInviteUserId] = useState<string | null>(null);
   const [countdownVal, setCountdownVal] = useState<number | null>(null);
   const [matchTimeRemaining, setMatchTimeRemaining] = useState<number | undefined>(undefined);
   const [multiLevelsClearedThisMatch, setMultiLevelsClearedThisMatch] = useState(0);
   const [multiTotalScoreThisMatch, setMultiTotalScoreThisMatch] = useState(0);
+
+  const { triggerInvite, getInviteStatus } = useInviteCooldown(roomState?.id);
 
   const engineRef = useRef<ArrowMazeEngine | null>(null);
   const activeViewRef = useRef(activeView);
@@ -188,17 +194,43 @@ export function ArrowMazeGameHub() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomState, activeView]);
 
-  // Fetch online friends for invite
-  useEffect(() => {
-    if (!userId || !showInviteModal) return;
+  // Fetch online users & friends
+  const fetchOnlineUsers = useCallback(() => {
+    if (!userId) return;
     const apiUrl = typeof window !== 'undefined'
       ? (process.env.NEXT_PUBLIC_SOCKET_URL || `http://${window.location.hostname}:3001`)
       : 'http://localhost:3001';
     fetch(`${apiUrl}/api/users/online`)
       .then((res) => res.json())
-      .then((data) => { if (Array.isArray(data)) setOnlineFriends(data.filter((u) => u.id !== userId)); })
+      .then((data) => { if (Array.isArray(data)) setOnlineUsers(data.filter((u) => u.id !== userId)); })
       .catch(console.error);
-  }, [userId, showInviteModal]);
+    fetch(`${apiUrl}/api/notifications/friendships/${userId}`)
+      .then((res) => res.json())
+      .then((data) => { if (Array.isArray(data)) setFriendsList(data); })
+      .catch(console.error);
+  }, [userId]);
+
+  useEffect(() => {
+    fetchOnlineUsers();
+    const socket = socketService.getSocket();
+    if (socket) {
+      socket.on('user_online', fetchOnlineUsers);
+      socket.on('user_offline', fetchOnlineUsers);
+      return () => {
+        socket.off('user_online', fetchOnlineUsers);
+        socket.off('user_offline', fetchOnlineUsers);
+      };
+    }
+  }, [fetchOnlineUsers]);
+
+  // Handle pending invite after creating lobby
+  useEffect(() => {
+    if (pendingInviteUserId && roomState && userId && nickname) {
+      invitePlayer(roomState.id, userId, nickname, pendingInviteUserId);
+      triggerInvite(pendingInviteUserId);
+      setPendingInviteUserId(null);
+    }
+  }, [pendingInviteUserId, roomState, userId, nickname, invitePlayer, triggerInvite]);
 
   // HUD update interval
   useEffect(() => {
@@ -361,11 +393,16 @@ export function ArrowMazeGameHub() {
     });
   }, [roomState]);
 
-  const handleInvite = useCallback((targetId: string) => {
-    if (!roomState) return;
-    invitePlayer(roomState.id, userId, nickname, targetId);
-    setInvitedUsers((prev) => new Set(prev).add(targetId));
-  }, [roomState, userId, nickname, invitePlayer]);
+  const handleSendInvite = useCallback((targetUserId: string) => {
+    if (!userId || !nickname) return;
+    if (!roomState) {
+      setPendingInviteUserId(targetUserId);
+      createLobby(userId, nickname);
+    } else {
+      invitePlayer(roomState.id, userId, nickname, targetUserId);
+      triggerInvite(targetUserId);
+    }
+  }, [userId, nickname, roomState, createLobby, invitePlayer, triggerInvite]);
 
   const formatTime = (seconds: number | undefined) => {
     if (seconds === undefined) return '';
@@ -374,11 +411,148 @@ export function ArrowMazeGameHub() {
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
+  // ── TOP NAVBAR ──────────────────────────────────────────
+  const renderNavbar = () => (
+    <div className="flex items-center justify-between p-4 bg-white/5 border-b border-white/10 flex-shrink-0 z-30 backdrop-blur-md">
+      <div className="flex items-center gap-4">
+        {activeView !== 'MENU' ? (
+          <button 
+            onClick={() => {
+              if (roomState) leaveLobby(userId);
+              setActiveView('MENU');
+              setGameStatus('idle');
+            }}
+            className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer"
+            title="Back to Menu"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+        ) : (
+          <Link 
+            href="/dashboard/games"
+            className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer"
+            title="Back to Arcade"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Link>
+        )}
+
+        <Link href="/dashboard" className="flex items-center gap-3 cursor-pointer group hover:opacity-80 transition-opacity">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
+            <MessageSquare className="w-4 h-4 text-white" />
+          </div>
+          <span className="text-lg font-bold text-white tracking-wide">Ano</span>
+        </Link>
+
+        <div className="ml-2 border-l border-white/20 pl-4">
+          <h1 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
+            <span>🏹</span>
+            <span>Arrow Maze</span>
+          </h1>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <button 
+          onClick={() => setShowRulesModal(true)}
+          className="px-3.5 py-1.5 bg-white/5 border border-white/10 text-gray-300 hover:text-white rounded-full text-xs sm:text-sm font-semibold flex items-center gap-2 transition-colors hover:bg-white/10 cursor-pointer"
+        >
+          <BookOpen className="w-4 h-4 text-cyan-400" />
+          <span>Rules</span>
+        </button>
+      </div>
+    </div>
+  );
+
+  // ── RULES MODAL ─────────────────────────────────────────
+  const renderRulesModal = () => (
+    <AnimatePresence>
+      {showRulesModal && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setShowRulesModal(false)}
+        >
+          <motion.div
+            initial={{ scale: 0.95, y: 20 }}
+            animate={{ scale: 1, y: 0 }}
+            exit={{ scale: 0.95, y: 20 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-neutral-900 border border-white/10 rounded-3xl p-6 max-w-lg w-full max-h-[85vh] overflow-y-auto text-left relative shadow-2xl space-y-4"
+          >
+            <div className="flex justify-between items-center pb-3 border-b border-white/10">
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-cyan-400" />
+                Arrow Maze Rules & Guide
+              </h2>
+              <button
+                onClick={() => setShowRulesModal(false)}
+                className="text-gray-400 hover:text-white p-1 hover:bg-white/10 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-sm text-gray-300">
+              <div className="bg-white/5 p-3.5 rounded-xl border border-white/5 space-y-1">
+                <div className="font-bold text-cyan-400 flex items-center gap-1.5">
+                  <Target className="w-4 h-4" /> Objective
+                </div>
+                <p className="text-xs text-gray-300">
+                  Clear every arrow off the board by clicking arrows in the correct sequence.
+                </p>
+              </div>
+
+              <div className="bg-white/5 p-3.5 rounded-xl border border-white/5 space-y-1.5">
+                <div className="font-bold text-cyan-400 flex items-center gap-1.5">
+                  <ArrowRight className="w-4 h-4" /> Arrow Trajectories
+                </div>
+                <ul className="list-disc pl-4 space-y-1 text-xs text-gray-300">
+                  <li>Each arrow moves straight in its pointed direction until it exits the grid.</li>
+                  <li>An arrow will <span className="text-white font-semibold">only escape</span> if the entire path in front of it is free of other arrows.</li>
+                  <li>Clicking a blocked arrow causes an obstacle bump and costs <span className="text-red-400 font-semibold">1 Life (❤️)</span>.</li>
+                </ul>
+              </div>
+
+              <div className="bg-white/5 p-3.5 rounded-xl border border-white/5 space-y-1.5">
+                <div className="font-bold text-cyan-400 flex items-center gap-1.5">
+                  <Zap className="w-4 h-4" /> Combos & Scoring
+                </div>
+                <ul className="list-disc pl-4 space-y-1 text-xs text-gray-300">
+                  <li>Clearing arrows rapidly within the combo timer builds a score multiplier up to <span className="text-yellow-400 font-semibold">×3.0</span>.</li>
+                  <li>Clear levels with zero mistakes and fast times for extra bonus stars and points!</li>
+                </ul>
+              </div>
+
+              <div className="bg-white/5 p-3.5 rounded-xl border border-white/5 space-y-1.5">
+                <div className="font-bold text-cyan-400 flex items-center gap-1.5">
+                  <Lightbulb className="w-4 h-4" /> Hints & Undo
+                </div>
+                <p className="text-xs text-gray-300">
+                  Stuck? Use the <span className="text-yellow-400 font-semibold">Hint</span> button to highlight an unblocked arrow ready to launch. You can also undo your last move.
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowRulesModal(false)}
+              className="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-cyan-500/25 cursor-pointer"
+            >
+              Ready to Play!
+            </button>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
   // ── MENU VIEW ──────────────────────────────────────────
 
   const renderMenu = () => (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 md:p-8">
-      <div className="max-w-2xl w-full space-y-8">
+    <div className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 overflow-y-auto">
+      <div className="max-w-2xl w-full space-y-8 my-auto">
         {/* Title */}
         <div className="text-center space-y-3">
           <div className="text-6xl md:text-7xl font-bold tracking-tight text-white">
@@ -404,7 +578,7 @@ export function ArrowMazeGameHub() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <button
             onClick={() => startSoloGame(soloStats.currentLevel || 1)}
-            className="group relative overflow-hidden bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-cyan-500/30 rounded-2xl p-6 text-left hover:border-cyan-400/50 transition-all duration-300 hover:scale-[1.02]"
+            className="group relative overflow-hidden bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-cyan-500/30 rounded-2xl p-6 text-left hover:border-cyan-400/50 transition-all duration-300 hover:scale-[1.02] cursor-pointer"
           >
             <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
             <div className="relative">
@@ -425,7 +599,7 @@ export function ArrowMazeGameHub() {
 
           <button
             onClick={() => { setActiveView('MULTIPLAYER_LOBBY'); fetchLobbies(); }}
-            className="group relative overflow-hidden bg-gradient-to-br from-violet-500/20 to-indigo-600/20 border border-violet-500/30 rounded-2xl p-6 text-left hover:border-violet-400/50 transition-all duration-300 hover:scale-[1.02]"
+            className="group relative overflow-hidden bg-gradient-to-br from-violet-500/20 to-indigo-600/20 border border-violet-500/30 rounded-2xl p-6 text-left hover:border-violet-400/50 transition-all duration-300 hover:scale-[1.02] cursor-pointer"
           >
             <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
             <div className="relative">
@@ -461,6 +635,7 @@ export function ArrowMazeGameHub() {
       </div>
     </div>
   );
+
 
   // ── SINGLEPLAYER VIEW ──────────────────────────────────
 
@@ -614,7 +789,7 @@ export function ArrowMazeGameHub() {
         </button>
         <button
           onClick={retryLevel}
-          className="flex items-center justify-center w-14 h-14 rounded-full bg-white text-[#07164a] shadow-lg hover:scale-105 active:scale-95 transition-all"
+          className="flex items-center justify-center w-14 h-14 rounded-full bg-white text-[#07164a] shadow-lg hover:scale-105 active:scale-95 transition-all cursor-pointer"
         >
           <RotateCcw className="w-7 h-7" />
         </button>
@@ -630,12 +805,12 @@ export function ArrowMazeGameHub() {
     const canStart = isHost && (roomState?.players?.length ?? 0) >= 1 && allReady;
 
     return (
-      <div className="flex flex-col min-h-screen p-4 md:p-8">
+      <div className="flex-1 flex flex-col p-4 md:p-8 overflow-y-auto">
         <div className="max-w-3xl w-full mx-auto space-y-6">
           {/* Header */}
           <div className="flex items-center gap-4">
             <button onClick={() => { if (roomState) leaveLobby(userId); setActiveView('MENU'); }}
-              className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
+              className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer">
               <ChevronLeft className="w-5 h-5" />
             </button>
             <div>
@@ -646,253 +821,353 @@ export function ArrowMazeGameHub() {
 
           {/* Not in a lobby */}
           {!roomState ? (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Left Column: Create Lobby & Open Lobbies */}
+              <div className="space-y-4">
                 <button
                   onClick={() => createLobby(userId, nickname)}
-                  className="bg-gradient-to-br from-violet-500/20 to-indigo-600/20 border border-violet-500/30 rounded-2xl p-6 text-left hover:border-violet-400/50 transition-all"
+                  className="w-full bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-cyan-500/30 rounded-2xl p-6 text-left hover:border-cyan-400/50 transition-all cursor-pointer group"
                 >
                   <div className="flex items-center gap-3 mb-2">
-                    <Crown className="w-5 h-5 text-violet-400" />
-                    <span className="text-lg font-bold text-white">Create Lobby</span>
+                    <Crown className="w-6 h-6 text-cyan-400 group-hover:scale-110 transition-transform" />
+                    <span className="text-xl font-bold text-white">Create Lobby</span>
                   </div>
-                  <p className="text-sm text-gray-400">Host a game and invite friends</p>
+                  <p className="text-sm text-gray-400">Host a game and invite online players to join your match.</p>
                 </button>
 
-                <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-                  <div className="text-sm font-semibold text-gray-300 mb-3">Join with Code</div>
-                  <div className="flex gap-2">
-                    <input
-                      value={joinCode} onChange={(e) => setJoinCode(e.target.value)}
-                      placeholder="Paste lobby code..."
-                      className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm placeholder:text-gray-600 focus:outline-none focus:border-violet-500/50"
-                    />
+                {/* Available Lobbies */}
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                      <Users className="w-4 h-4 text-cyan-400" />
+                      Open Lobbies ({availableLobbies.length})
+                    </div>
                     <button
-                      onClick={() => { if (joinCode.trim()) joinLobby(joinCode, userId, nickname); }}
-                      className="px-4 py-2.5 bg-violet-500 hover:bg-violet-400 text-white font-bold rounded-xl transition-colors text-sm"
+                      onClick={() => fetchLobbies()}
+                      className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer text-xs flex items-center gap-1"
+                      title="Refresh lobbies"
                     >
-                      Join
+                      <RotateCcw className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                </div>
-              </div>
 
-              {/* Available Lobbies */}
-              {availableLobbies.length > 0 && (
-                <div className="space-y-3">
-                  <div className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Open Lobbies</div>
-                  {availableLobbies.map((lobby) => (
-                    <div key={lobby.id} className="flex items-center justify-between bg-white/5 border border-white/10 rounded-xl p-4">
-                      <div>
-                        <div className="font-semibold text-white">{lobby.hostName}&apos;s Lobby</div>
-                        <div className="text-xs text-gray-500">{lobby.playerCount}/{lobby.maxPlayers} players</div>
-                      </div>
-                      <button
-                        onClick={() => joinLobby(lobby.id, userId, nickname)}
-                        className="px-4 py-2 bg-violet-500 hover:bg-violet-400 text-white text-sm font-bold rounded-lg transition-colors"
-                      >
-                        Join
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : (
-            /* In a lobby */
-            <div className="space-y-5">
-              {/* Lobby Code */}
-              <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl p-3">
-                <div className="text-xs text-gray-500 uppercase tracking-wider">Lobby Code</div>
-                <code className="text-sm text-violet-400 font-mono flex-1 truncate">{roomState.id}</code>
-                <button onClick={handleCopyLink} className="p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors">
-                  {copiedLink ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-gray-400" />}
-                </button>
-                <button onClick={() => setShowInviteModal(true)} className="p-2 rounded-lg bg-violet-500/20 hover:bg-violet-500/30 transition-colors">
-                  <UserPlus className="w-4 h-4 text-violet-400" />
-                </button>
-              </div>
-
-              {/* Settings (host only) */}
-              {isHost && (
-                <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-4">
-                  <div className="text-sm font-semibold text-gray-300">Match Settings</div>
-
-                  {/* Mode selector */}
-                  <div>
-                    <div className="text-xs text-gray-500 mb-2">Game Mode</div>
-                    <div className="flex gap-2">
-                      {(['LEVELS', 'TIMED'] as MultiplayerMode[]).map((m) => (
-                        <button key={m}
-                          onClick={() => {
-                            setMultiplayerMode(m);
-                            updateSettings(roomState.id, userId, { multiplayerMode: m });
-                          }}
-                          className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
-                            (roomState.settings?.multiplayerMode || multiplayerMode) === m
-                              ? 'bg-violet-500/30 text-violet-400 border border-violet-500/50'
-                              : 'bg-white/5 text-gray-500 border border-white/10'
-                          }`}
-                        >
-                          {m === 'LEVELS' ? '📊 By Levels' : '⏱️ By Time'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Level count or Time duration based on mode */}
-                  {(roomState.settings?.multiplayerMode || multiplayerMode) === 'LEVELS' ? (
-                    <div>
-                      <div className="text-xs text-gray-500 mb-2">Number of Levels</div>
-                      <div className="flex gap-2">
-                        {([5, 10, 15, 20] as LevelCount[]).map((n) => (
-                          <button key={n}
-                            onClick={() => {
-                              setLevelCount(n);
-                              updateSettings(roomState.id, userId, { levelCount: n });
-                            }}
-                            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
-                              (roomState.settings?.levelCount || levelCount) === n
-                                ? 'bg-cyan-500/30 text-cyan-400 border border-cyan-500/50'
-                                : 'bg-white/5 text-gray-500 border border-white/10'
-                            }`}
-                          >
-                            {n} Lvls
-                          </button>
-                        ))}
-                      </div>
+                  {availableLobbies.length === 0 ? (
+                    <div className="text-center py-6 text-gray-500 text-xs italic">
+                      No open lobbies right now. Create one to get started!
                     </div>
                   ) : (
-                    <div>
-                      <div className="text-xs text-gray-500 mb-2">Time Limit</div>
-                      <div className="flex gap-2">
-                        {([60, 180, 300, 600] as TimedDuration[]).map((t) => (
-                          <button key={t}
-                            onClick={() => {
-                              setTimedDuration(t);
-                              updateSettings(roomState.id, userId, { timedDuration: t });
-                            }}
-                            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
-                              (roomState.settings?.timedDuration || timedDuration) === t
-                                ? 'bg-amber-500/30 text-amber-400 border border-amber-500/50'
-                                : 'bg-white/5 text-gray-500 border border-white/10'
-                            }`}
+                    <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                      {availableLobbies.map((lobby) => (
+                        <div key={lobby.id} className="flex items-center justify-between bg-white/5 border border-white/10 rounded-xl p-3">
+                          <div>
+                            <div className="font-semibold text-white text-sm">{lobby.hostName}&apos;s Lobby</div>
+                            <div className="text-xs text-gray-500">{lobby.playerCount}/{lobby.maxPlayers || 8} players</div>
+                          </div>
+                          <button
+                            onClick={() => joinLobby(lobby.id, userId, nickname)}
+                            className="px-3.5 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
                           >
-                            {t < 60 ? `${t}s` : `${t / 60}m`}
+                            Join
                           </button>
-                        ))}
-                      </div>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
-              )}
+              </div>
 
-              {/* Players list */}
-              <div className="space-y-2">
-                <div className="text-sm font-semibold text-gray-400">Players ({roomState.players.length}/8)</div>
-                {roomState.players.map((p) => (
-                  <div key={p.userId} className="flex items-center justify-between bg-white/5 border border-white/10 rounded-xl p-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold">
-                        {p.nickname.charAt(0).toUpperCase()}
+              {/* Right Column: Online Players to Invite */}
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-5 flex flex-col space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <UserPlus className="w-5 h-5 text-cyan-400" />
+                    Online Players ({onlineUsers.length})
+                  </h3>
+                  <button
+                    onClick={fetchOnlineUsers}
+                    className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer text-xs flex items-center gap-1"
+                    title="Refresh online users"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto max-h-[380px] space-y-2.5 pr-1">
+                  {onlineUsers.length === 0 ? (
+                    <div className="text-center py-10 text-gray-500 text-sm space-y-1">
+                      <p>No other players online right now.</p>
+                      <p className="text-xs text-gray-600">Create a lobby and share your link with friends!</p>
+                    </div>
+                  ) : (
+                    onlineUsers.map((u) => {
+                      const isFriend = friendsList.some((f) => f.id === u.id);
+                      const status = getInviteStatus(u.id);
+                      return (
+                        <div key={u.id} className="flex items-center justify-between p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <div className="relative">
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center text-xs font-bold text-white overflow-hidden">
+                                {u.avatar ? (
+                                  <img src={u.avatar} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                  (u.nickname || '?')[0].toUpperCase()
+                                )}
+                              </div>
+                              <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-neutral-900 bg-emerald-400" />
+                            </div>
+                            <div>
+                              <span className="font-semibold text-sm text-white block leading-tight">{u.nickname}</span>
+                              <span className="text-[10px] text-gray-400">
+                                {isFriend ? 'Friend · Online' : 'Online'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <button
+                            onClick={() => handleSendInvite(u.id)}
+                            disabled={!status.canInvite}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                              !status.canInvite
+                                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 cursor-not-allowed'
+                                : 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-md shadow-cyan-500/20'
+                            }`}
+                          >
+                            {status.canInvite ? 'Invite' : status.label}
+                          </button>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* In a lobby */
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left 2 Cols: Lobby Info & Settings & Players */}
+              <div className="lg:col-span-2 space-y-5">
+                {/* Lobby Code & Copy Link */}
+                <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl p-3">
+                  <div className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Lobby Code</div>
+                  <code className="text-sm text-cyan-400 font-mono flex-1 truncate">{roomState.id}</code>
+                  <button onClick={handleCopyLink} className="p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors cursor-pointer flex items-center gap-1.5 text-xs text-gray-300">
+                    {copiedLink ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-gray-400" />}
+                    <span>{copiedLink ? 'Copied!' : 'Copy Link'}</span>
+                  </button>
+                </div>
+
+                {/* Settings (host only) */}
+                {isHost && (
+                  <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-4">
+                    <div className="text-sm font-semibold text-gray-300">Match Settings</div>
+
+                    {/* Mode selector */}
+                    <div>
+                      <div className="text-xs text-gray-500 mb-2">Game Mode</div>
+                      <div className="flex gap-2">
+                        {(['LEVELS', 'TIMED'] as MultiplayerMode[]).map((m) => (
+                          <button key={m}
+                            onClick={() => {
+                              setMultiplayerMode(m);
+                              updateSettings(roomState.id, userId, { multiplayerMode: m });
+                            }}
+                            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                              (roomState.settings?.multiplayerMode || multiplayerMode) === m
+                                ? 'bg-violet-500/30 text-violet-400 border border-violet-500/50'
+                                : 'bg-white/5 text-gray-500 border border-white/10'
+                            }`}
+                          >
+                            {m === 'LEVELS' ? '📊 By Levels' : '⏱️ By Time'}
+                          </button>
+                        ))}
                       </div>
+                    </div>
+
+                    {/* Level count or Time duration based on mode */}
+                    {(roomState.settings?.multiplayerMode || multiplayerMode) === 'LEVELS' ? (
                       <div>
+                        <div className="text-xs text-gray-500 mb-2">Number of Levels</div>
+                        <div className="flex gap-2">
+                          {([5, 10, 15, 20] as LevelCount[]).map((n) => (
+                            <button key={n}
+                              onClick={() => {
+                                setLevelCount(n);
+                                updateSettings(roomState.id, userId, { levelCount: n });
+                              }}
+                              className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                (roomState.settings?.levelCount || levelCount) === n
+                                  ? 'bg-cyan-500/30 text-cyan-400 border border-cyan-500/50'
+                                  : 'bg-white/5 text-gray-500 border border-white/10'
+                              }`}
+                            >
+                              {n} Lvls
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="text-xs text-gray-500 mb-2">Time Limit</div>
+                        <div className="flex gap-2">
+                          {([60, 180, 300, 600] as TimedDuration[]).map((t) => (
+                            <button key={t}
+                              onClick={() => {
+                                setTimedDuration(t);
+                                updateSettings(roomState.id, userId, { timedDuration: t });
+                              }}
+                              className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                (roomState.settings?.timedDuration || timedDuration) === t
+                                  ? 'bg-amber-500/30 text-amber-400 border border-amber-500/50'
+                                  : 'bg-white/5 text-gray-500 border border-white/10'
+                              }`}
+                            >
+                              {t < 60 ? `${t}s` : `${t / 60}m`}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Player list */}
+                <div className="space-y-2">
+                  <div className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Players ({roomState.players?.length || 0}/8)</div>
+                  {roomState.players?.map((p) => (
+                    <div key={p.userId} className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl p-3">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center text-xs font-bold text-white overflow-hidden">
+                        {p.avatar ? <img src={p.avatar} alt="" className="w-full h-full object-cover" /> : p.nickname?.[0]?.toUpperCase()}
+                      </div>
+                      <div className="flex-1">
                         <div className="font-semibold text-white text-sm flex items-center gap-2">
                           {p.nickname}
                           {p.isHost && <Crown className="w-3.5 h-3.5 text-yellow-400" />}
                         </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {p.userId === userId && !p.isHost && (
-                        <button
-                          onClick={() => toggleReady(roomState.id, userId)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                            p.isReady
-                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                              : 'bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10'
-                          }`}
-                        >
-                          {p.isReady ? '✓ Ready' : 'Ready Up'}
-                        </button>
-                      )}
-                      {isHost && p.userId !== userId && (
-                        <button
-                          onClick={() => kickPlayer(roomState.id, userId, p.userId)}
-                          className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors"
+                      <div className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                        p.isReady || p.isHost ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/5 text-gray-500'
+                      }`}>
+                        {p.isHost ? 'Host' : p.isReady ? 'Ready' : 'Not Ready'}
+                      </div>
+                      {isHost && !p.isHost && (
+                        <button onClick={() => kickPlayer(roomState.id, userId, p.userId)}
+                          className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors cursor-pointer"
+                          title="Kick Player"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
                       )}
-                      {p.isReady && !p.isHost && (
-                        <span className="text-[10px] text-emerald-400 font-bold">READY</span>
-                      )}
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-3">
+                  {isHost ? (
+                    <button
+                      onClick={() => startMatch(roomState.id, userId)}
+                      disabled={!canStart}
+                      className={`flex-1 px-4 py-3 font-bold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                        canStart ? 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-lg shadow-cyan-500/25' : 'bg-white/5 text-gray-600 cursor-not-allowed'
+                      }`}
+                    >
+                      <Play className="w-4 h-4" /> Start Match
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => toggleReady(roomState.id, userId)}
+                      className={`flex-1 px-4 py-3 font-bold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                        roomState.players.find(p => p.userId === userId)?.isReady
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                          : 'bg-cyan-500 hover:bg-cyan-400 text-white shadow-lg shadow-cyan-500/25'
+                      }`}
+                    >
+                      <Target className="w-4 h-4" />
+                      {roomState.players.find(p => p.userId === userId)?.isReady ? 'Unready' : 'Ready Up'}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => { leaveLobby(userId); setActiveView('MENU'); }}
+                    className="px-4 py-3 bg-white/5 hover:bg-white/10 text-gray-400 font-medium rounded-xl transition-colors border border-white/10 cursor-pointer"
+                  >
+                    Leave
+                  </button>
+                </div>
               </div>
 
-              {/* Start / Leave */}
-              <div className="flex gap-3">
-                {isHost && (
+              {/* Right Col: Online Players to Invite directly */}
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-5 flex flex-col space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <UserPlus className="w-4 h-4 text-cyan-400" />
+                    Invite Online Players
+                  </h3>
                   <button
-                    onClick={() => startMatch(roomState.id, userId)}
-                    disabled={!canStart}
-                    className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${
-                      canStart
-                        ? 'bg-gradient-to-r from-violet-500 to-indigo-600 hover:from-violet-400 hover:to-indigo-500 text-white hover:scale-[1.02]'
-                        : 'bg-white/5 text-gray-500 cursor-not-allowed border border-white/10'
-                    }`}
+                    onClick={fetchOnlineUsers}
+                    className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer text-xs"
+                    title="Refresh online users"
                   >
-                    <Play className="w-4 h-4" /> Start Match
+                    <RotateCcw className="w-3.5 h-3.5" />
                   </button>
-                )}
-                <button
-                  onClick={() => { leaveLobby(userId); setActiveView('MENU'); }}
-                  className="px-6 py-3 bg-white/5 hover:bg-white/10 text-gray-300 font-medium rounded-xl transition-colors border border-white/10 text-sm"
-                >
-                  Leave
-                </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto max-h-[380px] space-y-2.5 pr-1">
+                  {onlineUsers.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500 text-xs">
+                      No other players online
+                    </div>
+                  ) : (
+                    onlineUsers
+                      .filter((u) => !roomState.players?.some((p) => p.userId === u.id))
+                      .map((u) => {
+                        const isFriend = friendsList.some((f) => f.id === u.id);
+                        const status = getInviteStatus(u.id);
+                        return (
+                          <div key={u.id} className="flex items-center justify-between p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-colors">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="relative shrink-0">
+                                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center text-xs font-bold text-white overflow-hidden">
+                                  {u.avatar ? (
+                                    <img src={u.avatar} alt="" className="w-full h-full object-cover" />
+                                  ) : (
+                                    (u.nickname || '?')[0].toUpperCase()
+                                  )}
+                                </div>
+                                <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-neutral-900 bg-emerald-400" />
+                              </div>
+                              <div className="min-w-0">
+                                <span className="font-semibold text-xs text-white block truncate">{u.nickname}</span>
+                                <span className="text-[10px] text-gray-500 block">
+                                  {isFriend ? 'Friend' : 'Online'}
+                                </span>
+                              </div>
+                            </div>
+
+                            <button
+                              onClick={() => handleSendInvite(u.id)}
+                              disabled={!status.canInvite}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 ${
+                                !status.canInvite
+                                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 cursor-not-allowed'
+                                  : 'bg-cyan-500 hover:bg-cyan-400 text-white'
+                              }`}
+                            >
+                              {status.canInvite ? 'Invite' : status.label}
+                            </button>
+                          </div>
+                        );
+                      })
+                  )}
+                  {onlineUsers.filter((u) => !roomState.players?.some((p) => p.userId === u.id)).length === 0 && onlineUsers.length > 0 && (
+                    <div className="text-xs text-gray-500 text-center py-4">
+                      All online players are already in this lobby!
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
         </div>
-
-        {/* Invite Modal */}
-        {showInviteModal && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-neutral-900 border border-white/10 rounded-2xl p-6 w-full max-w-sm space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="font-bold text-white">Invite Players</div>
-                <button onClick={() => setShowInviteModal(false)} className="p-1 rounded-lg hover:bg-white/10 text-gray-400">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              {onlineFriends.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-4">No online users found</p>
-              ) : (
-                <div className="space-y-2 max-h-60 overflow-y-auto">
-                  {onlineFriends.map((u) => (
-                    <div key={u.id} className="flex items-center justify-between bg-white/5 rounded-lg p-2.5">
-                      <span className="text-sm text-white">{u.nickname}</span>
-                      <button
-                        onClick={() => handleInvite(u.id)}
-                        disabled={invitedUsers.has(u.id)}
-                        className={`px-3 py-1 rounded-lg text-xs font-bold ${
-                          invitedUsers.has(u.id)
-                            ? 'bg-emerald-500/20 text-emerald-400'
-                            : 'bg-violet-500 hover:bg-violet-400 text-white'
-                        }`}
-                      >
-                        {invitedUsers.has(u.id) ? 'Invited' : 'Invite'}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
       </div>
     );
   };
@@ -903,79 +1178,70 @@ export function ArrowMazeGameHub() {
     <div className="flex flex-col h-[100dvh] w-full bg-slate-900 overflow-hidden relative">
       {/* Top HUD */}
       <div className="flex items-center justify-between px-4 pt-4 pb-2 shrink-0 z-20">
+        <button
+          onClick={() => {
+            if (roomState) leaveLobby(userId);
+            setActiveView('MENU');
+            setGameStatus('idle');
+          }}
+          className="p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-all cursor-pointer"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+
+        {/* Level / Score info */}
         <div className="flex items-center gap-3">
-          <LivesDisplay lives={lives} maxLives={maxLives} />
-          <div className="w-px h-6 bg-white/20" />
-          <div className="text-center">
-            <div className="text-lg font-bold text-yellow-400 tabular-nums">{(engineRef.current?.totalScore ?? 0).toLocaleString()}</div>
+          <div className="px-3 py-1.5 rounded-full bg-white/10 text-white text-xs font-bold flex items-center gap-1.5">
+            <Target className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Level {currentLevel}</span>
+          </div>
+
+          <div className="px-3 py-1.5 rounded-full bg-white/10 text-yellow-400 text-xs font-bold flex items-center gap-1.5 tabular-nums">
+            <Trophy className="w-3.5 h-3.5" />
+            <span>{multiTotalScoreThisMatch + currentScore}</span>
           </div>
         </div>
 
-        <div className="flex flex-col items-center">
-          <div className="text-xl font-bold text-white leading-none">Level {currentLevel}</div>
+        {/* Lives / Timer */}
+        <div className="flex items-center gap-2">
           {matchTimeRemaining !== undefined && (
-            <div className={`text-sm font-bold tabular-nums mt-1 ${matchTimeRemaining <= 30 ? 'text-red-400 animate-pulse' : 'text-emerald-400'}`}>
-              {formatTime(matchTimeRemaining)}
+            <div className="px-3 py-1.5 rounded-full bg-white/10 text-white text-xs font-bold flex items-center gap-1.5 tabular-nums">
+              <Clock className="w-3.5 h-3.5 text-cyan-400" />
+              <span>{formatTime(matchTimeRemaining)}</span>
             </div>
           )}
+          <LivesDisplay lives={lives} maxLives={maxLives} />
         </div>
       </div>
 
       {/* Countdown overlay */}
-      {countdownVal !== null && (
-        <div className="absolute inset-0 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm z-40">
-          <div className="text-8xl font-black text-white animate-bounce drop-shadow-[0_0_20px_rgba(255,255,255,0.5)]">
-            {countdownVal}
-          </div>
+      {countdownVal !== null && countdownVal > 0 && (
+        <div className="absolute inset-0 flex items-center justify-center z-30 bg-black/60 backdrop-blur-sm">
+          <div className="text-8xl font-bold text-white animate-bounce">{countdownVal}</div>
         </div>
       )}
 
-      {/* Game Board */}
-      <div className="flex-1 flex flex-col items-center justify-center p-4 w-full min-h-0 relative">
-        {engineRef.current && gameStatus === 'playing' && (
+      {/* Board */}
+      <div className="flex-1 flex items-center justify-center relative overflow-hidden min-h-0">
+        {engineRef.current && (
           <ArrowMazeBoard
             engine={engineRef.current}
+            hintArrowId={hintArrowId}
             onArrowClick={handleArrowClick}
-            hintArrowId={null}
-            className="w-full h-full p-2 sm:p-6"
+            className="w-full h-full"
           />
         )}
 
-        {/* Level complete in multiplayer — auto advance */}
-        {gameStatus === 'levelComplete' && (
-          <div className="absolute inset-0 flex items-center justify-center bg-slate-900/70 z-30">
-            <div className="text-center space-y-3 animate-in fade-in zoom-in duration-300 bg-slate-800 p-6 rounded-3xl shadow-2xl">
-              <div className="text-5xl font-black text-emerald-400 drop-shadow-lg">
-                ✓ Level {currentLevel}
-              </div>
-              <div className="text-xl text-yellow-400 font-bold">+{scoreBreakdown?.total.toLocaleString()} pts</div>
-              <button
-                onClick={advanceToNextLevel}
-                className="px-6 py-3 bg-white text-[#07164a] font-bold rounded-xl transition-all"
-              >
-                Next Level →
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-      {/* Bottom Controls / Opponents sidebar */}
-      <div className="flex items-center justify-between px-4 pb-8 pt-2 shrink-0 z-20">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={retryLevel}
-            className="flex items-center justify-center w-14 h-14 rounded-full bg-white text-[#07164a] shadow-lg hover:scale-105 active:scale-95 transition-all"
-          >
-            <RotateCcw className="w-7 h-7" />
-          </button>
-        </div>
-
-        {roomState && roomState.players.length > 1 && (
-          <div className="flex flex-row-reverse gap-2 overflow-x-auto pb-2 items-center flex-1 ml-4 mask-fade-left">
+        {/* Opponents Mini Progress Strip */}
+        {roomState && roomState.players && roomState.players.length > 1 && (
+          <div className="absolute bottom-3 left-4 right-4 z-20 flex gap-2 overflow-x-auto py-1">
             {roomState.players
-              .filter(p => p.userId !== userId)
-              .map(p => (
-                <div key={p.userId} className="bg-slate-800 border border-white/10 rounded-xl p-2 w-28 shrink-0 flex flex-col justify-between h-14 shadow-md">
+              .filter((p) => p.userId !== userId)
+              .map((p) => (
+                <div
+                  key={p.userId}
+                  className="bg-black/60 backdrop-blur-md border border-white/10 rounded-xl px-3 py-1.5 flex flex-col gap-1 min-w-[120px]"
+                >
                   <div className="flex justify-between items-center w-full">
                     <span className="text-[10px] text-gray-300 font-bold truncate max-w-[60%]">{p.nickname}</span>
                     <span className="text-[10px] text-cyan-400">Lv {p.currentLevel ?? 1}</span>
@@ -1003,8 +1269,8 @@ export function ArrowMazeGameHub() {
     const sorted = [...results].sort((a, b) => b.score - a.score);
 
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4 md:p-8">
-        <div className="max-w-lg w-full space-y-6">
+      <div className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 overflow-y-auto">
+        <div className="max-w-lg w-full space-y-6 my-auto">
           <div className="text-center space-y-2">
             <Trophy className="w-12 h-12 text-yellow-400 mx-auto" />
             <div className="text-3xl font-bold text-white">Match Results</div>
@@ -1055,7 +1321,7 @@ export function ArrowMazeGameHub() {
                   resetLobby(roomState.id);
                 }
               }}
-              className="flex-1 px-4 py-3 bg-violet-500 hover:bg-violet-400 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm"
+              className="flex-1 px-4 py-3 bg-violet-500 hover:bg-violet-400 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm cursor-pointer"
             >
               <RotateCcw className="w-4 h-4" /> Play Again
             </button>
@@ -1065,7 +1331,7 @@ export function ArrowMazeGameHub() {
                 setActiveView('MENU');
                 setGameStatus('idle');
               }}
-              className="px-4 py-3 bg-white/5 hover:bg-white/10 text-gray-300 font-medium rounded-xl transition-colors border border-white/10 text-sm"
+              className="px-4 py-3 bg-white/5 hover:bg-white/10 text-gray-300 font-medium rounded-xl transition-colors border border-white/10 text-sm cursor-pointer"
             >
               Leave
             </button>
@@ -1078,7 +1344,7 @@ export function ArrowMazeGameHub() {
   // ── Render Router ──────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-950 via-slate-950 to-black">
+    <div className="flex flex-col h-full min-h-screen bg-gradient-to-b from-gray-950 via-slate-950 to-black text-white">
       {/* Add shake keyframe animation */}
       <style jsx global>{`
         @keyframes shake {
@@ -1090,6 +1356,9 @@ export function ArrowMazeGameHub() {
           75% { transform: translateX(-2px); }
         }
       `}</style>
+
+      {(activeView === 'MENU' || activeView === 'MULTIPLAYER_LOBBY' || activeView === 'MATCH_RESULTS') && renderNavbar()}
+      {renderRulesModal()}
 
       {activeView === 'MENU' && renderMenu()}
       {activeView === 'SINGLEPLAYER' && renderSingleplayer()}
