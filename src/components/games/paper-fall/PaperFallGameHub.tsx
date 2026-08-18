@@ -401,12 +401,8 @@ export function PaperFallGameHub() {
         <button
           onClick={() => { 
             engineRef.current?.pause(); 
-            if (gameStatus === 'playing') {
-              handleGameOver();
-            } else {
-              setActiveView('MENU'); 
-              setGameStatus('idle'); 
-            }
+            setActiveView('MENU'); 
+            setGameStatus('idle'); 
           }}
           className="p-2 rounded-full bg-black/40 backdrop-blur-md text-gray-300 hover:text-white hover:bg-black/60 transition-all"
         >

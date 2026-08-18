@@ -4,6 +4,7 @@ import { Game2048 } from '@/components/games/Game2048';
 import { Minesweeper } from '@/components/games/Minesweeper';
 import { SlitherGameHub } from '@/components/games/slither/SlitherGameHub';
 import { PaperFallGameHub } from '@/components/games/paper-fall/PaperFallGameHub';
+import { ArrowMazeGameHub } from '@/components/games/arrow-maze/ArrowMazeGameHub';
 
 export type GameSupportedMode = 'SOLO' | 'MULTIPLAYER' | 'BOTH';
 
@@ -202,6 +203,21 @@ export const GAMES_REGISTRY: Record<string, GameDefinition> = {
     type: 'singleplayer',
     href: '/dashboard/games/paper-fall',
     component: PaperFallGameHub
+  },
+  'arrow-maze': {
+    id: 'arrow-maze',
+    name: 'Arrow Maze',
+    title: 'Arrow Maze',
+    slug: 'arrow-maze',
+    description: 'Clear the grid by clicking arrows in the right order. Race your friends or play solo in this puzzle game!',
+    icon: '🏹',
+    color: 'from-cyan-500 to-blue-600',
+    supportedModes: 'BOTH',
+    enabled: true,
+    displayOrder: 13,
+    type: 'multiplayer',
+    href: '/dashboard/games/arrow-maze',
+    component: ArrowMazeGameHub
   }
 };
 
