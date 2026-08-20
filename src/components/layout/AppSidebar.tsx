@@ -21,6 +21,7 @@ import {
   Menu,
   X,
   Bug,
+  Sparkles,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ReportBugModal } from "@/components/feedback/ReportBugModal";
@@ -46,6 +47,7 @@ export function AppSidebar() {
     { label: "Rooms", icon: MessageSquare, href: "/dashboard/rooms", active: pathname === "/dashboard/rooms" },
     { label: "Saved Posts", icon: Bookmark, href: "/feed/saved", active: pathname === "/feed/saved" },
     { label: "Settings", icon: Settings, href: "/dashboard/settings", active: pathname === "/dashboard/settings" },
+    { label: "About", icon: Sparkles, href: "/dashboard/about", active: pathname === "/dashboard/about" },
   ];
 
   if (role === 'SUPER_ADMIN') {
@@ -66,12 +68,15 @@ export function AppSidebar() {
     <>
       {/* Header */}
       <div className="p-4 border-b border-white/5 flex items-center justify-between">
-        <h1
-          className="text-xl font-bold text-white cursor-pointer hover:text-blue-400 transition-colors"
+        <div
+          className="flex items-center gap-2.5 cursor-pointer hover:opacity-80 transition-opacity"
           onClick={() => navigateTo("/dashboard")}
         >
-          Ano
-        </h1>
+          <img src="/ano-logo.png" alt="Ano Logo" className="w-7 h-7 object-contain" />
+          <h1 className="text-xl font-bold text-white tracking-wide">
+            Ano
+          </h1>
+        </div>
         <div className="flex items-center gap-2">
           <NotificationBell />
           {/* Close button only on mobile */}

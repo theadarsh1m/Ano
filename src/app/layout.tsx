@@ -20,6 +20,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Ano",
   description: "A real-time platform for students to chat, collaborate, and play games.",
+  icons: {
+    icon: "/ano-logo.png",
+    shortcut: "/ano-logo.png",
+    apple: "/ano-logo.png",
+  },
 };
 
 export default function RootLayout({

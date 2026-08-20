@@ -37,6 +37,10 @@ export function resolveGameRoute(gameType?: string, gameId?: string): string {
   const gameMap: Record<string, string> = {
     'flappy-bird': 'flappy-bird',
     'flappybird': 'flappy-bird',
+    'paper-fall': 'paper-fall',
+    'paperfall': 'paper-fall',
+    'arrow-maze': 'arrow-maze',
+    'arrowmaze': 'arrow-maze',
     'bluff': 'bluff',
     'memory-match': 'memory-match',
     'memorymatch': 'memory-match',

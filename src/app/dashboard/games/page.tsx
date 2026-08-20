@@ -61,9 +61,7 @@ export default function GamesHubPage() {
         <div className="flex items-center gap-4">
           <Link href="/dashboard">
             <div className="flex items-center gap-3 cursor-pointer group hover:opacity-80 transition-opacity">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
-                <MessageSquare className="w-5 h-5 text-white" />
-              </div>
+              <img src="/ano-logo.png" alt="Ano Logo" className="w-9 h-9 object-contain group-hover:scale-105 transition-transform flex-shrink-0" />
               <div>
                 <span className="text-xl font-bold text-white tracking-wide block leading-tight">
                   Ano Arcade

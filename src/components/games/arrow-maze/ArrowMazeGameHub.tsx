@@ -163,9 +163,23 @@ export function ArrowMazeGameHub() {
   useEffect(() => {
     if (gameIdParam && userId && nickname && !roomState) {
       setActiveView('MULTIPLAYER_LOBBY');
-      joinLobby(gameIdParam, userId, nickname);
+      initLobbySockets(userId);
+      const socket = socketService.getSocket();
+      const doJoin = () => {
+        joinLobby(gameIdParam, userId, nickname);
+      };
+      if (socket?.connected) {
+        doJoin();
+      } else if (socket) {
+        socket.once('connect', doJoin);
+        const timer = setTimeout(doJoin, 500);
+        return () => {
+          socket.off('connect', doJoin);
+          clearTimeout(timer);
+        };
+      }
     }
-  }, [gameIdParam, userId, nickname]);
+  }, [gameIdParam, userId, nickname, roomState, initLobbySockets, joinLobby]);
 
   // Room state transitions
   useEffect(() => {
