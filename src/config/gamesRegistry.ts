@@ -2,7 +2,6 @@ import React from 'react';
 import { FlappyGameHub } from '@/components/games/flappy-bird/FlappyGameHub';
 import { Game2048 } from '@/components/games/Game2048';
 import { Minesweeper } from '@/components/games/Minesweeper';
-import { SlitherGameHub } from '@/components/games/slither/SlitherGameHub';
 import { PaperFallGameHub } from '@/components/games/paper-fall/PaperFallGameHub';
 import { ArrowMazeGameHub } from '@/components/games/arrow-maze/ArrowMazeGameHub';
 
@@ -174,21 +173,6 @@ export const GAMES_REGISTRY: Record<string, GameDefinition> = {
     href: '/dashboard/games/minesweeper',
     component: Minesweeper
   },
-  'slither': {
-    id: 'slither',
-    name: 'Slither.io',
-    title: 'Slither.io',
-    slug: 'slither',
-    description: 'Grow as long as possible by eating colorful food and outsmarting other players and bots. Don\'t run into their bodies!',
-    icon: '🐍',
-    color: 'from-green-400 to-emerald-600',
-    supportedModes: 'BOTH',
-    enabled: true,
-    displayOrder: 11,
-    type: 'singleplayer',
-    href: '/dashboard/games/slither',
-    component: SlitherGameHub
-  },
   'paper-fall': {
     id: 'paper-fall',
     name: 'PaperFall',
@@ -199,7 +183,7 @@ export const GAMES_REGISTRY: Record<string, GameDefinition> = {
     color: 'from-orange-400 to-amber-600',
     supportedModes: 'BOTH',
     enabled: true,
-    displayOrder: 12,
+    displayOrder: 11,
     type: 'singleplayer',
     href: '/dashboard/games/paper-fall',
     component: PaperFallGameHub
@@ -214,7 +198,7 @@ export const GAMES_REGISTRY: Record<string, GameDefinition> = {
     color: 'from-cyan-500 to-blue-600',
     supportedModes: 'BOTH',
     enabled: true,
-    displayOrder: 13,
+    displayOrder: 12,
     type: 'multiplayer',
     href: '/dashboard/games/arrow-maze',
     component: ArrowMazeGameHub

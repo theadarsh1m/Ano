@@ -7,7 +7,6 @@ const ScribbleEngine = require('../scribble/ScribbleEngine');
 const InkDeceptionEngine = require('../ink-deception/InkDeceptionEngine');
 const ChamberClashEngine = require('../chamber-clash/ChamberClashEngine');
 const FlappyBirdEngine = require('../flappy-bird/FlappyBirdEngine');
-const SlitherEngine = require('../slither/SlitherEngine');
 const PaperFallEngine = require('../paper-fall/PaperFallEngine');
 const ArrowMazeEngine = require('../arrow-maze/ArrowMazeEngine');
 const userService = require('../../services/userService');
@@ -21,7 +20,6 @@ const ENGINE_MAP = {
   'INK_DECEPTION': InkDeceptionEngine,
   'CHAMBER_CLASH': ChamberClashEngine,
   'FLAPPY_BIRD': FlappyBirdEngine,
-  'SLITHER': SlitherEngine,
   'PAPER_FALL': PaperFallEngine,
   'ARROW_MAZE': ArrowMazeEngine,
 };
@@ -35,7 +33,6 @@ const GAME_DISPLAY_NAMES = {
   'INK_DECEPTION': 'Ink & Deception',
   'CHAMBER_CLASH': 'Chamber Clash',
   'FLAPPY_BIRD': 'Flappy Bird',
-  'SLITHER': 'Slither.io',
   'PAPER_FALL': 'PaperFall',
   'ARROW_MAZE': 'Arrow Maze',
 };
@@ -99,88 +96,6 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
 
   socket.on('lobby_join', async ({ gameId, userId, nickname }) => {
     console.log(`Player ${nickname} joined lobby ${gameId}`);
-    
-    if (gameId === 'slither_global') {
-      let engine = activeGames.get('slither_global');
-      if (!engine) {
-        const SlitherEngine = require('../slither/SlitherEngine');
-        engine = new SlitherEngine('slither_global');
-        engine.onEvent = (type, data) => {
-          io.to('slither_global').emit(type, data);
-          if (type === 'round_started') {
-            engine.players.forEach((p, id) => {
-              const sockets = onlineUsers.get(id);
-              if (sockets && sockets.size > 0) {
-                sockets.forEach(sId => {
-                  io.to(sId).emit('game_state', engine.serializeState(id));
-                });
-              } else {
-                // Fallback: emit to slither_global room directly so connected sockets get state
-                io.to('slither_global').emit('game_state', engine.serializeState(id));
-              }
-            });
-          }
-        };
-        engine.onPrivateEvent = (targetUserId, type, data) => {
-          const targetSockets = onlineUsers.get(targetUserId);
-          if (targetSockets && targetSockets.size > 0) {
-            targetSockets.forEach(sId => io.to(sId).emit(type, data));
-          } else {
-            io.to('slither_global').emit(type, data);
-          }
-        };
-        engine.startGame();
-        activeGames.set('slither_global', engine);
-      }
-
-      // Ensure user presence mapping in onlineUsers map
-      if (userId) {
-        if (!onlineUsers.has(userId)) {
-          onlineUsers.set(userId, new Set());
-        }
-        onlineUsers.get(userId).add(socket.id);
-      }
-
-      engine.players.set(userId, {
-        userId,
-        nickname,
-        role: 'PLAYER',
-        isReady: true,
-        isOnline: true
-      });
-
-      if (!engine.snakes.has(userId) || !engine.snakes.get(userId).isAlive) {
-        const pos = engine.getSafeSpawnPosition();
-        engine.snakes.set(userId, engine.createSnake(userId, nickname, 'CLASSIC', false, pos.x, pos.y));
-        engine.kills.set(userId, 0);
-      } else {
-        const existingSnake = engine.snakes.get(userId);
-        if (nickname) existingSnake.nickname = nickname;
-      }
-
-      socket.join('slither_global');
-
-      const fakeLobby = {
-        id: 'slither_global',
-        hostId: 'system',
-        gameType: 'SLITHER',
-        players: Array.from(engine.players.values()).map(p => ({
-          userId: p.userId,
-          nickname: p.nickname,
-          isReady: true,
-          role: 'PLAYER'
-        })),
-        status: 'PLAYING',
-        settings: { maxPlayers: 100 }
-      };
-
-      socket.emit('lobby_state', fakeLobby);
-      io.to('slither_global').emit('lobby_state', fakeLobby);
-
-      // Immediately send initial game_state to joining player
-      socket.emit('game_state', engine.serializeState(userId));
-      return;
-    }
 
     const lobby = await LobbyService.joinLobby(gameId, userId, nickname);
     if (!lobby) {
@@ -250,7 +165,7 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
       const removed = engine.removePlayer(userId);
       if (removed) {
         broadcastGameStates(gameId, engine);
-        if (engine.players.size === 0 && gameId !== 'slither_global') {
+        if (engine.players.size === 0) {
           activeGames.delete(gameId);
         }
       }
@@ -592,7 +507,7 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
               const removed = engine.removePlayer(disconnectedUserId);
               if (removed) {
                 broadcastGameStates(gameId, engine);
-                if (engine.players.size === 0 && gameId !== 'slither_global') activeGames.delete(gameId);
+                if (engine.players.size === 0) activeGames.delete(gameId);
               }
             }
           }

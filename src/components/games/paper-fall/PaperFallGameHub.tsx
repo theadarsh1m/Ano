@@ -61,6 +61,7 @@ export function PaperFallGameHub() {
     score: number; wpm: number; accuracy: number; wordsTyped: number;
     errors: number; level: number; wpmHistory: WpmSample[]; timeSurvived: number;
   } | null>(null);
+  const [isKeyboardFocused, setIsKeyboardFocused] = useState(false);
 
   const { triggerInvite, getInviteStatus } = useInviteCooldown(roomState?.id);
 
@@ -242,11 +243,17 @@ export function PaperFallGameHub() {
     const onInput = () => {
       const v = ghost.value;
       ghost.value = '';
-      for (const ch of v) engineRef.current?.handleChar(ch);
-      updateHud();
+      if (v) {
+        for (const ch of v) engineRef.current?.handleChar(ch);
+        updateHud();
+      }
     };
     ghost.addEventListener('input', onInput);
-    return () => ghost.removeEventListener('input', onInput);
+    ghost.addEventListener('compositionend', onInput);
+    return () => {
+      ghost.removeEventListener('input', onInput);
+      ghost.removeEventListener('compositionend', onInput);
+    };
   }, []);
 
   // HUD update interval
@@ -269,8 +276,30 @@ export function PaperFallGameHub() {
 
   const claimKeyboard = useCallback(() => {
     try { window.focus(); } catch {}
-    try { ghostRef.current?.focus({ preventScroll: true }); } catch { try { ghostRef.current?.focus(); } catch {} }
+    const el = ghostRef.current;
+    if (el) {
+      try {
+        el.focus({ preventScroll: true });
+      } catch {
+        try {
+          el.focus();
+        } catch {}
+      }
+    }
   }, []);
+
+  // Auto-focus keyboard on mobile when entering active gameplay
+  useEffect(() => {
+    if (
+      (activeView === 'SINGLEPLAYER' || activeView === 'MULTIPLAYER_MATCH') &&
+      (gameStatus === 'playing' || countdownVal !== null)
+    ) {
+      const timer = setTimeout(() => {
+        claimKeyboard();
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [activeView, gameStatus, countdownVal, claimKeyboard]);
 
   // ── Game actions ──────────────────────────────────────
 
@@ -569,7 +598,11 @@ export function PaperFallGameHub() {
   // ── SINGLEPLAYER VIEW ─────────────────────────────────
 
   const renderSingleplayer = () => (
-    <div className="flex flex-col h-full min-h-screen bg-black relative">
+    <div
+      onClick={claimKeyboard}
+      onTouchStart={claimKeyboard}
+      className="flex flex-col h-full min-h-screen bg-black relative select-none"
+    >
       {/* Top bar */}
       <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between p-3 md:p-4">
         <button
@@ -745,14 +778,6 @@ export function PaperFallGameHub() {
           </div>
         )}
       </div>
-
-      {/* Hidden input for mobile keyboard */}
-      <input
-        ref={ghostRef}
-        className="fixed left-2 bottom-2 w-px h-px opacity-[0.01] border-0 p-0 bg-transparent text-transparent"
-        autoComplete="off" autoCapitalize="off" autoCorrect="off" spellCheck={false}
-        aria-label="Type here"
-      />
     </div>
   );
 
@@ -1128,7 +1153,11 @@ export function PaperFallGameHub() {
   // ── MULTIPLAYER MATCH VIEW ────────────────────────────
 
   const renderMultiplayerMatch = () => (
-    <div className="flex flex-col h-full min-h-screen bg-black relative">
+    <div
+      onClick={claimKeyboard}
+      onTouchStart={claimKeyboard}
+      className="flex flex-col h-full min-h-screen bg-black relative select-none"
+    >
       {/* Top HUD */}
       <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between p-3">
         <button
@@ -1222,13 +1251,6 @@ export function PaperFallGameHub() {
           </div>
         )}
       </div>
-
-      <input
-        ref={ghostRef}
-        className="fixed left-2 bottom-2 w-px h-px opacity-[0.01] border-0 p-0 bg-transparent text-transparent"
-        autoComplete="off" autoCapitalize="off" autoCorrect="off" spellCheck={false}
-        aria-label="Type here"
-      />
     </div>
   );
 
@@ -1334,6 +1356,53 @@ export function PaperFallGameHub() {
       {activeView === 'MULTIPLAYER_LOBBY' && renderMultiplayerLobby()}
       {activeView === 'MULTIPLAYER_MATCH' && renderMultiplayerMatch()}
       {activeView === 'MATCH_RESULTS' && renderMatchResults()}
+
+      {/* Mobile Keyboard Status / Open Button */}
+      {(activeView === 'SINGLEPLAYER' || activeView === 'MULTIPLAYER_MATCH') && (gameStatus === 'playing' || countdownVal !== null) && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 md:hidden pointer-events-auto">
+          {!isKeyboardFocused ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                claimKeyboard();
+              }}
+              className="px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-bold rounded-full shadow-lg shadow-orange-500/40 flex items-center gap-2 border border-white/20 active:scale-95 transition-all animate-bounce cursor-pointer"
+            >
+              <Keyboard className="w-4 h-4" />
+              <span>Tap to Open Keyboard</span>
+            </button>
+          ) : (
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                claimKeyboard();
+              }}
+              className="px-3 py-1 bg-black/70 backdrop-blur-md text-emerald-400 text-[11px] font-medium rounded-full border border-emerald-500/30 flex items-center gap-1.5 shadow cursor-pointer"
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Keyboard Active</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Global Hidden Input for Mobile Keyboard */}
+      <input
+        ref={ghostRef}
+        type="text"
+        inputMode="text"
+        autoComplete="off"
+        autoCapitalize="none"
+        autoCorrect="off"
+        spellCheck={false}
+        tabIndex={-1}
+        aria-label="Paper fall typing input"
+        onFocus={() => setIsKeyboardFocused(true)}
+        onBlur={() => setIsKeyboardFocused(false)}
+        className="fixed top-0 left-0 w-full h-12 opacity-0 pointer-events-none text-base"
+        style={{ fontSize: '16px', zIndex: -1 }}
+      />
     </div>
   );
 }
