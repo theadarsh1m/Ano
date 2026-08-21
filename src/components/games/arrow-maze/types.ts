@@ -6,6 +6,7 @@ export type ArrowDirection = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
 export type MultiplayerMode = 'LEVELS' | 'TIMED';
 export type TimedDuration = 60 | 180 | 300 | 600; // 1min, 3min, 5min, 10min
 export type LevelCount = 5 | 10 | 15 | 20;
+export type GameDifficulty = 'EASY' | 'MEDIUM' | 'HARD';
 
 export interface Point {
   r: number;
@@ -130,6 +131,18 @@ export function calculateLevelScore(
     streakBonus,
     lifeBonus,
     total: arrowPoints + timeBonus + streakBonus + lifeBonus,
+  };
+}
+
+export interface LeaderboardEntry {
+  id?: string;
+  userId: string;
+  score: number;
+  createdAt?: string;
+  user?: {
+    username?: string;
+    name?: string;
+    avatar?: string;
   };
 }
 
