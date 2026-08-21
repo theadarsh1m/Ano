@@ -12,7 +12,7 @@ import { UserAvatar } from "@/components/ui/UserAvatar";
 import {
   MessageSquare,
   Lock,
-  Settings,
+  Gamepad2,
   LogOut,
   Home,
   UserPlus,
@@ -43,10 +43,10 @@ export function AppSidebar() {
 
   const navItems = [
     { label: "Dashboard", icon: Home, href: "/dashboard", active: pathname === "/dashboard" },
+    { label: "Games", icon: Gamepad2, href: "/dashboard/games", active: pathname?.startsWith("/dashboard/games") ?? false },
     { label: "Feed", icon: Newspaper, href: "/feed", active: pathname?.startsWith("/feed") ?? false },
     { label: "Rooms", icon: MessageSquare, href: "/dashboard/rooms", active: pathname === "/dashboard/rooms" },
     { label: "Saved Posts", icon: Bookmark, href: "/feed/saved", active: pathname === "/feed/saved" },
-    { label: "Settings", icon: Settings, href: "/dashboard/settings", active: pathname === "/dashboard/settings" },
     { label: "About", icon: Sparkles, href: "/dashboard/about", active: pathname === "/dashboard/about" },
   ];
 

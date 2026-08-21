@@ -179,6 +179,39 @@ export const DEVELOPERS: Developer[] = [
       linkedin: "https://www.linkedin.com/in/abhinav-sahu-865a01297/"
     },
     featured: true
+  },
+  {
+    id: "aditya-prajapati",
+    name: "Aditya Prajapati",
+    roles: ["Junior Developer"],
+    avatar: "/Aditya-prajapati.jpeg",
+    location: "India",
+    tagline: "Junior Developer",
+    bio: "Junior developer at Ano contributing to real-time multiplayer party games and interactive social deduction mechanics.",
+    contributions: [
+      "Ink & Deception social deduction game loop, canvas stroke synchronization, and impostor mechanics",
+      "Collaborative drawing workflow, role reveals, and real-time player voting systems"
+    ],
+    technologies: [
+      "React",
+      "TypeScript",
+      "Next.js",
+      "Socket.IO",
+      "HTML5 Canvas",
+      "TailwindCSS"
+    ],
+    games: [
+      {
+        gameId: "ink-deception",
+        roleInGame: "Game Developer"
+      }
+    ],
+    socials: {
+      portfolio: "https://aditya-prajapati.vercel.app/",
+      github: "https://github.com/Aditya4405",
+      linkedin: "https://www.linkedin.com/in/aditya-prajapati-4405q/"
+    },
+    featured: true
   }
 ];
 
@@ -216,7 +249,13 @@ export const ABOUT_GAMES: AboutGame[] = [
     status: "Live",
     technologies: ["React", "HTML5 Canvas", "Velocity Physics", "Socket.IO", "Web Audio Synth"],
     featured: true,
-    developers: []
+    developers: [
+      {
+        developerId: "aditya-prajapati",
+        role: "Game Developer",
+        contribution: "Social deduction game loop, canvas stroke synchronization, and role assignment logic."
+      }
+    ]
   },
   {
     id: "color-wars",
