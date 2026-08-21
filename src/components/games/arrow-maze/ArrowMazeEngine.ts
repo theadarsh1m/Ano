@@ -6,12 +6,20 @@
 import type {
   Arrow,
   ArrowDirection,
+  GameDifficulty,
   LevelConfig,
   ScoreBreakdown,
   Point,
 } from './types';
 import { getLevelConfig, calculateLevelScore } from './types';
 import { BAKED_LEVELS } from './BakedLevels';
+
+// Sort baked levels strictly by difficulty (grid dimensions, arrow density, and path lengths)
+const SORTED_BAKED_LEVELS = [...BAKED_LEVELS].sort((a, b) => {
+  const complexityA = a.gridRows * a.gridCols * 2 + a.arrows.length * 5 + a.arrows.reduce((sum, ar) => sum + ar.tailPositions.length, 0);
+  const complexityB = b.gridRows * b.gridCols * 2 + b.arrows.length * 5 + b.arrows.reduce((sum, ar) => sum + ar.tailPositions.length, 0);
+  return complexityA - complexityB;
+});
 
 // ── Seeded PRNG ─────────────────────────────────────────
 function createRng(seed: number) {
@@ -41,6 +49,7 @@ export class ArrowMazeEngine {
   gridRows: number = 0;
   gridCols: number = 0;
   currentLevel: number = 1;
+  difficulty: GameDifficulty = 'EASY';
   lives: number = 3;
   maxLives: number = 3;
   hintsRemaining: number = 2;
@@ -76,15 +85,20 @@ export class ArrowMazeEngine {
 
   // ── Initialization ──────────────────────────────────────
 
-  startLevel(level: number, seed?: number) {
+  startLevel(level: number, seed?: number, keepLives: boolean = false, difficulty?: GameDifficulty) {
+    if (difficulty !== undefined) {
+      this.difficulty = difficulty;
+    }
     if (seed !== undefined) {
       this.seed = seed;
     }
     this.currentLevel = level;
     const config = getLevelConfig(level);
-    this.lives = config.lives;
+    if (!keepLives || this.lives <= 0) {
+      this.lives = config.lives;
+      this.hintsRemaining = config.hintCount;
+    }
     this.maxLives = config.lives;
-    this.hintsRemaining = config.hintCount;
     this.streak = 0;
     this.isLevelComplete = false;
     this.isGameOver = false;
@@ -100,17 +114,14 @@ export class ArrowMazeEngine {
 
   // ── Puzzle Generation (Baked Levels) ─────────
   private generatePuzzle(config: LevelConfig): Arrow[] {
-    const levelIndex = (this.currentLevel - 1) % BAKED_LEVELS.length;
-    const bakedLevel = BAKED_LEVELS[levelIndex];
+    const offset = this.difficulty === 'HARD' ? 20 : this.difficulty === 'MEDIUM' ? 10 : 0;
+    const levelIndex = (offset + (this.currentLevel - 1)) % SORTED_BAKED_LEVELS.length;
+    const bakedLevel = SORTED_BAKED_LEVELS[levelIndex];
 
     this.gridRows = bakedLevel.gridRows;
     this.gridCols = bakedLevel.gridCols;
 
     const placed: Arrow[] = bakedLevel.arrows.map((a, i) => {
-      // Reconstruct path: Head is at the end of the path array in Arrow type
-      // Actually, Arrow path is [tail..., head].
-      // Baked arrow has tailPositions (from head to tail tip usually, or tail tip to head).
-      // Let's assume Arrow path is simply tailPositions + headPosition.
       const path: Point[] = [...a.tailPositions].reverse();
       path.push(a.headPosition);
       
@@ -233,7 +244,7 @@ export class ArrowMazeEngine {
           this.isGameOver = true;
           this.isPlaying = false;
           // In multiplayer, 0 score / levels cleared will be overridden, but we send it locally
-          this.onGameOver?.(0, this.levelsCleared); 
+          this.onGameOver?.(this.totalScore, this.levelsCleared); 
           this.onStateChange?.();
         }, 500);
       }

@@ -11,6 +11,7 @@ import type {
   ArrowMazeSoloStats,
   ArrowMazeMultiStats,
   ArrowMazeMatchStats,
+  LeaderboardEntry,
 } from '@/components/games/arrow-maze/types';
 
 interface ArrowMazeStoreState {
@@ -19,9 +20,10 @@ interface ArrowMazeStoreState {
   levelCount: LevelCount;
   timedDuration: TimedDuration;
 
-  // Stats
+  // Stats & Leaderboard
   soloStats: ArrowMazeSoloStats;
   multiStats: ArrowMazeMultiStats;
+  leaderboard: LeaderboardEntry[];
 
   // Multiplayer
   roomState: ArrowMazeRoomState | null;
@@ -35,6 +37,7 @@ interface ArrowMazeStoreState {
 
   // Actions — API
   fetchStats: (userId: string) => Promise<void>;
+  fetchLeaderboard: () => Promise<void>;
   submitSoloProgress: (
     userId: string,
     currentLevel: number,
@@ -88,6 +91,7 @@ export const useArrowMazeStore = create<ArrowMazeStoreState>((set, get) => ({
   roomState: null,
   availableLobbies: [],
   matchResults: null,
+  leaderboard: [],
 
   setMultiplayerMode: (m) => set({ multiplayerMode: m }),
   setLevelCount: (n) => set({ levelCount: n }),
@@ -120,6 +124,17 @@ export const useArrowMazeStore = create<ArrowMazeStoreState>((set, get) => ({
     }
   },
 
+  fetchLeaderboard: async () => {
+    try {
+      const res = await axios.get(`${getApiUrl()}/api/games/leaderboard/arrow-maze`);
+      if (res.data) {
+        set({ leaderboard: Array.isArray(res.data) ? res.data : [] });
+      }
+    } catch (err) {
+      console.warn('Failed to fetch arrow-maze leaderboard:', err);
+    }
+  },
+
   submitSoloProgress: async (userId, currentLevel, totalScore, levelsCleared, totalArrowsCleared) => {
     if (!userId) return;
     try {
@@ -136,7 +151,7 @@ export const useArrowMazeStore = create<ArrowMazeStoreState>((set, get) => ({
           gamesPlayed: (get().soloStats.gamesPlayed || 0) + 1,
         },
       });
-      // Update local state immediately
+      // Update local state immediately & refresh leaderboard
       set(prev => ({
         soloStats: {
           ...prev.soloStats,
@@ -147,6 +162,7 @@ export const useArrowMazeStore = create<ArrowMazeStoreState>((set, get) => ({
           totalArrowsCleared,
         },
       }));
+      get().fetchLeaderboard();
     } catch (err) {
       console.warn('Arrow maze progress save warning:', err);
     }
