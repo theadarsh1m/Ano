@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import axios from 'axios';
 import { socketService } from '@/lib/socket';
 import { getApiUrl } from '@/lib/config';
@@ -68,105 +69,109 @@ interface ArrowMazeStoreState {
   initLobbySockets: (userId: string) => () => void;
 }
 
-export const useArrowMazeStore = create<ArrowMazeStoreState>((set, get) => ({
-  multiplayerMode: 'LEVELS',
-  levelCount: 10,
-  timedDuration: 180,
+export const useArrowMazeStore = create<ArrowMazeStoreState>()(
+  persist(
+    (set, get) => ({
+      multiplayerMode: 'LEVELS',
+      levelCount: 10,
+      timedDuration: 180,
 
-  soloStats: {
-    currentLevel: 1,
-    highScore: 0,
-    totalScore: 0,
-    levelsCleared: 0,
-    totalArrowsCleared: 0,
-    gamesPlayed: 0,
-  },
-  multiStats: {
-    gamesPlayed: 0,
-    wins: 0,
-    losses: 0,
-    highScore: 0,
-    levelsCleared: 0,
-  },
-  roomState: null,
-  availableLobbies: [],
-  matchResults: null,
-  leaderboard: [],
+      soloStats: {
+        currentLevel: 1,
+        highScore: 0,
+        totalScore: 0,
+        levelsCleared: 0,
+        totalArrowsCleared: 0,
+        gamesPlayed: 0,
+      },
+      multiStats: {
+        gamesPlayed: 0,
+        wins: 0,
+        losses: 0,
+        highScore: 0,
+        levelsCleared: 0,
+      },
+      roomState: null,
+      availableLobbies: [],
+      matchResults: null,
+      leaderboard: [],
 
-  setMultiplayerMode: (m) => set({ multiplayerMode: m }),
-  setLevelCount: (n) => set({ levelCount: n }),
-  setTimedDuration: (d) => set({ timedDuration: d }),
+      setMultiplayerMode: (m) => set({ multiplayerMode: m }),
+      setLevelCount: (n) => set({ levelCount: n }),
+      setTimedDuration: (d) => set({ timedDuration: d }),
 
-  fetchStats: async (userId) => {
-    if (!userId) return;
-    try {
-      const res = await axios.get(`${getApiUrl()}/api/games/stats/${userId}`);
-      if (res.data) {
-        const gameStat = Array.isArray(res.data)
-          ? res.data.find((s: any) => s.gameType === 'arrow-maze')
-          : null;
-        if (gameStat) {
-          const extra = gameStat.extraStats || {};
-          set({
-            soloStats: {
-              currentLevel: extra.currentLevel || 1,
-              highScore: gameStat.highScore || 0,
-              totalScore: extra.totalScore || 0,
-              levelsCleared: extra.levelsCleared || 0,
-              totalArrowsCleared: extra.totalArrowsCleared || 0,
-              gamesPlayed: extra.gamesPlayed || 0,
+      fetchStats: async (userId) => {
+        if (!userId || userId === 'guest') return;
+        try {
+          const res = await axios.get(`${getApiUrl()}/api/games/stats/${userId}`);
+          if (res.data) {
+            const gameStat = Array.isArray(res.data)
+              ? res.data.find((s: any) => s.gameType === 'arrow-maze')
+              : null;
+            if (gameStat) {
+              const extra = gameStat.extraStats || {};
+              set((prev) => ({
+                soloStats: {
+                  currentLevel: Math.max(prev.soloStats.currentLevel, extra.currentLevel || 1),
+                  highScore: Math.max(prev.soloStats.highScore, gameStat.highScore || 0),
+                  totalScore: Math.max(prev.soloStats.totalScore, extra.totalScore || 0),
+                  levelsCleared: Math.max(prev.soloStats.levelsCleared, extra.levelsCleared || 0),
+                  totalArrowsCleared: Math.max(prev.soloStats.totalArrowsCleared, extra.totalArrowsCleared || 0),
+                  gamesPlayed: Math.max(prev.soloStats.gamesPlayed, extra.gamesPlayed || 0),
+                },
+              }));
+            }
+          }
+        } catch (err) {
+          console.warn('Failed to fetch arrow maze stats:', err);
+        }
+      },
+
+      fetchLeaderboard: async () => {
+        try {
+          const res = await axios.get(`${getApiUrl()}/api/games/leaderboard/arrow-maze`);
+          if (res.data) {
+            set({ leaderboard: Array.isArray(res.data) ? res.data : [] });
+          }
+        } catch (err) {
+          console.warn('Failed to fetch arrow-maze leaderboard:', err);
+        }
+      },
+
+      submitSoloProgress: async (userId, currentLevel, totalScore, levelsCleared, totalArrowsCleared) => {
+        // Update local state immediately
+        set(prev => ({
+          soloStats: {
+            ...prev.soloStats,
+            currentLevel: Math.max(prev.soloStats.currentLevel, currentLevel),
+            highScore: Math.max(prev.soloStats.highScore, totalScore),
+            totalScore,
+            levelsCleared,
+            totalArrowsCleared,
+            gamesPlayed: (prev.soloStats.gamesPlayed || 0) + 1,
+          },
+        }));
+
+        if (!userId || userId === 'guest') return;
+        try {
+          await axios.post(`${getApiUrl()}/api/games/save`, {
+            userId,
+            gameType: 'arrow-maze',
+            score: totalScore,
+            playTimeSeconds: 0,
+            extraStats: {
+              currentLevel,
+              totalScore,
+              levelsCleared,
+              totalArrowsCleared,
+              gamesPlayed: (get().soloStats.gamesPlayed || 0),
             },
           });
+          get().fetchLeaderboard();
+        } catch (err) {
+          console.warn('Arrow maze progress save warning:', err);
         }
-      }
-    } catch (err) {
-      console.error('Failed to fetch arrow maze stats:', err);
-    }
-  },
-
-  fetchLeaderboard: async () => {
-    try {
-      const res = await axios.get(`${getApiUrl()}/api/games/leaderboard/arrow-maze`);
-      if (res.data) {
-        set({ leaderboard: Array.isArray(res.data) ? res.data : [] });
-      }
-    } catch (err) {
-      console.warn('Failed to fetch arrow-maze leaderboard:', err);
-    }
-  },
-
-  submitSoloProgress: async (userId, currentLevel, totalScore, levelsCleared, totalArrowsCleared) => {
-    if (!userId) return;
-    try {
-      await axios.post(`${getApiUrl()}/api/games/save`, {
-        userId,
-        gameType: 'arrow-maze',
-        score: totalScore,
-        playTimeSeconds: 0,
-        extraStats: {
-          currentLevel,
-          totalScore,
-          levelsCleared,
-          totalArrowsCleared,
-          gamesPlayed: (get().soloStats.gamesPlayed || 0) + 1,
-        },
-      });
-      // Update local state immediately & refresh leaderboard
-      set(prev => ({
-        soloStats: {
-          ...prev.soloStats,
-          currentLevel: Math.max(prev.soloStats.currentLevel, currentLevel),
-          highScore: Math.max(prev.soloStats.highScore, totalScore),
-          totalScore,
-          levelsCleared,
-          totalArrowsCleared,
-        },
-      }));
-      get().fetchLeaderboard();
-    } catch (err) {
-      console.warn('Arrow maze progress save warning:', err);
-    }
-  },
+      },
 
   // Socket Actions
   createLobby: (userId, nickname) => {
@@ -440,4 +445,16 @@ export const useArrowMazeStore = create<ArrowMazeStoreState>((set, get) => ({
       socket.off('game_over', onGameOver);
     };
   },
-}));
+}),
+    {
+      name: 'ano_arrow_maze_store',
+      partialize: (state) => ({
+        soloStats: state.soloStats,
+        multiStats: state.multiStats,
+        levelCount: state.levelCount,
+        timedDuration: state.timedDuration,
+        multiplayerMode: state.multiplayerMode,
+      }),
+    }
+  )
+);

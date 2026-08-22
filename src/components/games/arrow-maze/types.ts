@@ -137,9 +137,12 @@ export function calculateLevelScore(
 export interface LeaderboardEntry {
   id?: string;
   userId: string;
-  score: number;
+  highScore?: number;
+  score?: number;
+  lastPlayed?: string;
   createdAt?: string;
   user?: {
+    nickname?: string;
     username?: string;
     name?: string;
     avatar?: string;
