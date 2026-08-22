@@ -62,6 +62,7 @@ interface ChamberClashStore {
   leaveLobby: (gameId: string, userId: string) => void;
   toggleReady: (gameId: string, userId: string, isReady: boolean) => void;
   startGame: (gameId: string, hostId: string) => void;
+  invitePlayer: (gameId: string, senderId: string, senderName: string, targetUserId: string) => void;
   
   // Game Actions
   shootTarget: (gameId: string, userId: string, targetId: string) => void;
@@ -132,6 +133,18 @@ export const useChamberClashStore = create<ChamberClashStore>((set, get) => ({
   startGame: (gameId, hostId) => {
     const socket = socketService.getSocket();
     if (socket) socket.emit('game_start', { gameId, hostId });
+  },
+
+  invitePlayer: (gameId, senderId, senderName, targetUserId) => {
+    const socket = socketService.getSocket();
+    if (!socket) return;
+    socket.emit('lobby_invite', {
+      gameId,
+      senderId,
+      senderName,
+      targetUserId,
+      gameType: 'CHAMBER_CLASH',
+    });
   },
 
   shootTarget: (gameId, userId, targetId) => {

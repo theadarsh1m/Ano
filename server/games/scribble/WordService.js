@@ -8,63 +8,129 @@ class WordService {
     this.loadWords();
   }
 
+  findWordsJsonPath() {
+    const candidatePaths = [
+      path.resolve(process.cwd(), 'words.json'),
+      path.resolve(__dirname, '../../../words.json'),
+      path.resolve(__dirname, '../../words.json'),
+      path.resolve(__dirname, '../words.json'),
+    ];
+
+    for (const p of candidatePaths) {
+      if (fs.existsSync(p)) {
+        return p;
+      }
+    }
+    return null;
+  }
+
   loadWords() {
-    const wordsDir = path.join(__dirname, 'words');
-    if (!fs.existsSync(wordsDir)) {
-      console.log('Words directory not found, creating it...');
-      fs.mkdirSync(wordsDir, { recursive: true });
-      // Create some default categories if they don't exist
-      this.createDefaultDictionaries(wordsDir);
+    this.words = {};
+    this.categories = [];
+    const allWordsSet = new Set();
+
+    const wordsJsonPath = this.findWordsJsonPath();
+    if (wordsJsonPath) {
+      try {
+        const content = fs.readFileSync(wordsJsonPath, 'utf8');
+        const parsed = JSON.parse(content);
+        const categoriesData = parsed.categories || parsed;
+
+        if (typeof categoriesData === 'object' && categoriesData !== null) {
+          for (const [catName, list] of Object.entries(categoriesData)) {
+            if (Array.isArray(list)) {
+              const cleanList = list
+                .filter(w => typeof w === 'string' && w.trim().length > 0)
+                .map(w => w.trim().toLowerCase());
+
+              if (cleanList.length > 0) {
+                const normalizedCategory = catName.toLowerCase().trim();
+                this.words[normalizedCategory] = cleanList;
+                if (!this.categories.includes(normalizedCategory)) {
+                  this.categories.push(normalizedCategory);
+                }
+                cleanList.forEach(w => allWordsSet.add(w));
+              }
+            }
+          }
+        }
+        console.log(`[Scribble] Loaded ${this.categories.length} categories (${allWordsSet.size} total words) from words.json (${wordsJsonPath}).`);
+      } catch (err) {
+        console.error('[Scribble] Failed to parse words.json:', err);
+      }
     }
 
-    const files = fs.readdirSync(wordsDir);
-    for (const file of files) {
-      if (file.endsWith('.json')) {
-        const category = file.replace('.json', '');
-        try {
-          const content = fs.readFileSync(path.join(wordsDir, file), 'utf8');
-          const parsed = JSON.parse(content);
-          if (Array.isArray(parsed)) {
-            this.words[category] = parsed;
-            this.categories.push(category);
+    // Also check local words directory for any additional custom lists
+    const wordsDir = path.join(__dirname, 'words');
+    if (fs.existsSync(wordsDir)) {
+      const files = fs.readdirSync(wordsDir);
+      for (const file of files) {
+        if (file.endsWith('.json')) {
+          const category = file.replace('.json', '').toLowerCase();
+          try {
+            const content = fs.readFileSync(path.join(wordsDir, file), 'utf8');
+            const parsed = JSON.parse(content);
+            if (Array.isArray(parsed)) {
+              const cleanList = parsed
+                .filter(w => typeof w === 'string' && w.trim().length > 0)
+                .map(w => w.trim().toLowerCase());
+              
+              if (!this.words[category]) {
+                this.words[category] = cleanList;
+                if (!this.categories.includes(category)) {
+                  this.categories.push(category);
+                }
+              } else {
+                // Merge without duplicates
+                const merged = Array.from(new Set([...this.words[category], ...cleanList]));
+                this.words[category] = merged;
+              }
+              cleanList.forEach(w => allWordsSet.add(w));
+            }
+          } catch (e) {
+            console.error(`[Scribble] Failed to load local word list ${file}:`, e);
           }
-        } catch (e) {
-          console.error(`Failed to load word list ${file}:`, e);
         }
       }
     }
-    console.log(`Loaded ${this.categories.length} word categories for Scribble.`);
-  }
 
-  createDefaultDictionaries(wordsDir) {
-    const defaultAnimals = ["dog", "cat", "elephant", "lion", "tiger", "bear", "monkey", "giraffe", "zebra", "penguin", "dolphin", "whale", "shark", "octopus", "butterfly", "spider", "snake", "crocodile", "frog", "turtle", "eagle", "owl", "parrot", "peacock", "ostrich", "kangaroo", "koala", "panda", "hippopotamus", "rhinoceros", "camel", "horse", "cow", "pig", "sheep", "goat", "chicken", "duck", "goose", "swan", "pigeon", "crow", "mouse", "rat", "squirrel", "rabbit", "deer", "fox", "wolf", "bat"];
-    const defaultFood = ["apple", "banana", "orange", "grape", "strawberry", "watermelon", "pineapple", "mango", "peach", "cherry", "pear", "plum", "kiwi", "lemon", "lime", "coconut", "avocado", "tomato", "potato", "onion", "carrot", "broccoli", "spinach", "lettuce", "cucumber", "pepper", "mushroom", "corn", "peas", "beans", "bread", "cheese", "milk", "egg", "butter", "yogurt", "pizza", "burger", "hotdog", "sandwich", "taco", "sushi", "pasta", "rice", "noodle", "soup", "salad", "steak", "chicken", "fish"];
-    const defaultObjects = ["chair", "table", "bed", "sofa", "desk", "lamp", "clock", "mirror", "window", "door", "wall", "floor", "ceiling", "roof", "house", "building", "car", "bus", "train", "airplane", "boat", "ship", "bicycle", "motorcycle", "computer", "laptop", "phone", "tablet", "television", "radio", "camera", "watch", "glasses", "hat", "shirt", "pants", "shoes", "socks", "jacket", "coat", "book", "pen", "pencil", "paper", "notebook", "bag", "backpack", "wallet", "keys", "umbrella"];
-    const defaultMixed = [...defaultAnimals, ...defaultFood, ...defaultObjects, "sun", "moon", "star", "cloud", "rain", "snow", "wind", "storm", "lightning", "thunder", "fire", "water", "earth", "tree", "flower", "grass", "leaf", "mountain", "river", "lake", "ocean", "beach", "sand", "rock", "stone", "city", "town", "village", "street", "road", "bridge", "park", "garden", "forest", "jungle", "desert", "island"];
+    // If no words were loaded, use robust fallback
+    if (allWordsSet.size === 0) {
+      const defaultAnimals = ["dog", "cat", "elephant", "lion", "tiger", "bear", "monkey", "giraffe", "zebra", "penguin", "dolphin", "whale", "shark", "octopus", "butterfly", "spider", "snake", "crocodile", "frog", "turtle", "rabbit", "panda"];
+      const defaultFood = ["apple", "banana", "orange", "grape", "strawberry", "watermelon", "pineapple", "mango", "pizza", "burger", "taco", "sushi", "pasta", "cookie", "cake", "ice_cream", "sandwich", "donut"];
+      const defaultObjects = ["chair", "table", "bed", "lamp", "clock", "mirror", "window", "door", "car", "airplane", "boat", "bicycle", "computer", "phone", "book", "pen", "guitar", "camera", "glasses", "hat"];
+      
+      this.words['animals'] = defaultAnimals;
+      this.words['food'] = defaultFood;
+      this.words['objects'] = defaultObjects;
+      this.categories = ['animals', 'food', 'objects'];
+      
+      [...defaultAnimals, ...defaultFood, ...defaultObjects].forEach(w => allWordsSet.add(w));
+    }
 
-    fs.writeFileSync(path.join(wordsDir, 'animals.json'), JSON.stringify(defaultAnimals, null, 2));
-    fs.writeFileSync(path.join(wordsDir, 'food.json'), JSON.stringify(defaultFood, null, 2));
-    fs.writeFileSync(path.join(wordsDir, 'objects.json'), JSON.stringify(defaultObjects, null, 2));
-    fs.writeFileSync(path.join(wordsDir, 'mixed.json'), JSON.stringify(defaultMixed, null, 2));
+    // Set mixed category with all words
+    this.words['mixed'] = Array.from(allWordsSet);
+    if (!this.categories.includes('mixed')) {
+      this.categories.unshift('mixed');
+    }
   }
 
   getWordChoices(category = 'mixed', count = 3, excludeWords = []) {
-    let wordList = this.words[category] || this.words['mixed'];
+    const normCat = (category || 'mixed').toLowerCase().trim();
+    let wordList = this.words[normCat] || this.words['mixed'];
     if (!wordList || wordList.length === 0) {
-      // Fallback
-      wordList = ["apple", "dog", "house", "car", "tree", "sun", "book", "phone"];
+      wordList = this.words['mixed'] || ["APPLE", "DOG", "HOUSE", "CAR", "TREE", "SUN", "BOOK", "PHONE"];
     }
 
-    // Filter out excluded words (recently used)
-    let availableWords = wordList.filter(w => !excludeWords.includes(w.toUpperCase()));
+    const upperExclude = excludeWords.map(w => String(w).toUpperCase().trim());
+    let availableWords = wordList.filter(w => !upperExclude.includes(String(w).toUpperCase().trim()));
     if (availableWords.length < count) {
-      // If we run out of words, reset exclusions for this pull
       availableWords = wordList;
     }
 
     // Shuffle and pick
     const shuffled = [...availableWords].sort(() => 0.5 - Math.random());
-    return shuffled.slice(0, count).map(w => w.toUpperCase());
+    return shuffled.slice(0, count).map(w => String(w).toUpperCase());
   }
 
   getAllCategories() {

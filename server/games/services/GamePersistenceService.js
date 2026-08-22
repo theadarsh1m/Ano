@@ -62,6 +62,10 @@ class GamePersistenceService {
         }
       }).catch(e => console.warn(`Could not ensure user ${userId} before adding to game:`, e.message));
 
+      // Check if session exists in DB before attempting to insert player
+      const session = await prisma.gameSession.findUnique({ where: { id: sessionId } });
+      if (!session) return null;
+
       return await prisma.gamePlayer.upsert({
         where: {
           gameSessionId_userId: {
@@ -87,12 +91,10 @@ class GamePersistenceService {
 
   static async removePlayer(sessionId, userId) {
     try {
-      return await prisma.gamePlayer.delete({
+      return await prisma.gamePlayer.deleteMany({
         where: {
-          gameSessionId_userId: {
-            gameSessionId: sessionId,
-            userId
-          }
+          gameSessionId: sessionId,
+          userId
         }
       });
     } catch (err) {

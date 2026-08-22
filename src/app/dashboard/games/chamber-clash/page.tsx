@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useMemo, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Users, LogOut, Loader2, X, BookOpen, Volume2, VolumeX, ScrollText } from "lucide-react";
+import { Users, LogOut, Loader2, X, BookOpen, Volume2, VolumeX, ScrollText, UserPlus, Copy, Check, RotateCcw } from "lucide-react";
 import { useUserStore } from "@/store/useUserStore";
 import { useRoomConnectionStore } from "@/store/useRoomConnectionStore";
 import { useChamberClashStore, type ActionLogEntry } from "@/store/useChamberClashStore";
@@ -12,6 +12,8 @@ import { TurnIndicator } from "@/components/games/TurnIndicator";
 import dynamic from "next/dynamic";
 import { useExitWarning } from "@/hooks/useExitWarning";
 import { useChamberClashPreloader } from "@/hooks/useChamberClashPreloader";
+import { useInviteCooldown } from "@/hooks/useInviteCooldown";
+import { socketService } from "@/lib/socket";
 import { sounds } from "@/lib/sounds";
 import { getItemAnimConfig } from "@/components/games/chamber-clash/animationConfigs";
 import { PlayerHealthIndicator } from "@/components/games/chamber-clash/PlayerHealthIndicator";
@@ -47,12 +49,19 @@ function ChamberClashGameContent() {
   const {
     lobby, gameState, eventQueue, isAnimating, availableLobbies, error,
     actionLog, revealedShell, burnerPhoneReveal,
-    createLobby, joinLobby, leaveLobby, toggleReady, startGame,
+    createLobby, joinLobby, leaveLobby, toggleReady, startGame, invitePlayer,
     shootTarget, useItem, resolvePendingItem,
     setupListeners, dequeueEvent, setAnimating, addLogEntry, clearState, reportAssetsReady
   } = useChamberClashStore();
 
   // ─── Local UI State ───
+  const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
+  const [friendsList, setFriendsList] = useState<any[]>([]);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const { triggerInvite, getInviteStatus } = useInviteCooldown(lobby?.id || gameState?.gameId);
+
   const [targetingAction, setTargetingAction] = useState<'shoot' | 'handcuffs' | 'adrenaline' | null>(null);
   const [stealingFromPlayerId, setStealingFromPlayerId] = useState<string | null>(null);
   const [stealingAnimation, setStealingAnimation] = useState<{ icon: string; from: { left: string; top: string }; to: { left: string; top: string } } | null>(null);
@@ -159,6 +168,64 @@ function ChamberClashGameContent() {
     if (gameIdParam && !lobby && !gameState) joinLobby(gameIdParam, userId, nickname || "Player");
     return () => cleanup();
   }, [userId, lobby?.id, gameState?.gameId, gameIdParam]);
+
+  // ─── Fetch online users & friends ───
+  const fetchOnlineUsers = useCallback(() => {
+    if (!userId) return;
+    const apiUrl = typeof window !== 'undefined'
+      ? (process.env.NEXT_PUBLIC_SOCKET_URL || `http://${window.location.hostname}:3001`)
+      : 'http://localhost:3001';
+    fetch(`${apiUrl}/api/users/online`)
+      .then((res) => res.json())
+      .then((data) => { if (Array.isArray(data)) setOnlineUsers(data.filter((u) => u.id !== userId)); })
+      .catch(console.error);
+    fetch(`${apiUrl}/api/notifications/friendships/${userId}`)
+      .then((res) => res.json())
+      .then((data) => { if (Array.isArray(data)) setFriendsList(data); })
+      .catch(console.error);
+  }, [userId]);
+
+  useEffect(() => {
+    fetchOnlineUsers();
+    const socket = socketService.getSocket();
+    if (socket) {
+      socket.on('user_online', fetchOnlineUsers);
+      socket.on('user_offline', fetchOnlineUsers);
+      return () => {
+        socket.off('user_online', fetchOnlineUsers);
+        socket.off('user_offline', fetchOnlineUsers);
+      };
+    }
+  }, [fetchOnlineUsers]);
+
+  const handleSendInvite = (targetUserId: string) => {
+    const activeGameId = lobby?.id || gameState?.gameId;
+    if (!activeGameId || !userId || !nickname) return;
+    invitePlayer(activeGameId, userId, nickname, targetUserId);
+    triggerInvite(targetUserId);
+  };
+
+  const handleCopyLink = async () => {
+    const activeGameId = lobby?.id || gameState?.gameId;
+    if (!activeGameId) return;
+    const link = `${window.location.origin}/dashboard/games/chamber-clash?gameId=${activeGameId}`;
+    try {
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(link);
+      } else {
+        const input = document.createElement('input');
+        input.value = link;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+      }
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy link', err);
+    }
+  };
 
   // ─── // Local variables previously used for shell counters are removed for suspense
   // ─── Sync visual turn when not animating ───
@@ -781,6 +848,254 @@ function ChamberClashGameContent() {
   };
 
   // ═══════════════════
+  //  MODAL RENDERERS
+  // ═══════════════════
+  const renderInviteModal = () => {
+    const activeGameId = lobby?.id || gameState?.gameId;
+    const unjoinedOnlineUsers = onlineUsers.filter((u) => !lobby?.players?.some((p: any) => p.userId === u.id));
+
+    return (
+      <AnimatePresence>
+        {showInviteModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setShowInviteModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-[#0f1115] border border-white/10 rounded-2xl max-w-md w-full p-6 max-h-[85vh] overflow-y-auto space-y-5 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+                <div className="flex items-center gap-2">
+                  <UserPlus className="w-5 h-5 text-red-400" />
+                  <h3 className="text-base font-bold text-white">Invite Players</h3>
+                </div>
+                <button
+                  onClick={() => setShowInviteModal(false)}
+                  className="p-1 hover:bg-white/10 rounded-lg text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Copy Invite Link */}
+              {activeGameId && (
+                <div className="p-3.5 bg-white/[0.03] border border-white/[0.06] rounded-xl space-y-2">
+                  <span className="text-[11px] text-zinc-400 font-bold uppercase tracking-wider block">Lobby Invite Link</span>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={typeof window !== 'undefined' ? `${window.location.origin}/dashboard/games/chamber-clash?gameId=${activeGameId}` : ''}
+                      className="flex-1 bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-zinc-300 font-mono outline-none"
+                    />
+                    <button
+                      onClick={handleCopyLink}
+                      className="px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-300 border border-red-500/30 rounded-lg text-xs font-bold transition-colors cursor-pointer shrink-0"
+                    >
+                      {copiedLink ? 'Copied!' : 'Copy'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Online Users List */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-zinc-400 font-bold uppercase tracking-wider">
+                    Online Users ({onlineUsers.length})
+                  </span>
+                  <button
+                    onClick={fetchOnlineUsers}
+                    className="p-1 hover:bg-white/10 rounded text-zinc-400 hover:text-white transition-colors text-xs flex items-center gap-1 cursor-pointer"
+                    title="Refresh"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                  </button>
+                </div>
+
+                {onlineUsers.length === 0 ? (
+                  <div className="text-center py-8 text-zinc-500 text-xs bg-white/[0.02] border border-dashed border-white/10 rounded-xl">
+                    No other players online right now.
+                  </div>
+                ) : unjoinedOnlineUsers.length === 0 ? (
+                  <div className="text-center py-6 text-zinc-500 text-xs bg-white/[0.02] border border-dashed border-white/10 rounded-xl">
+                    All online players are already in this lobby!
+                  </div>
+                ) : (
+                  <div className="max-h-[250px] overflow-y-auto pr-1 space-y-2 custom-scrollbar">
+                    {unjoinedOnlineUsers.map((u) => {
+                      const isFriend = friendsList.some((f) => f.id === u.id);
+                      const status = getInviteStatus(u.id);
+                      return (
+                        <div key={u.id} className="flex items-center justify-between p-2.5 bg-white/[0.03] border border-white/[0.06] rounded-xl">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="relative shrink-0">
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-600 to-rose-700 flex items-center justify-center text-xs font-bold text-white overflow-hidden">
+                                {u.avatar ? (
+                                  <img src={u.avatar} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                  (u.nickname || '?')[0].toUpperCase()
+                                )}
+                              </div>
+                              <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-neutral-900 bg-emerald-400" />
+                            </div>
+                            <div className="min-w-0">
+                              <span className="text-xs font-bold text-white block truncate">{u.nickname}</span>
+                              <span className="text-[10px] text-zinc-500 block">
+                                {isFriend ? 'Friend · Online' : 'Online'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <button
+                            onClick={() => handleSendInvite(u.id)}
+                            disabled={!status.canInvite}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 ${
+                              !status.canInvite
+                                ? 'bg-red-500/10 text-red-400 border border-red-500/20 cursor-not-allowed'
+                                : 'bg-red-600 hover:bg-red-500 text-white shadow-md shadow-red-600/20'
+                            }`}
+                          >
+                            {status.canInvite ? 'Invite' : status.label}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={() => setShowInviteModal(false)}
+                className="w-full py-2.5 bg-white/10 hover:bg-white/15 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    );
+  };
+
+  const renderRulesModal = () => (
+    <AnimatePresence>
+      {showRules && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          onClick={() => setShowRules(false)}
+          className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <motion.div initial={{ scale: 0.95, y: 15 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 10 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[#0f1115] border border-white/[0.08] rounded-3xl p-6 md:p-8 max-w-lg w-full max-h-[85vh] overflow-y-auto shadow-[0_0_50px_rgba(0,0,0,0.8)] relative flex flex-col gap-5">
+            
+            <button onClick={() => setShowRules(false)} className="absolute top-4 right-4 p-1.5 hover:bg-white/10 rounded-lg text-zinc-500 hover:text-zinc-200 transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 border-b border-white/[0.06] pb-3">
+              <BookOpen className="w-6 h-6 text-red-500" />
+              <h2 className="text-xl font-black uppercase tracking-wider">How to Play</h2>
+            </div>
+
+            <div className="space-y-4 text-xs text-zinc-300 leading-relaxed overflow-y-auto pr-1">
+              <div>
+                <h3 className="font-bold text-red-400 uppercase tracking-wide mb-1 text-[11px]">Core Objective</h3>
+                <p>Be the last player standing in a high-stakes, turn-based Russian Roulette duel. Each player starts with 5 HP.</p>
+              </div>
+
+              <div>
+                <h3 className="font-bold text-red-400 uppercase tracking-wide mb-1 text-[11px]">The Chamber</h3>
+                <p>At the start of each round, the shotgun is loaded with a random mixture of <strong>LIVE (🔴)</strong> and <strong>BLANK (⚪)</strong> shells. The counts are revealed only once during the load intro sequence—remember them!</p>
+              </div>
+
+              <div>
+                <h3 className="font-bold text-red-400 uppercase tracking-wide mb-1 text-[11px]">Turn Actions</h3>
+                <ul className="list-disc pl-4 space-y-1 mt-1">
+                  <li><strong>Shoot Target:</strong> Point the barrel at an opponent. If it is <strong>LIVE (🔴)</strong>, they lose 1 HP. If <strong>BLANK (⚪)</strong>, no damage is dealt. In both cases, your turn ends.</li>
+                  <li><strong>Shoot Self:</strong> Fire at yourself. If it is a <strong>BLANK (⚪)</strong> shell, you are granted an <strong>extra turn</strong>! If it is a <strong>LIVE (🔴)</strong> shell, you take 1 damage and your turn ends.</li>
+                </ul>
+              </div>
+
+              <div className="border-t border-white/[0.06] pt-3">
+                <h3 className="font-bold text-red-400 uppercase tracking-wide mb-2 text-[11px]">Item Directory</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
+                  <div className="bg-white/[0.02] border border-white/[0.04] p-2 rounded-xl flex gap-2">
+                    <span className="text-base">🔍</span>
+                    <div>
+                      <strong className="text-blue-400 block">Magnifier</strong>
+                      Peeks privately at the current shell in the chamber.
+                    </div>
+                  </div>
+                  <div className="bg-white/[0.02] border border-white/[0.04] p-2 rounded-xl flex gap-2">
+                    <span className="text-base">💊</span>
+                    <div>
+                      <strong className="text-green-400 block">Medkit</strong>
+                      Heals you for 1 HP. Cannot exceed max HP.
+                    </div>
+                  </div>
+                  <div className="bg-white/[0.02] border border-white/[0.04] p-2 rounded-xl flex gap-2">
+                    <span className="text-base">🔄</span>
+                    <div>
+                      <strong className="text-cyan-400 block">Inverter</strong>
+                      Converts the current shell: LIVE ➔ BLANK or BLANK ➔ LIVE.
+                    </div>
+                  </div>
+                  <div className="bg-white/[0.02] border border-white/[0.04] p-2 rounded-xl flex gap-2">
+                    <span className="text-base">📞</span>
+                    <div>
+                      <strong className="text-amber-400 block">Burner Phone</strong>
+                      Reveal information about one upcoming shell privately.
+                    </div>
+                  </div>
+                  <div className="bg-white/[0.02] border border-white/[0.04] p-2 rounded-xl flex gap-2">
+                    <span className="text-base">🪚</span>
+                    <div>
+                      <strong className="text-orange-400 block">Handsaw</strong>
+                      Saws off the barrel to deal double damage (2 HP) on your next shot.
+                    </div>
+                  </div>
+                  <div className="bg-white/[0.02] border border-white/[0.04] p-2 rounded-xl flex gap-2">
+                    <span className="text-base">⛓️</span>
+                    <div>
+                      <strong className="text-zinc-400 block">Handcuffs</strong>
+                      Skips the targeted player&apos;s next turn.
+                    </div>
+                  </div>
+                  <div className="bg-white/[0.02] border border-white/[0.04] p-2 rounded-xl flex gap-2">
+                    <span className="text-base">🍺</span>
+                    <div>
+                      <strong className="text-amber-400 block">Beer</strong>
+                      Ejects the current shell without firing it, revealing it to all players.
+                    </div>
+                  </div>
+                  <div className="bg-white/[0.02] border border-white/[0.04] p-2 rounded-xl flex gap-2">
+                    <span className="text-base">💉</span>
+                    <div>
+                      <strong className="text-amber-500 block">Adrenaline</strong>
+                      Steal one item from an opponent&apos;s inventory and use it immediately.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button onClick={() => setShowRules(false)} className="w-full py-2.5 bg-zinc-800 hover:bg-zinc-700 rounded-xl font-bold uppercase tracking-wider text-xs transition-colors mt-2">
+              Got it
+            </button>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
+  // ═══════════════════
   //  LOADING SCREEN
   // ═══════════════════
   if (!userId || !nickname) {
@@ -797,7 +1112,7 @@ function ChamberClashGameContent() {
   if (!lobby && !gameState) {
     const active = availableLobbies.filter(l => l.gameType === 'CHAMBER_CLASH');
     return (
-      <div className="flex flex-col h-screen bg-[#050607] text-white p-4 space-y-6">
+      <div className="flex flex-col h-screen bg-[#050607] text-white p-4 space-y-6 overflow-y-auto">
         <div className="flex justify-between items-center bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4">
           <div className="flex items-center gap-4">
             <button onClick={() => router.push("/dashboard/games")} className="p-2 rounded-full hover:bg-white/10 transition-colors"><X className="w-5 h-5" /></button>
@@ -864,6 +1179,8 @@ function ChamberClashGameContent() {
             </div>
           )}
         </div>
+
+        {renderRulesModal()}
       </div>
     );
   }
@@ -879,91 +1196,217 @@ function ChamberClashGameContent() {
     const waitingFor = !allPlayersAssetsReady
       ? lobby.players.filter((p: any) => !p.assetReady).map((p: any) => p.nickname).join(', ')
       : null;
+    const unjoinedOnlineUsers = onlineUsers.filter((u) => !lobby.players.some((p: any) => p.userId === u.id));
+
     return (
-      <div className="flex flex-col h-screen bg-[#050607] text-white p-4">
-        <div className="max-w-4xl mx-auto w-full space-y-6 mt-8">
+      <div className="flex flex-col h-screen bg-[#050607] text-white p-4 overflow-y-auto">
+        <div className="max-w-6xl mx-auto w-full space-y-6 mt-4 pb-8">
+          {/* Header */}
           <div className="flex flex-wrap items-center justify-between bg-white/[0.03] border border-white/[0.06] rounded-2xl p-3 sm:p-4 gap-2">
             <div className="flex items-center gap-2 sm:gap-4">
-              <h1 className="text-lg sm:text-2xl font-black text-red-500">Chamber Clash</h1>
+              <h1 className="text-lg sm:text-2xl font-black text-red-500 flex items-center gap-2">
+                <span>🔫</span> Chamber Clash
+              </h1>
               <button onClick={() => setShowRules(true)} className="p-2 hover:bg-white/10 rounded-lg transition-colors flex items-center gap-1.5 text-zinc-400 hover:text-zinc-200 cursor-pointer">
                 <BookOpen className="w-4 h-4" />
                 <span className="text-xs font-bold uppercase tracking-wider hidden sm:inline">Rules</span>
               </button>
             </div>
-            <button onClick={handleLeave} className="px-3 py-2 bg-red-600/20 text-red-400 rounded-xl hover:bg-red-600/30 transition-colors flex items-center gap-1.5 text-xs font-bold cursor-pointer">
-              <LogOut className="w-4 h-4" />
-              <span className="hidden sm:inline">Leave Lobby</span>
-              <span className="sm:hidden">Leave</span>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => setShowInviteModal(true)} 
+                className="px-3 sm:px-4 py-2 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all shadow-md shadow-red-900/30 cursor-pointer"
+              >
+                <UserPlus className="w-4 h-4" /> <span>Invite</span>
+              </button>
+              <button onClick={handleLeave} className="px-3 py-2 bg-red-600/20 text-red-400 rounded-xl hover:bg-red-600/30 transition-colors flex items-center gap-1.5 text-xs font-bold cursor-pointer">
+                <LogOut className="w-4 h-4" />
+                <span className="hidden sm:inline">Leave Lobby</span>
+                <span className="sm:hidden">Leave</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Lobby Code & Share Link Banner */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-white/[0.02] border border-white/[0.06] rounded-xl p-3">
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-zinc-500 uppercase tracking-wider font-semibold">Lobby Code:</span>
+              <code className="text-red-400 font-mono font-bold bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20">{lobby.id}</code>
+            </div>
+            <button
+              onClick={handleCopyLink}
+              className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-medium border border-white/[0.08]"
+            >
+              {copiedLink ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5 text-zinc-400" />}
+              <span>{copiedLink ? 'Link Copied!' : 'Copy Invite Link'}</span>
             </button>
           </div>
 
-          <GlassCard className="p-4 sm:p-6 space-y-6">
-            <h2 className="text-lg font-bold">Players ({lobby.players.length}/6)</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-              {lobby.players.map((p: any) => (
-                <div key={p.userId} className={`p-3 sm:p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${p.userId === userId ? 'border-red-500/50 bg-red-500/10' : 'border-white/[0.06] bg-white/[0.03]'}`}>
-                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-zinc-800 rounded-full flex items-center justify-center font-black text-base sm:text-lg">{p.nickname.substring(0, 2).toUpperCase()}</div>
-                  <span className="font-semibold text-xs sm:text-sm truncate w-full text-center">{p.nickname}</span>
-                  <span className="text-[11px] sm:text-xs text-zinc-500">{p.role === 'HOST' ? '👑 Host' : (p.isReady ? '✅ Ready' : '⏳ Not Ready')}</span>
-                  <span className={`text-[10px] font-bold uppercase tracking-wide ${p.assetReady ? 'text-green-400' : 'text-amber-400'}`}>
-                    {p.assetReady ? '✓ Assets Ready' : '⏳ Loading...'}
-                  </span>
+          {/* Main Content Grid: Players on Left (2 cols), Online Users to Invite on Right (1 col) */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Players in Lobby */}
+            <div className="lg:col-span-2">
+              <GlassCard className="p-4 sm:p-6 space-y-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-bold flex items-center gap-2">
+                    <Users className="w-5 h-5 text-red-500" /> Players ({lobby.players.length}/6)
+                  </h2>
+                  <span className="text-xs text-zinc-500">Min. 2 players to start</span>
                 </div>
-              ))}
-            </div>
-            {/* Asset loading progress for local player */}
-            {!assetsReady && (
-              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs text-amber-300 font-bold uppercase tracking-wider">Loading Game Assets...</span>
-                  <span className="text-xs text-amber-400 font-mono">{assetProgress}%</span>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
+                  {lobby.players.map((p: any) => (
+                    <div key={p.userId} className={`p-3 sm:p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${p.userId === userId ? 'border-red-500/50 bg-red-500/10' : 'border-white/[0.06] bg-white/[0.03]'}`}>
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-zinc-800 rounded-full flex items-center justify-center font-black text-base sm:text-lg overflow-hidden border border-white/10">
+                        {p.avatar ? (
+                          <img src={p.avatar} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          p.nickname.substring(0, 2).toUpperCase()
+                        )}
+                      </div>
+                      <span className="font-semibold text-xs sm:text-sm truncate w-full text-center">{p.nickname}</span>
+                      <span className="text-[11px] sm:text-xs text-zinc-500">{p.role === 'HOST' ? '👑 Host' : (p.isReady ? '✅ Ready' : '⏳ Not Ready')}</span>
+                      <span className={`text-[10px] font-bold uppercase tracking-wide ${p.assetReady ? 'text-green-400' : 'text-amber-400'}`}>
+                        {p.assetReady ? '✓ Assets Ready' : '⏳ Loading...'}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-                <div className="h-1.5 bg-amber-500/10 rounded-full overflow-hidden">
-                  <div className="h-full bg-amber-500 rounded-full transition-all duration-300" style={{ width: `${assetProgress}%` }} />
-                </div>
-                {assetError && (
-                  <div className="mt-2 flex items-center justify-between">
-                    <span className="text-[10px] text-red-400">⚠ Failed to load: {failedAssets.join(', ')}</span>
-                    <button onClick={retryAssets} className="text-[10px] px-2 py-0.5 bg-red-600/20 hover:bg-red-600/40 text-red-300 rounded font-bold">RETRY</button>
+
+                {/* Asset loading progress for local player */}
+                {!assetsReady && (
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs text-amber-300 font-bold uppercase tracking-wider">Loading Game Assets...</span>
+                      <span className="text-xs text-amber-400 font-mono">{assetProgress}%</span>
+                    </div>
+                    <div className="h-1.5 bg-amber-500/10 rounded-full overflow-hidden">
+                      <div className="h-full bg-amber-500 rounded-full transition-all duration-300" style={{ width: `${assetProgress}%` }} />
+                    </div>
+                    {assetError && (
+                      <div className="mt-2 flex items-center justify-between">
+                        <span className="text-[10px] text-red-400">⚠ Failed to load: {failedAssets.join(', ')}</span>
+                        <button onClick={retryAssets} className="text-[10px] px-2 py-0.5 bg-red-600/20 hover:bg-red-600/40 text-red-300 rounded font-bold">RETRY</button>
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
-            )}
-            {assetsReady && (
-              <div className="p-2.5 bg-green-500/10 border border-green-500/20 rounded-xl text-center">
-                <span className="text-xs text-green-400 font-bold uppercase tracking-wider">✓ GAME ASSETS READY</span>
-              </div>
-            )}
+                {assetsReady && (
+                  <div className="p-2.5 bg-green-500/10 border border-green-500/20 rounded-xl text-center">
+                    <span className="text-xs text-green-400 font-bold uppercase tracking-wider">✓ GAME ASSETS READY</span>
+                  </div>
+                )}
 
-            <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-white/[0.06]">
-              {!isHost && (
-                <button onClick={() => toggleReady(lobby.id, userId, !lobby.players.find((p: any) => p.userId === userId)?.isReady)} className="w-full sm:w-auto px-6 py-2.5 bg-zinc-800 hover:bg-zinc-700 rounded-xl font-bold transition-colors cursor-pointer">
-                  {lobby.players.find((p: any) => p.userId === userId)?.isReady ? 'Unready' : 'Ready'}
-                </button>
-              )}
-              {isHost && (
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-white/[0.06]">
+                  {!isHost && (
+                    <button onClick={() => toggleReady(lobby.id, userId, !lobby.players.find((p: any) => p.userId === userId)?.isReady)} className="w-full sm:w-auto px-6 py-2.5 bg-zinc-800 hover:bg-zinc-700 rounded-xl font-bold transition-colors cursor-pointer">
+                      {lobby.players.find((p: any) => p.userId === userId)?.isReady ? 'Unready' : 'Ready'}
+                    </button>
+                  )}
+                  {isHost && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => startGame(lobby.id, userId)}
+                        disabled={!canStart}
+                        title={waitingFor ? `Waiting for ${waitingFor} to load assets` : undefined}
+                        className={`px-8 py-2.5 rounded-xl font-bold transition-all cursor-pointer text-xs ${
+                          canStart
+                            ? 'bg-red-600 hover:bg-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)]'
+                            : 'bg-zinc-900 text-zinc-600 cursor-not-allowed'
+                        }`}
+                      >
+                        {!allPlayersGameReady
+                          ? 'Waiting for Players...'
+                          : !allPlayersAssetsReady
+                          ? `Waiting for Assets...`
+                          : 'Start Match'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </GlassCard>
+            </div>
+
+            {/* Right Column: Online Players to Invite */}
+            <div>
+              <GlassCard className="p-4 sm:p-5 flex flex-col space-y-4 h-full max-h-[500px]">
+                <div className="flex items-center justify-between pb-2 border-b border-white/[0.06]">
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <UserPlus className="w-4 h-4 text-red-400" />
+                    Online Players ({onlineUsers.length})
+                  </h3>
                   <button
-                    onClick={() => startGame(lobby.id, userId)}
-                    disabled={!canStart}
-                    title={waitingFor ? `Waiting for ${waitingFor} to load assets` : undefined}
-                    className={`px-8 py-2.5 rounded-xl font-bold transition-all cursor-pointer text-xs ${
-                      canStart
-                        ? 'bg-red-600 hover:bg-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)]'
-                        : 'bg-zinc-900 text-zinc-600 cursor-not-allowed'
-                    }`}
+                    onClick={fetchOnlineUsers}
+                    className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white transition-colors cursor-pointer text-xs flex items-center gap-1"
+                    title="Refresh online users"
                   >
-                    {!allPlayersGameReady
-                      ? 'Waiting for Players...'
-                      : !allPlayersAssetsReady
-                      ? `Waiting for Assets...`
-                      : 'Start Match'}
+                    <RotateCcw className="w-3.5 h-3.5" />
                   </button>
                 </div>
-              )}
+
+                <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                  {onlineUsers.length === 0 ? (
+                    <div className="text-center py-8 text-zinc-500 text-xs space-y-2">
+                      <p>No other players online right now.</p>
+                      <button
+                        onClick={handleCopyLink}
+                        className="text-[11px] text-red-400 hover:text-red-300 underline block mx-auto cursor-pointer"
+                      >
+                        Copy lobby link to share
+                      </button>
+                    </div>
+                  ) : unjoinedOnlineUsers.length === 0 ? (
+                    <div className="text-center py-8 text-zinc-500 text-xs">
+                      All online players are already in this lobby!
+                    </div>
+                  ) : (
+                    unjoinedOnlineUsers.map((u) => {
+                      const isFriend = friendsList.some((f) => f.id === u.id);
+                      const status = getInviteStatus(u.id);
+                      return (
+                        <div key={u.id} className="flex items-center justify-between p-2.5 bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.05] rounded-xl transition-colors">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="relative shrink-0">
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-600 to-rose-700 flex items-center justify-center text-xs font-bold text-white overflow-hidden">
+                                {u.avatar ? (
+                                  <img src={u.avatar} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                  (u.nickname || '?')[0].toUpperCase()
+                                )}
+                              </div>
+                              <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-neutral-900 bg-emerald-400" />
+                            </div>
+                            <div className="min-w-0">
+                              <span className="font-semibold text-xs text-white block truncate">{u.nickname}</span>
+                              <span className="text-[10px] text-zinc-500 block">
+                                {isFriend ? 'Friend · Online' : 'Online'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <button
+                            onClick={() => handleSendInvite(u.id)}
+                            disabled={!status.canInvite}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 ${
+                              !status.canInvite
+                                ? 'bg-red-500/10 text-red-400 border border-red-500/20 cursor-not-allowed'
+                                : 'bg-red-600 hover:bg-red-500 text-white shadow-md shadow-red-600/20'
+                            }`}
+                          >
+                            {status.canInvite ? 'Invite' : status.label}
+                          </button>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </GlassCard>
             </div>
-          </GlassCard>
+          </div>
         </div>
+
+        {/* Invite Modal */}
+        {renderInviteModal()}
+        {renderRulesModal()}
       </div>
     );
   }
@@ -1665,114 +2108,7 @@ function ChamberClashGameContent() {
             .cc-table-wrapper { transform: scale(0.8); }
           }
         `}</style>
-        <AnimatePresence>
-          {showRules && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setShowRules(false)}
-              className="absolute inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
-              <motion.div initial={{ scale: 0.95, y: 15 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 10 }}
-                onClick={(e) => e.stopPropagation()}
-                className="bg-[#0f1115] border border-white/[0.08] rounded-3xl p-6 md:p-8 max-w-lg w-full max-h-[85vh] overflow-y-auto shadow-[0_0_50px_rgba(0,0,0,0.8)] relative flex flex-col gap-5">
-                
-                {/* Close button */}
-                <button onClick={() => setShowRules(false)} className="absolute top-4 right-4 p-1.5 hover:bg-white/10 rounded-lg text-zinc-500 hover:text-zinc-200 transition-colors">
-                  <X className="w-5 h-5" />
-                </button>
-
-                <div className="flex items-center gap-3 border-b border-white/[0.06] pb-3">
-                  <BookOpen className="w-6 h-6 text-red-500" />
-                  <h2 className="text-xl font-black uppercase tracking-wider">How to Play</h2>
-                </div>
-
-                <div className="space-y-4 text-xs text-zinc-300 leading-relaxed overflow-y-auto pr-1">
-                  <div>
-                    <h3 className="font-bold text-red-400 uppercase tracking-wide mb-1 text-[11px]">Core Objective</h3>
-                    <p>Be the last player standing in a high-stakes, turn-based Russian Roulette duel. Each player starts with 5 HP.</p>
-                  </div>
-
-                  <div>
-                    <h3 className="font-bold text-red-400 uppercase tracking-wide mb-1 text-[11px]">The Chamber</h3>
-                    <p>At the start of each round, the shotgun is loaded with a random mixture of <strong>LIVE (🔴)</strong> and <strong>BLANK (⚪)</strong> shells. The counts are revealed only once during the load intro sequence—remember them!</p>
-                  </div>
-
-                  <div>
-                    <h3 className="font-bold text-red-400 uppercase tracking-wide mb-1 text-[11px]">Turn Actions</h3>
-                    <ul className="list-disc pl-4 space-y-1 mt-1">
-                      <li><strong>Shoot Target:</strong> Point the barrel at an opponent. If it is <strong>LIVE (🔴)</strong>, they lose 1 HP. If <strong>BLANK (⚪)</strong>, no damage is dealt. In both cases, your turn ends.</li>
-                      <li><strong>Shoot Self:</strong> Fire at yourself. If it is a <strong>BLANK (⚪)</strong> shell, you are granted an <strong>extra turn</strong>! If it is a <strong>LIVE (🔴)</strong> shell, you take 1 damage and your turn ends.</li>
-                    </ul>
-                  </div>
-
-                  <div className="border-t border-white/[0.06] pt-3">
-                    <h3 className="font-bold text-red-400 uppercase tracking-wide mb-2 text-[11px]">Item Directory</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
-                      <div className="bg-white/[0.02] border border-white/[0.04] p-2 rounded-xl flex gap-2">
-                        <span className="text-base">🔍</span>
-                        <div>
-                          <strong className="text-blue-400 block">Magnifier</strong>
-                          Peeks privately at the current shell in the chamber.
-                        </div>
-                      </div>
-                      <div className="bg-white/[0.02] border border-white/[0.04] p-2 rounded-xl flex gap-2">
-                        <span className="text-base">💊</span>
-                        <div>
-                          <strong className="text-green-400 block">Medkit</strong>
-                          Heals you for 1 HP. Cannot exceed max HP.
-                        </div>
-                      </div>
-                      <div className="bg-white/[0.02] border border-white/[0.04] p-2 rounded-xl flex gap-2">
-                        <span className="text-base">🔄</span>
-                        <div>
-                          <strong className="text-cyan-400 block">Inverter</strong>
-                          Converts the current shell: LIVE ➔ BLANK or BLANK ➔ LIVE.
-                        </div>
-                      </div>
-                      <div className="bg-white/[0.02] border border-white/[0.04] p-2 rounded-xl flex gap-2">
-                        <span className="text-base">📞</span>
-                        <div>
-                          <strong className="text-amber-400 block">Burner Phone</strong>
-                          Reveal information about one upcoming shell privately.
-                        </div>
-                      </div>
-                      <div className="bg-white/[0.02] border border-white/[0.04] p-2 rounded-xl flex gap-2">
-                        <span className="text-base">🪚</span>
-                        <div>
-                          <strong className="text-orange-400 block">Handsaw</strong>
-                          Saws off the barrel to deal double damage (2 HP) on your next shot.
-                        </div>
-                      </div>
-                      <div className="bg-white/[0.02] border border-white/[0.04] p-2 rounded-xl flex gap-2">
-                        <span className="text-base">⛓️</span>
-                        <div>
-                          <strong className="text-zinc-400 block">Handcuffs</strong>
-                          Skips the targeted player&apos;s next turn.
-                        </div>
-                      </div>
-                      <div className="bg-white/[0.02] border border-white/[0.04] p-2 rounded-xl flex gap-2">
-                        <span className="text-base">🍺</span>
-                        <div>
-                          <strong className="text-amber-400 block">Beer</strong>
-                          Ejects the current shell without firing it, revealing it to all players.
-                        </div>
-                      </div>
-                      <div className="bg-white/[0.02] border border-white/[0.04] p-2 rounded-xl flex gap-2">
-                        <span className="text-base">💉</span>
-                        <div>
-                          <strong className="text-amber-500 block">Adrenaline</strong>
-                          Steal one item from an opponent&apos;s inventory and use it immediately.
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <button onClick={() => setShowRules(false)} className="w-full py-2.5 bg-zinc-800 hover:bg-zinc-700 rounded-xl font-bold uppercase tracking-wider text-xs transition-colors mt-2">
-                  Got it
-                </button>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {renderRulesModal()}
       </div>
     );
   }

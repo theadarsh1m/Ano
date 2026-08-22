@@ -19,7 +19,7 @@ router.get('/stats/:userId', async (req, res) => {
 router.get('/leaderboard/:gameType', async (req, res) => {
   try {
     const { gameType } = req.params;
-    const limit = parseInt(req.query.limit) || 10;
+    const limit = parseInt(req.query.limit) || 50;
     const leaderboard = await gameService.getLeaderboard(gameType, limit);
     res.json(leaderboard);
   } catch (error) {
@@ -31,13 +31,13 @@ router.get('/leaderboard/:gameType', async (req, res) => {
 // Save game result
 router.post('/save', async (req, res) => {
   try {
-    const { userId, gameType, score, playTimeSeconds } = req.body;
+    const { userId, gameType, score, playTimeSeconds, extraStats } = req.body;
     
-    if (!userId || !gameType || score === undefined || playTimeSeconds === undefined) {
+    if (!userId || !gameType || score === undefined) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    const stat = await gameService.updateGameStat(userId, gameType, score, playTimeSeconds);
+    const stat = await gameService.updateGameStat(userId, gameType, score, playTimeSeconds || 0, extraStats);
     res.json(stat);
   } catch (error) {
     console.error('Error saving game stat:', error);

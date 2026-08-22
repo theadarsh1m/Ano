@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useUserStore } from '@/store/useUserStore';
 import { useArrowMazeStore } from '@/store/useArrowMazeStore';
@@ -93,6 +93,7 @@ export function ArrowMazeGameHub() {
   const [matchTimeRemaining, setMatchTimeRemaining] = useState<number | undefined>(undefined);
   const [multiLevelsClearedThisMatch, setMultiLevelsClearedThisMatch] = useState(0);
   const [multiTotalScoreThisMatch, setMultiTotalScoreThisMatch] = useState(0);
+  const [leaderboardDifficulty, setLeaderboardDifficulty] = useState<'ALL' | GameDifficulty>('ALL');
 
   const { triggerInvite, getInviteStatus } = useInviteCooldown(roomState?.id);
 
@@ -105,6 +106,54 @@ export function ArrowMazeGameHub() {
   selectedDifficultyRef.current = selectedDifficulty;
   const matchTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  const activeDiffStats = soloStats.byDifficulty?.[selectedDifficulty] || {
+    currentLevel: 1,
+    highScore: 0,
+    totalScore: 0,
+    levelsCleared: 0,
+    totalArrowsCleared: 0,
+    gamesPlayed: 0,
+  };
+
+  const filteredLeaderboard = useMemo(() => {
+    if (!leaderboard || leaderboard.length === 0) return [];
+
+    if (leaderboardDifficulty === 'ALL') {
+      return [...leaderboard]
+        .map((entry) => ({
+          ...entry,
+          displayScore: entry.highScore ?? entry.score ?? 0,
+          displayLevel: entry.extraStats?.currentLevel,
+          displayCleared: entry.extraStats?.levelsCleared,
+        }))
+        .filter((entry) => entry.displayScore > 0)
+        .sort((a, b) => b.displayScore - a.displayScore);
+    }
+
+    return [...leaderboard]
+      .map((entry) => {
+        const diffStats = entry.extraStats?.byDifficulty?.[leaderboardDifficulty];
+        let diffScore = diffStats?.highScore ?? 0;
+        let diffLevel = diffStats?.currentLevel ?? 1;
+        let diffCleared = diffStats?.levelsCleared ?? 0;
+
+        if (!entry.extraStats?.byDifficulty && leaderboardDifficulty === 'EASY') {
+          diffScore = entry.highScore ?? entry.score ?? 0;
+          diffLevel = entry.extraStats?.currentLevel ?? 1;
+          diffCleared = entry.extraStats?.levelsCleared ?? 0;
+        }
+
+        return {
+          ...entry,
+          displayScore: diffScore,
+          displayLevel: diffLevel,
+          displayCleared: diffCleared,
+        };
+      })
+      .filter((entry) => entry.displayScore > 0)
+      .sort((a, b) => b.displayScore - a.displayScore);
+  }, [leaderboard, leaderboardDifficulty]);
+
   // Initialize engine
   useEffect(() => {
     const eng = new ArrowMazeEngine();
@@ -116,8 +165,10 @@ export function ArrowMazeGameHub() {
       setCurrentScore(breakdown.total);
       setTotalScore(eng.totalScore);
 
+      const diff = eng.difficulty || selectedDifficultyRef.current || 'EASY';
+
       if (activeViewRef.current === 'SINGLEPLAYER' && userId) {
-        submitSoloProgress(userId, level + 1, eng.totalScore, eng.levelsCleared, eng.totalArrowsCleared);
+        submitSoloProgress(userId, level + 1, eng.totalScore, eng.levelsCleared, eng.totalArrowsCleared, diff);
       }
       if (activeViewRef.current === 'MULTIPLAYER_MATCH' && roomStateRef.current && userId) {
         sendLevelCleared(roomStateRef.current.id, userId, level, breakdown.total, eng.levelsCleared);
@@ -519,7 +570,7 @@ export function ArrowMazeGameHub() {
             <div className="flex justify-between items-center pb-3 border-b border-white/10">
               <div className="flex items-center gap-2.5 font-bold text-white text-base sm:text-lg tracking-wide uppercase">
                 <Trophy className="w-5 h-5 text-yellow-400" />
-                <span>Global High Scores</span>
+                <span>Leaderboard</span>
               </div>
               <button
                 onClick={() => setShowLeaderboardModal(false)}
@@ -529,26 +580,59 @@ export function ArrowMazeGameHub() {
               </button>
             </div>
 
+            {/* Difficulty Tabs */}
+            <div className="grid grid-cols-4 gap-1.5 p-1 bg-white/5 border border-white/10 rounded-2xl">
+              {[
+                { id: 'ALL' as const, label: 'Global', icon: '🌐' },
+                { id: 'EASY' as const, label: 'Easy', icon: '🟢' },
+                { id: 'MEDIUM' as const, label: 'Med', icon: '🟡' },
+                { id: 'HARD' as const, label: 'Hard', icon: '🔴' },
+              ].map((tab) => {
+                const isActive = leaderboardDifficulty === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setLeaderboardDifficulty(tab.id)}
+                    className={`py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                      isActive
+                        ? tab.id === 'HARD'
+                          ? 'bg-rose-500 text-white shadow-md shadow-rose-500/20'
+                          : tab.id === 'MEDIUM'
+                          ? 'bg-amber-500 text-white shadow-md shadow-amber-500/20'
+                          : tab.id === 'EASY'
+                          ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20'
+                          : 'bg-cyan-500 text-white shadow-md shadow-cyan-500/20'
+                        : 'text-slate-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <span>{tab.icon}</span>
+                    <span>{tab.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
             <div className="space-y-2.5 pt-1">
-              {leaderboard.length === 0 ? (
-                <div className="text-center text-slate-400 text-sm py-12">
-                  No scores submitted yet. Play a Solo Run to be #1!
+              {filteredLeaderboard.length === 0 ? (
+                <div className="text-center text-slate-400 text-sm py-12 space-y-1">
+                  <div>No scores recorded yet for {leaderboardDifficulty === 'ALL' ? 'Global' : `${leaderboardDifficulty} mode`}.</div>
+                  <div className="text-xs text-slate-500">Play a Solo Run to claim the #1 spot!</div>
                 </div>
               ) : (
-                leaderboard.map((entry, index) => {
+                filteredLeaderboard.map((entry, index) => {
                   const rank = index + 1;
+                  const rankBadge = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`;
                   const rankColor = rank === 1 ? 'text-yellow-400 font-extrabold' : rank === 2 ? 'text-slate-300 font-bold' : rank === 3 ? 'text-amber-500 font-bold' : 'text-slate-500 font-semibold';
                   const displayName = entry.user?.nickname || entry.user?.username || entry.user?.name || entry.userId || 'Anonymous';
                   const initial = displayName.charAt(0).toUpperCase();
                   const avatarUrl = entry.user?.avatar;
                   const dateVal = entry.createdAt || entry.lastPlayed;
                   const formattedDate = dateVal ? new Date(dateVal).toLocaleDateString() : '';
-                  const scoreVal = entry.highScore ?? entry.score ?? 0;
 
                   return (
                     <div key={entry.id || `${entry.userId}-${index}`} className="bg-white/5 border border-white/10 rounded-2xl p-3.5 flex items-center justify-between hover:bg-white/10 transition-colors">
                       <div className="flex items-center gap-3">
-                        <span className={`text-base w-7 text-center tabular-nums ${rankColor}`}>#{rank}</span>
+                        <span className={`text-base w-7 text-center tabular-nums ${rankColor}`}>{rankBadge}</span>
                         {avatarUrl ? (
                           <img src={avatarUrl} alt={displayName} className="w-10 h-10 rounded-full object-cover border border-white/10" />
                         ) : (
@@ -557,14 +641,35 @@ export function ArrowMazeGameHub() {
                           </div>
                         )}
                         <div className="flex flex-col text-left">
-                          <span className="font-bold text-white text-sm">{displayName}</span>
-                          {formattedDate && <span className="text-[10px] text-slate-500">{formattedDate}</span>}
+                          <span className="font-bold text-white text-sm flex items-center gap-1.5">
+                            <span>{displayName}</span>
+                            {entry.userId === userId && (
+                              <span className="px-1.5 py-0.2 text-[9px] font-semibold uppercase bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-md">You</span>
+                            )}
+                          </span>
+                          <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                            {entry.displayLevel && <span>Level {entry.displayLevel}</span>}
+                            {entry.displayCleared !== undefined && entry.displayCleared > 0 && (
+                              <>
+                                <span>•</span>
+                                <span>{entry.displayCleared} cleared</span>
+                              </>
+                            )}
+                            {formattedDate && (
+                              <>
+                                <span>•</span>
+                                <span>{formattedDate}</span>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
 
                       <div className="flex flex-col items-end">
-                        <span className="font-extrabold text-emerald-400 text-base tabular-nums">{scoreVal.toLocaleString()}</span>
-                        <span className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold">High Score</span>
+                        <span className="font-extrabold text-emerald-400 text-base tabular-nums">{entry.displayScore.toLocaleString()}</span>
+                        <span className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold">
+                          {leaderboardDifficulty === 'ALL' ? 'Score' : `${leaderboardDifficulty} Pts`}
+                        </span>
                       </div>
                     </div>
                   );
@@ -679,20 +784,20 @@ export function ArrowMazeGameHub() {
         {/* Stats Card */}
         <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-around text-center backdrop-blur-sm shadow-xl">
           <div>
-            <div className="text-xl md:text-2xl font-bold text-cyan-400">Lvl {soloStats.currentLevel || 1}</div>
+            <div className="text-xl md:text-2xl font-bold text-cyan-400">Lvl {activeDiffStats.currentLevel || 1}</div>
             <div className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Progress</div>
           </div>
           <div className="w-px h-10 bg-white/10" />
           <div>
-            <div className="text-xl md:text-2xl font-bold text-yellow-400 tabular-nums">{(soloStats.highScore || 0).toLocaleString()}</div>
+            <div className="text-xl md:text-2xl font-bold text-yellow-400 tabular-nums">{(activeDiffStats.highScore || 0).toLocaleString()}</div>
             <div className="text-[10px] text-yellow-400/80 uppercase tracking-wider font-semibold flex items-center justify-center gap-1">
               <Trophy className="w-3 h-3 text-yellow-400" />
-              High Score
+              {selectedDifficulty} Best
             </div>
           </div>
           <div className="w-px h-10 bg-white/10" />
           <div>
-            <div className="text-xl md:text-2xl font-bold text-emerald-400">{soloStats.levelsCleared || 0}</div>
+            <div className="text-xl md:text-2xl font-bold text-emerald-400">{activeDiffStats.levelsCleared || 0}</div>
             <div className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Cleared</div>
           </div>
         </div>
@@ -712,8 +817,8 @@ export function ArrowMazeGameHub() {
                     ? mode === 'HARD'
                       ? 'bg-rose-500/25 text-rose-300 border-rose-500/60 shadow-lg shadow-rose-500/10 scale-[1.02]'
                       : mode === 'MEDIUM'
-                      ? 'bg-amber-500/25 text-amber-300 border-amber-500/60 shadow-lg shadow-amber-500/10 scale-[1.02]'
-                      : 'bg-emerald-500/25 text-emerald-300 border-emerald-500/60 shadow-lg shadow-emerald-500/10 scale-[1.02]'
+                        ? 'bg-amber-500/25 text-amber-300 border-amber-500/60 shadow-lg shadow-amber-500/10 scale-[1.02]'
+                        : 'bg-emerald-500/25 text-emerald-300 border-emerald-500/60 shadow-lg shadow-emerald-500/10 scale-[1.02]'
                     : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10 hover:text-slate-200'
                 }`}
               >
@@ -731,7 +836,7 @@ export function ArrowMazeGameHub() {
         {/* Mode Buttons */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <button
-            onClick={() => startSoloGame(soloStats.currentLevel || 1)}
+            onClick={() => startSoloGame(activeDiffStats.currentLevel || 1, selectedDifficulty)}
             className="group relative overflow-hidden bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-cyan-500/30 rounded-2xl p-6 text-left hover:border-cyan-400/50 transition-all duration-300 hover:scale-[1.02] cursor-pointer"
           >
             <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -743,16 +848,16 @@ export function ArrowMazeGameHub() {
                 <div>
                   <div className="text-lg font-bold text-white">Solo Run</div>
                   <div className="flex items-center gap-2 text-xs text-cyan-400 font-medium">
-                    <span>Level {soloStats.currentLevel || 1}</span>
+                    <span>Level {activeDiffStats.currentLevel || 1} ({selectedDifficulty})</span>
                     <span className="text-white/30">•</span>
                     <span className="text-yellow-400 font-semibold flex items-center gap-1">
                       <Trophy className="w-3 h-3 text-yellow-400" />
-                      Best: {(soloStats.highScore || 0).toLocaleString()} pts
+                      Best: {(activeDiffStats.highScore || 0).toLocaleString()} pts
                     </span>
                   </div>
                 </div>
               </div>
-              <p className="text-sm text-gray-400">Clear the grid level by level. Your progress is saved automatically.</p>
+              <p className="text-sm text-gray-400">Clear the grid level by level in {selectedDifficulty} mode. Your progress is saved automatically.</p>
             </div>
           </button>
 
@@ -835,7 +940,7 @@ export function ArrowMazeGameHub() {
             <span className="text-white/30">•</span>
             <span className="text-yellow-400 flex items-center gap-1 font-medium">
               <Trophy className="w-3 h-3 text-yellow-400" />
-              Best: {Math.max(soloStats.highScore || 0, totalScore).toLocaleString()}
+              Best: {Math.max(activeDiffStats.highScore || 0, totalScore).toLocaleString()}
             </span>
           </div>
         </div>
@@ -904,7 +1009,7 @@ export function ArrowMazeGameHub() {
                 </div>
                 <div className="text-center py-2 bg-yellow-500/10 rounded-xl border border-yellow-500/20">
                   <div className="text-[10px] text-yellow-400/80 uppercase tracking-wider font-semibold">High Score</div>
-                  <div className="text-lg font-bold text-yellow-400 tabular-nums">{Math.max(soloStats.highScore || 0, totalScore).toLocaleString()}</div>
+                  <div className="text-lg font-bold text-yellow-400 tabular-nums">{Math.max(activeDiffStats.highScore || 0, totalScore).toLocaleString()}</div>
                 </div>
               </div>
 
@@ -924,15 +1029,15 @@ export function ArrowMazeGameHub() {
           <div className="absolute inset-0 flex items-center justify-center bg-[#0a0f1d]/85 backdrop-blur-sm z-30">
             <div className="max-w-sm w-full mx-4 bg-[#131b2e] border border-white/10 rounded-2xl p-6 space-y-4 shadow-2xl">
               <div className="text-center">
-                <div className="text-xs uppercase tracking-wider font-semibold text-red-400 mb-1">Game Over</div>
+                <div className="text-xs uppercase tracking-wider font-semibold text-red-400 mb-1">Game Over ({selectedDifficulty})</div>
                 <div className="text-xl font-bold text-white">
-                  {totalScore > (soloStats.highScore || 0) ? '🎉 New High Score!' : 'Out of Lives'}
+                  {totalScore > (activeDiffStats.highScore || 0) ? '🎉 New High Score!' : 'Out of Lives'}
                 </div>
               </div>
 
               <div className="grid grid-cols-3 gap-2">
                 <StatBox label="Score" value={totalScore.toLocaleString()} icon={<Trophy className="w-3.5 h-3.5 text-blue-400" />} />
-                <StatBox label="Best" value={Math.max(soloStats.highScore || 0, totalScore).toLocaleString()} icon={<Crown className="w-3.5 h-3.5 text-amber-400" />} />
+                <StatBox label="Best" value={Math.max(activeDiffStats.highScore || 0, totalScore).toLocaleString()} icon={<Crown className="w-3.5 h-3.5 text-amber-400" />} />
                 <StatBox label="Level" value={String(currentLevel)} icon={<Target className="w-3.5 h-3.5 text-emerald-400" />} />
               </div>
 

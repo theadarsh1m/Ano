@@ -7,8 +7,9 @@ class GameService {
    * @param {string} gameType 
    * @param {number} score 
    * @param {number} playTimeSeconds 
+   * @param {any} extraStats 
    */
-  async updateGameStat(userId, gameType, score, playTimeSeconds) {
+  async updateGameStat(userId, gameType, score, playTimeSeconds = 0, extraStats = undefined) {
     let stat = await prisma.gameStat.findUnique({
       where: {
         userId_gameType: {
@@ -23,7 +24,8 @@ class GameService {
         where: { id: stat.id },
         data: {
           highScore: Math.max(stat.highScore, score),
-          totalPlayTimeSeconds: stat.totalPlayTimeSeconds + playTimeSeconds,
+          totalPlayTimeSeconds: stat.totalPlayTimeSeconds + (playTimeSeconds || 0),
+          extraStats: extraStats !== undefined ? extraStats : stat.extraStats,
           lastPlayed: new Date()
         }
       });
@@ -33,7 +35,8 @@ class GameService {
           userId,
           gameType,
           highScore: score,
-          totalPlayTimeSeconds: playTimeSeconds,
+          totalPlayTimeSeconds: playTimeSeconds || 0,
+          extraStats: extraStats || {},
           lastPlayed: new Date()
         }
       });
@@ -52,12 +55,13 @@ class GameService {
       orderBy: { lastPlayed: 'desc' }
     });
   }
+
   /**
    * Get global leaderboard for a game type
    * @param {string} gameType 
    * @param {number} limit 
    */
-  async getLeaderboard(gameType, limit = 10) {
+  async getLeaderboard(gameType, limit = 50) {
     return prisma.gameStat.findMany({
       where: { gameType },
       orderBy: { highScore: 'desc' },

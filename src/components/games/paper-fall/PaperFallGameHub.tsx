@@ -13,7 +13,7 @@ import Link from 'next/link';
 import {
   ArrowLeft, Play, RotateCcw, Users, UserPlus, Copy, Check,
   Crown, Trophy, Zap, Target, Clock, BarChart3, Keyboard,
-  Bomb, Shield, Gauge, X, Pause, ChevronLeft,
+  Bomb, Shield, Gauge, X, Pause, ChevronLeft, ChevronRight, Eye,
   MessageSquare, BookOpen,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -62,6 +62,7 @@ export function PaperFallGameHub() {
     errors: number; level: number; wpmHistory: WpmSample[]; timeSurvived: number;
   } | null>(null);
   const [isKeyboardFocused, setIsKeyboardFocused] = useState(false);
+  const [spectatingUserId, setSpectatingUserId] = useState<string | null>(null);
 
   const { triggerInvite, getInviteStatus } = useInviteCooldown(roomState?.id);
 
@@ -1167,107 +1168,248 @@ export function PaperFallGameHub() {
 
   // ── MULTIPLAYER MATCH VIEW ────────────────────────────
 
-  const renderMultiplayerMatch = () => (
-    <div
-      onClick={claimKeyboard}
-      onTouchStart={claimKeyboard}
-      className="flex flex-col h-full min-h-screen bg-black relative select-none"
-    >
-      {/* Top HUD */}
-      <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between p-3">
-        <button
-          onClick={() => { if (roomState) leaveLobby(userId); setActiveView('MENU'); setGameStatus('idle'); }}
-          className="p-2 rounded-full bg-black/40 backdrop-blur-md text-gray-300 hover:text-white transition-all cursor-pointer"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
+  const renderMultiplayerMatch = () => {
+    const alivePlayers = (roomState?.players || []).filter((p) => p.status === 'PLAYING');
+    const isSelfEliminated = gameStatus === 'over';
+    const isSpectating = isSelfEliminated && alivePlayers.length > 0;
 
-        {(gameStatus === 'playing' || countdownVal !== null) && (
-          <div className="flex items-center gap-4 bg-black/40 backdrop-blur-md rounded-full px-4 py-2">
-            {timeRemaining !== undefined && (
-              <>
-                <div className="text-center">
-                  <div className="text-[10px] text-gray-400 uppercase">Time</div>
-                  <div className={`text-lg font-bold tabular-nums ${timeRemaining < 30 ? 'text-red-400' : 'text-white'}`}>
-                    {formatTime(timeRemaining)}
+    const currentSpectated = alivePlayers.find((p) => p.userId === spectatingUserId) || alivePlayers[0] || null;
+
+    const handleNextSpectate = () => {
+      if (alivePlayers.length === 0) return;
+      const currentIndex = alivePlayers.findIndex((p) => p.userId === (currentSpectated?.userId || ''));
+      const nextIndex = (currentIndex + 1) % alivePlayers.length;
+      setSpectatingUserId(alivePlayers[nextIndex].userId);
+    };
+
+    const handlePrevSpectate = () => {
+      if (alivePlayers.length === 0) return;
+      const currentIndex = alivePlayers.findIndex((p) => p.userId === (currentSpectated?.userId || ''));
+      const prevIndex = (currentIndex - 1 + alivePlayers.length) % alivePlayers.length;
+      setSpectatingUserId(alivePlayers[prevIndex].userId);
+    };
+
+    return (
+      <div
+        onClick={claimKeyboard}
+        onTouchStart={claimKeyboard}
+        className="flex flex-col h-full min-h-screen bg-black relative select-none"
+      >
+        {/* Top HUD */}
+        <div className="absolute top-0 left-0 right-0 z-20 flex flex-col items-center gap-2 p-3">
+          <div className="w-full flex items-center justify-between">
+            <button
+              onClick={() => { if (roomState) leaveLobby(userId); setActiveView('MENU'); setGameStatus('idle'); }}
+              className="p-2 rounded-full bg-black/60 backdrop-blur-md text-gray-300 hover:text-white transition-all cursor-pointer border border-white/10"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+
+            {isSpectating ? (
+              <div className="flex items-center gap-3 bg-black/70 backdrop-blur-md rounded-full px-4 py-2 border border-violet-500/30 shadow-lg shadow-violet-500/10">
+                <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-red-500/20 border border-red-500/40 text-red-400 text-[10px] font-black uppercase tracking-wider animate-pulse">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                  Spectating
+                </div>
+                <div className="w-px h-6 bg-white/10" />
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center text-[10px] font-bold text-white overflow-hidden">
+                    {currentSpectated?.avatar ? (
+                      <img src={currentSpectated.avatar} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      currentSpectated?.nickname?.[0]?.toUpperCase() || '?'
+                    )}
                   </div>
+                  <span className="text-xs font-bold text-white max-w-[100px] truncate">{currentSpectated?.nickname}</span>
+                </div>
+                <div className="w-px h-6 bg-white/10" />
+                <div className="text-xs font-bold text-orange-400 tabular-nums">
+                  {(currentSpectated?.score || 0).toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">pts</span>
+                </div>
+                <div className="w-px h-6 bg-white/10" />
+                <div className="text-xs font-bold text-cyan-400 tabular-nums">
+                  {currentSpectated?.wpm || 0} <span className="text-[10px] text-gray-400 font-normal">WPM</span>
+                </div>
+              </div>
+            ) : (gameStatus === 'playing' || countdownVal !== null) ? (
+              <div className="flex items-center gap-4 bg-black/40 backdrop-blur-md rounded-full px-4 py-2 border border-white/10">
+                {timeRemaining !== undefined && (
+                  <>
+                    <div className="text-center">
+                      <div className="text-[10px] text-gray-400 uppercase">Time</div>
+                      <div className={`text-lg font-bold tabular-nums ${timeRemaining < 30 ? 'text-red-400' : 'text-white'}`}>
+                        {formatTime(timeRemaining)}
+                      </div>
+                    </div>
+                    <div className="w-px h-8 bg-white/10" />
+                  </>
+                )}
+                <div className="text-center">
+                  <div className="text-[10px] text-gray-400 uppercase">Score</div>
+                  <div className="text-lg font-bold text-white tabular-nums">{currentScore.toLocaleString()}</div>
                 </div>
                 <div className="w-px h-8 bg-white/10" />
-              </>
-            )}
-            <div className="text-center">
-              <div className="text-[10px] text-gray-400 uppercase">Score</div>
-              <div className="text-lg font-bold text-white tabular-nums">{currentScore.toLocaleString()}</div>
+                <div className="text-center">
+                  <div className="text-[10px] text-gray-400 uppercase">WPM</div>
+                  <div className="text-lg font-bold text-cyan-400">{currentWpm}</div>
+                </div>
+                <div className="w-px h-8 bg-white/10" />
+                <div className="text-center">
+                  <div className="text-[10px] text-gray-400 uppercase">Acc</div>
+                  <div className="text-lg font-bold text-emerald-400">{currentAccuracy}%</div>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="w-9" /> {/* Spacer */}
+          </div>
+
+          {/* Spectator Switcher Toolbar */}
+          {isSpectating && alivePlayers.length > 1 && (
+            <div className="flex items-center gap-2 bg-black/80 backdrop-blur-md border border-white/10 rounded-2xl px-3 py-1.5 shadow-xl animate-in fade-in slide-in-from-top-2 duration-300">
+              <button
+                onClick={handlePrevSpectate}
+                className="p-1 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer"
+                title="Previous Player"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              <div className="flex items-center gap-1.5 overflow-x-auto max-w-[280px] sm:max-w-md py-0.5">
+                {alivePlayers.map((p) => {
+                  const isSelected = p.userId === currentSpectated?.userId;
+                  return (
+                    <button
+                      key={p.userId}
+                      onClick={() => setSpectatingUserId(p.userId)}
+                      className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                        isSelected
+                          ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/30 border border-violet-400/40 scale-105'
+                          : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 border border-white/5'
+                      }`}
+                    >
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      <span>{p.nickname}</span>
+                      <span className="text-[10px] text-gray-300/80 font-mono">({p.score || 0})</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                onClick={handleNextSpectate}
+                className="p-1 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer"
+                title="Next Player"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
             </div>
-            <div className="w-px h-8 bg-white/10" />
-            <div className="text-center">
-              <div className="text-[10px] text-gray-400 uppercase">WPM</div>
-              <div className="text-lg font-bold text-cyan-400">{currentWpm}</div>
-            </div>
-            <div className="w-px h-8 bg-white/10" />
-            <div className="text-center">
-              <div className="text-[10px] text-gray-400 uppercase">Acc</div>
-              <div className="text-lg font-bold text-emerald-400">{currentAccuracy}%</div>
+          )}
+        </div>
+
+        {/* Countdown overlay */}
+        {countdownVal !== null && countdownVal > 0 && (
+          <div className="absolute inset-0 flex items-center justify-center z-30 bg-black/60 backdrop-blur-sm">
+            <div className="text-8xl font-bold text-white animate-bounce">{countdownVal}</div>
+          </div>
+        )}
+
+        {/* Level Flash Overlay */}
+        {levelFlash !== null && (
+          <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
+            <div className="text-center animate-in fade-in zoom-in duration-300">
+              <div className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-amber-300 drop-shadow-2xl">
+                LEVEL {levelFlash}
+              </div>
+              <div className="text-sm text-white/70 font-semibold mt-1">SPEED INCREASING!</div>
             </div>
           </div>
         )}
-      </div>
 
-      {/* Countdown overlay */}
-      {countdownVal !== null && countdownVal > 0 && (
-        <div className="absolute inset-0 flex items-center justify-center z-30 bg-black/60 backdrop-blur-sm">
-          <div className="text-8xl font-bold text-white animate-bounce">{countdownVal}</div>
-        </div>
-      )}
-
-      {/* Level Flash Overlay */}
-      {levelFlash !== null && (
-        <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
-          <div className="text-center animate-in fade-in zoom-in duration-300">
-            <div className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-amber-300 drop-shadow-2xl">
-              LEVEL {levelFlash}
-            </div>
-            <div className="text-sm text-white/70 font-semibold mt-1">SPEED INCREASING!</div>
-          </div>
-        </div>
-      )}
-
-      {/* Canvas */}
-      <div className="flex-1 relative">
-        {engineRef.current && (
-          <PaperFallCanvas
-            engine={engineRef.current}
-            isPlaying={gameStatus === 'playing'}
-            className="absolute inset-0"
-          />
-        )}
-
-        {/* Live Opponents Strip */}
-        {roomState && roomState.players && roomState.players.length > 1 && (
-          <div className="absolute bottom-3 left-4 right-4 z-20 flex gap-2 overflow-x-auto py-1">
-            {roomState.players
-              .filter((p) => p.userId !== userId)
-              .map((p) => (
-                <div
-                  key={p.userId}
-                  className="bg-black/60 backdrop-blur-md border border-white/10 rounded-xl px-3 py-1.5 flex flex-col gap-1 min-w-[120px]"
-                >
-                  <div className="flex justify-between items-center w-full">
-                    <span className="text-[10px] text-gray-300 font-bold truncate max-w-[60%]">{p.nickname}</span>
-                    <span className="text-[10px] text-orange-400 font-mono">{p.score}</span>
+        {/* Spectator Target Card Center HUD */}
+        {isSpectating && currentSpectated && (
+          <div className="absolute top-28 left-1/2 -translate-x-1/2 z-20 w-full max-w-sm px-4 pointer-events-none">
+            <div className="bg-black/75 backdrop-blur-xl border border-violet-500/30 rounded-3xl p-5 text-center space-y-3 shadow-2xl animate-in fade-in zoom-in-95 duration-300">
+              <div className="flex items-center justify-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-lg font-black text-white shadow-lg shadow-violet-500/20 overflow-hidden">
+                  {currentSpectated.avatar ? (
+                    <img src={currentSpectated.avatar} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    currentSpectated.nickname?.[0]?.toUpperCase() || '?'
+                  )}
+                </div>
+                <div className="text-left">
+                  <div className="text-lg font-black text-white flex items-center gap-2">
+                    <span>{currentSpectated.nickname}</span>
+                    <span className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold px-2 py-0.5 rounded-full">
+                      ALIVE
+                    </span>
                   </div>
-                  <div className="flex justify-between items-center text-[9px] text-gray-400">
-                    <span>{p.wpm || 0} WPM</span>
-                    <span>{p.accuracy || 100}%</span>
+                  <div className="text-xs text-gray-400">
+                    Level {currentSpectated.currentLevel || 1} • {currentSpectated.wordsTyped || 0} words typed
                   </div>
                 </div>
-              ))
-            }
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 pt-1">
+                <div className="bg-white/5 border border-white/10 rounded-xl p-2">
+                  <div className="text-[9px] text-gray-400 uppercase font-semibold">Score</div>
+                  <div className="text-base font-black text-orange-400 tabular-nums">{(currentSpectated.score || 0).toLocaleString()}</div>
+                </div>
+                <div className="bg-white/5 border border-white/10 rounded-xl p-2">
+                  <div className="text-[9px] text-gray-400 uppercase font-semibold">Speed</div>
+                  <div className="text-base font-black text-cyan-400 tabular-nums">{currentSpectated.wpm || 0} <span className="text-[10px] font-normal">WPM</span></div>
+                </div>
+                <div className="bg-white/5 border border-white/10 rounded-xl p-2">
+                  <div className="text-[9px] text-gray-400 uppercase font-semibold">Accuracy</div>
+                  <div className="text-base font-black text-emerald-400 tabular-nums">{currentSpectated.accuracy || 100}%</div>
+                </div>
+              </div>
+
+              <div className="text-[11px] text-gray-400">
+                You were eliminated! Match concludes when only 1 player remains.
+              </div>
+            </div>
           </div>
         )}
+
+        {/* Canvas */}
+        <div className="flex-1 relative">
+          {engineRef.current && (
+            <PaperFallCanvas
+              engine={engineRef.current}
+              isPlaying={gameStatus === 'playing'}
+              className="absolute inset-0"
+            />
+          )}
+
+          {/* Live Opponents Strip */}
+          {roomState && roomState.players && roomState.players.length > 1 && !isSpectating && (
+            <div className="absolute bottom-3 left-4 right-4 z-20 flex gap-2 overflow-x-auto py-1">
+              {roomState.players
+                .filter((p) => p.userId !== userId)
+                .map((p) => (
+                  <div
+                    key={p.userId}
+                    className="bg-black/60 backdrop-blur-md border border-white/10 rounded-xl px-3 py-1.5 flex flex-col gap-1 min-w-[120px]"
+                  >
+                    <div className="flex justify-between items-center w-full">
+                      <span className="text-[10px] text-gray-300 font-bold truncate max-w-[60%]">{p.nickname}</span>
+                      <span className="text-[10px] text-orange-400 font-mono">{p.score}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-[9px] text-gray-400">
+                      <span>{p.wpm || 0} WPM</span>
+                      <span>{p.accuracy || 100}%</span>
+                    </div>
+                  </div>
+                ))
+              }
+            </div>
+          )}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   // ── MATCH RESULTS VIEW ─────────────────────────────────
 

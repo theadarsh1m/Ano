@@ -194,10 +194,11 @@ function registerGameSockets(io, socket, onlineUsers, activeGames) {
       });
 
       if (notif) {
-        io.to(targetUserId).emit('new_notification', notif);
-        const targetSockets = onlineUsers.get(targetUserId);
-        if (targetSockets) {
-          targetSockets.forEach(sId => io.to(sId).emit('new_notification', notif));
+        const recipientSockets = onlineUsers.get(targetUserId);
+        if (recipientSockets) {
+          for (const socketId of recipientSockets) {
+            io.to(socketId).emit('new_notification', notif);
+          }
         }
       }
     } catch (err) {

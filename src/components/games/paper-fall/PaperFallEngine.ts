@@ -16,8 +16,24 @@ import {
   CAMPAIGN_LEVELS,
 } from './types';
 
-// ── Word Pool ────────────────────────────────────────────
-const WORDS = [
+import wordsJson from '../../../../words.json';
+
+// ── Word Pool (Integrated with words.json) ────────────────
+const EXTRACTED_WORDS: string[] = [];
+if (wordsJson && typeof wordsJson === 'object' && 'categories' in wordsJson) {
+  const cats = (wordsJson as { categories: Record<string, string[]> }).categories;
+  for (const list of Object.values(cats)) {
+    if (Array.isArray(list)) {
+      for (const w of list) {
+        if (typeof w === 'string' && w.trim().length >= 3 && !w.includes(' ')) {
+          EXTRACTED_WORDS.push(w.trim().toLowerCase());
+        }
+      }
+    }
+  }
+}
+
+const FALLBACK_WORDS = [
   "oak","tide","rust","moth","wren","fern","plum","jolt","kiln","husk",
   "ant","dew","fog","gem","ivy","jam","keg","lip","map","net",
   "hello","spark","lunar","glass","drift","flint","amber","cliff","brisk","nomad",
@@ -31,6 +47,8 @@ const WORDS = [
   "parachute","dandelion","hurricane","metronome","lighthouse","wavelength",
   "avalanche","butterfly","crocodile","dragonfly","evergreen","fireworks",
 ];
+
+const WORDS = Array.from(new Set([...EXTRACTED_WORDS, ...FALLBACK_WORDS]));
 
 // ── Seeded RNG ───────────────────────────────────────────
 export function mulberry32(seed: number): () => number {

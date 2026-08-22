@@ -243,7 +243,6 @@ export const useFlappyStore = create<FlappyStoreState>((set, get) => ({
       gameType
     };
     socket.emit('lobby_invite', payload);
-    socket.emit('game_invite', payload);
   },
 
   startMatch: (lobbyId, hostId) => {

@@ -9,124 +9,134 @@ class WordService {
     this.loadWords();
   }
 
+  findWordsJsonPath() {
+    const candidatePaths = [
+      path.resolve(process.cwd(), 'words.json'),
+      path.resolve(__dirname, '../../../words.json'),
+      path.resolve(__dirname, '../../words.json'),
+      path.resolve(__dirname, '../words.json'),
+    ];
+
+    for (const p of candidatePaths) {
+      if (fs.existsSync(p)) {
+        return p;
+      }
+    }
+    return null;
+  }
+
   loadWords() {
-    const wordsDir = path.join(__dirname, 'words');
-    if (!fs.existsSync(wordsDir)) {
-      console.log('[Ink & Deception] Words directory not found, creating it...');
-      fs.mkdirSync(wordsDir, { recursive: true });
+    this.words = {};
+    this.categories = [];
+    const allWordsSet = new Set();
+
+    // 1. Primary source: words.json from root
+    const wordsJsonPath = this.findWordsJsonPath();
+    if (wordsJsonPath) {
+      try {
+        const content = fs.readFileSync(wordsJsonPath, 'utf8');
+        const parsed = JSON.parse(content);
+        const categoriesData = parsed.categories || parsed;
+
+        if (typeof categoriesData === 'object' && categoriesData !== null) {
+          for (const [catName, list] of Object.entries(categoriesData)) {
+            if (Array.isArray(list)) {
+              const cleanList = list
+                .filter(w => typeof w === 'string' && w.trim().length > 0)
+                .map(w => w.trim().toLowerCase());
+
+              if (cleanList.length > 0) {
+                const normalizedCategory = catName.toLowerCase().trim();
+                this.words[normalizedCategory] = cleanList;
+                if (!this.categories.includes(normalizedCategory)) {
+                  this.categories.push(normalizedCategory);
+                }
+                cleanList.forEach(w => allWordsSet.add(w));
+              }
+            }
+          }
+        }
+        console.log(`[Ink & Deception] Loaded ${this.categories.length} categories from words.json (${wordsJsonPath}).`);
+      } catch (err) {
+        console.error('[Ink & Deception] Failed to parse words.json:', err);
+      }
     }
 
-    // Force regeneration to ensure 3000+ word database is active and written
-    this.createDefaultDictionaries(wordsDir);
+    // 2. Check local words directory for any additional custom category JSONs
+    const wordsDir = path.join(__dirname, 'words');
+    if (fs.existsSync(wordsDir)) {
+      const files = fs.readdirSync(wordsDir);
+      for (const file of files) {
+        if (file.endsWith('.json')) {
+          const category = file.replace('.json', '').toLowerCase().trim();
+          try {
+            const content = fs.readFileSync(path.join(wordsDir, file), 'utf8');
+            const parsed = JSON.parse(content);
+            if (Array.isArray(parsed)) {
+              const cleanList = parsed
+                .filter(w => typeof w === 'string' && w.trim().length > 0)
+                .map(w => w.trim().toLowerCase());
 
-    const files = fs.readdirSync(wordsDir);
-    this.categories = [];
-    this.words = {};
-
-    for (const file of files) {
-      if (file.endsWith('.json')) {
-        const category = file.replace('.json', '');
-        try {
-          const content = fs.readFileSync(path.join(wordsDir, file), 'utf8');
-          const parsed = JSON.parse(content);
-          if (Array.isArray(parsed)) {
-            this.words[category] = parsed;
-            this.categories.push(category);
+              if (!this.words[category]) {
+                this.words[category] = cleanList;
+                if (!this.categories.includes(category)) {
+                  this.categories.push(category);
+                }
+              } else {
+                this.words[category] = Array.from(new Set([...this.words[category], ...cleanList]));
+              }
+              cleanList.forEach(w => allWordsSet.add(w));
+            }
+          } catch (e) {
+            console.error(`[Ink & Deception] Failed to load word list ${file}:`, e);
           }
-        } catch (e) {
-          console.error(`[Ink & Deception] Failed to load word list ${file}:`, e);
         }
       }
     }
-    console.log(`[Ink & Deception] Loaded ${this.categories.length} word categories (3000+ words).`);
-  }
 
-  createDefaultDictionaries(wordsDir) {
-    const categories = {
-      animals: [
-        "dog", "cat", "fish", "bird", "duck", "pig", "cow", "bear", "lion", "frog", "snake", "owl", "bee", "ant", "deer", "goat", "crab", "shark", "whale", "turtle", "panda", "monkey", "rabbit", "fox", "sheep", "chicken"
-      ],
-      food: [
-        "pizza", "apple", "cake", "donut", "taco", "egg", "bread", "banana", "pear", "milk", "cookie", "carrot", "grape", "orange", "burger", "cheese", "strawberry", "pineapple", "sandwich", "soup", "hotdog", "candy", "popcorn"
-      ],
-      movies: [
-        "titanic", "batman", "spiderman", "jaws", "shrek", "frozen", "star_wars", "jurassic_park", "harry_potter", "toy_story", "lion_king", "matrix", "godzilla", "king_kong", "ghostbusters", "cars"
-      ],
-      anime: [
-        "pokemon", "naruto", "dragon_ball", "one_piece", "goku", "luffy", "pikachu", "totoro", "death_note", "doraemon", "digimon"
-      ],
-      gaming: [
-        "mario", "pacman", "pikachu", "minecraft", "tetris", "sonic", "controller", "headset", "keyboard", "mouse", "xbox", "playstation", "nintendo"
-      ],
-      sports: [
-        "soccer", "basketball", "tennis", "baseball", "football", "golf", "boxing", "running", "swimming", "bowling", "cycling", "cricket", "hockey"
-      ],
-      science: [
-        "atom", "rocket", "galaxy", "planet", "dna", "magnet", "beaker", "telescope", "microscope", "star", "moon", "sun", "cloud", "volcano", "dinosaur", "battery"
-      ],
-      technology: [
-        "computer", "phone", "robot", "drone", "camera", "watch", "laptop", "mouse", "keyboard", "printer", "television", "headphones", "speaker"
-      ],
-      programming: [
-        "code", "website", "database", "server", "computer", "bug", "mouse", "keyboard", "monitor", "laptop", "terminal", "python", "arrow"
-      ],
-      internet_culture: [
-        "emoji", "meme", "hashtag", "viral", "youtube", "tiktok", "discord", "like", "comment", "share", "avatar", "profile", "chat"
-      ],
-      countries: [
-        "japan", "france", "egypt", "india", "china", "canada", "mexico", "brazil", "usa", "uk", "italy", "spain", "germany", "australia"
-      ],
-      cities: [
-        "tokyo", "paris", "london", "new_york", "rome", "cairo", "sydney", "mumbai", "toronto", "dubai", "pisa", "venice"
-      ],
-      nature: [
-        "mountain", "river", "lake", "ocean", "beach", "forest", "desert", "island", "volcano", "waterfall", "tree", "flower", "grass", "cloud", "rainbow", "star", "moon", "sun"
-      ],
-      fantasy: [
-        "dragon", "wizard", "unicorn", "elf", "fairy", "mermaid", "phoenix", "castle", "sword", "shield", "magic", "potion", "scroll", "crown", "ghost", "wand"
-      ],
-      objects: [
-        "chair", "table", "bed", "lamp", "mirror", "clock", "umbrella", "keys", "wallet", "backpack", "book", "pen", "glasses", "scissors", "guitar", "piano", "shoes", "mug", "fork", "spoon", "knife", "cup", "plate", "soap"
-      ],
-      vehicles: [
-        "car", "bus", "train", "airplane", "helicopter", "boat", "ship", "bicycle", "motorcycle", "truck", "tractor", "rocket", "submarine", "scooter", "ambulance", "police_car", "taxi"
-      ],
-      jobs: [
-        "doctor", "teacher", "artist", "chef", "pilot", "police", "firefighter", "astronaut", "farmer", "singer", "painter", "dentist", "nurse"
-      ],
-      music: [
-        "guitar", "piano", "drums", "violin", "flute", "trumpet", "singer", "microphone", "headphones", "speaker", "notes", "radio", "harp"
-      ]
-    };
+    // Fallback if empty
+    if (allWordsSet.size === 0) {
+      const fallbackAnimals = ["dog", "cat", "elephant", "lion", "tiger", "bear", "monkey", "giraffe", "zebra", "penguin", "dolphin", "whale", "shark", "octopus", "butterfly", "spider", "snake", "crocodile", "frog", "turtle", "rabbit", "panda"];
+      const fallbackFood = ["pizza", "apple", "cake", "donut", "taco", "egg", "bread", "banana", "pear", "milk", "cookie", "carrot", "grape", "orange", "burger", "cheese", "strawberry", "pineapple", "sandwich", "soup", "hotdog", "candy", "popcorn"];
+      const fallbackObjects = ["chair", "table", "bed", "lamp", "mirror", "clock", "umbrella", "keys", "wallet", "backpack", "book", "pen", "glasses", "scissors", "guitar", "piano", "shoes", "mug", "fork", "spoon", "knife", "cup", "plate", "soap"];
 
-    for (const [category, list] of Object.entries(categories)) {
-      const fileContent = JSON.stringify(list, null, 2);
-      fs.writeFileSync(path.join(wordsDir, `${category}.json`), fileContent, 'utf8');
+      this.words['animals'] = fallbackAnimals;
+      this.words['food'] = fallbackFood;
+      this.words['objects'] = fallbackObjects;
+      this.categories = ['animals', 'food', 'objects'];
+      [...fallbackAnimals, ...fallbackFood, ...fallbackObjects].forEach(w => allWordsSet.add(w));
     }
+
+    this.words['mixed'] = Array.from(allWordsSet);
+    if (!this.categories.includes('mixed')) {
+      this.categories.unshift('mixed');
+    }
+
+    console.log(`[Ink & Deception] Ready with ${this.categories.length} categories and ${allWordsSet.size} total words.`);
   }
 
   getWordChoices(category = 'mixed', count = 3, excludeWords = []) {
+    const normCat = (category || 'mixed').toLowerCase().trim();
     let wordList = [];
-    if (category === 'mixed') {
-      for (const cat in this.words) {
-        wordList = wordList.concat(this.words[cat]);
-      }
+
+    if (normCat === 'mixed') {
+      wordList = this.words['mixed'] || [];
     } else {
-      wordList = this.words[category] || this.words['mixed'] || [];
+      wordList = this.words[normCat] || this.words['mixed'] || [];
     }
 
     if (!wordList || wordList.length === 0) {
-      wordList = ["APPLE", "DRAGON", "ROCKET", "SUSHI", "TOTORO", "CONTROLLER"];
+      wordList = ["APPLE", "DRAGON", "ROCKET", "SUSHI", "CONTROLLER", "PENGUIN", "PIZZA"];
     }
 
-    const upperExclude = excludeWords.map(w => w.toUpperCase());
-    let availableWords = wordList.filter(w => !upperExclude.includes(w.toUpperCase()));
+    const upperExclude = excludeWords.map(w => String(w).toUpperCase().trim());
+    let availableWords = wordList.filter(w => !upperExclude.includes(String(w).toUpperCase().trim()));
     if (availableWords.length < count) {
       availableWords = wordList;
     }
 
     const shuffled = [...availableWords].sort(() => 0.5 - Math.random());
-    return shuffled.slice(0, count).map(w => w.toUpperCase());
+    return shuffled.slice(0, count).map(w => String(w).toUpperCase());
   }
 
   getAllCategories() {

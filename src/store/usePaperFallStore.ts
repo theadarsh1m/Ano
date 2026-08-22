@@ -190,7 +190,6 @@ export const usePaperFallStore = create<PaperFallStoreState>((set, get) => ({
       targetUserId, gameType: 'PAPER_FALL',
     };
     socket.emit('lobby_invite', payload);
-    socket.emit('game_invite', payload);
   },
 
   startMatch: (lobbyId, hostId) => {
@@ -362,12 +361,33 @@ export const usePaperFallStore = create<PaperFallStoreState>((set, get) => ({
       });
     };
 
-    const onPlayerProgress = (data: { userId: string; score: number; wpm: number; accuracy: number; level: number; wordsTyped: number }) => {
+    const onPlayerProgress = (data: { userId: string; score: number; wpm: number; accuracy: number; level: number; wordsTyped: number; status?: string }) => {
       set((current) => {
         if (!current.roomState) return current;
         const players = current.roomState.players.map((p) => {
           if (p.userId === data.userId) {
-            return { ...p, score: data.score, wpm: data.wpm, accuracy: data.accuracy, currentLevel: data.level, wordsTyped: data.wordsTyped };
+            return {
+              ...p,
+              score: data.score,
+              wpm: data.wpm,
+              accuracy: data.accuracy,
+              currentLevel: data.level,
+              wordsTyped: data.wordsTyped,
+              status: (data.status as any) || p.status,
+            };
+          }
+          return p;
+        });
+        return { roomState: { ...current.roomState, players } };
+      });
+    };
+
+    const onPlayerFinished = (data: { userId: string; nickname?: string; score?: number }) => {
+      set((current) => {
+        if (!current.roomState) return current;
+        const players = current.roomState.players.map((p) => {
+          if (p.userId === data.userId) {
+            return { ...p, status: 'FINISHED' as const, score: data.score ?? p.score };
           }
           return p;
         });
@@ -392,6 +412,7 @@ export const usePaperFallStore = create<PaperFallStoreState>((set, get) => ({
     socket.on('game_started', onGameStarted);
     socket.on('game_countdown', onGameCountdown);
     socket.on('paperfall_player_progress', onPlayerProgress);
+    socket.on('paperfall_player_finished', onPlayerFinished);
     socket.on('game_over', onGameOver);
 
     return () => {
@@ -402,6 +423,7 @@ export const usePaperFallStore = create<PaperFallStoreState>((set, get) => ({
       socket.off('game_started', onGameStarted);
       socket.off('game_countdown', onGameCountdown);
       socket.off('paperfall_player_progress', onPlayerProgress);
+      socket.off('paperfall_player_finished', onPlayerFinished);
       socket.off('game_over', onGameOver);
     };
   },

@@ -125,26 +125,69 @@ class PaperFallEngine extends BaseGameEngine {
           }
         }
 
-        // Check if all players finished OR someone achieved victory in campaign mode
-        let allFinished = true;
-        for (const [, ps] of this.playerStates) {
-          if (ps.status !== 'FINISHED') { allFinished = false; break; }
+        this.emit('paperfall_player_progress', {
+          userId: playerId,
+          score: state.score,
+          wpm: state.wpm,
+          accuracy: state.accuracy,
+          level: state.level,
+          wordsTyped: state.wordsTyped,
+          status: 'FINISHED',
+        });
+        this.emit('paperfall_player_finished', {
+          userId: playerId,
+          nickname: state.nickname,
+          score: state.score,
+        });
+
+        // Check active remaining players
+        const activePlayers = [];
+        for (const [id, ps] of this.playerStates) {
+          if (this.players.has(id) && ps.status === 'PLAYING') {
+            activePlayers.push(ps);
+          }
         }
-        if (allFinished || (this.settings.mode === 'CAMPAIGN' && state.victory)) {
-          this.endMatch();
+
+        const wasMultiplayer = this.playerStates.size > 1;
+        if (wasMultiplayer) {
+          // If only 1 player remains, that player is the winner and match stops immediately
+          if (activePlayers.length <= 1) {
+            if (activePlayers.length === 1) {
+              const winner = activePlayers[0];
+              winner.status = 'FINISHED';
+              winner.finishedAt = Date.now();
+              winner.isWinner = true;
+            }
+            this.endMatch();
+          }
+        } else {
+          // Solo game
+          if (activePlayers.length === 0 || (this.settings.mode === 'CAMPAIGN' && state.victory)) {
+            this.endMatch();
+          }
         }
         break;
       }
 
       case 'return_to_lobby': {
         state.status = 'FINISHED';
-        
-        // Check if all players finished
-        let allFinished = true;
-        for (const [, ps] of this.playerStates) {
-          if (ps.status !== 'FINISHED') { allFinished = false; break; }
+        state.finishedAt = Date.now();
+
+        const activePlayers = [];
+        for (const [id, ps] of this.playerStates) {
+          if (this.players.has(id) && ps.status === 'PLAYING') {
+            activePlayers.push(ps);
+          }
         }
-        if (allFinished) {
+
+        const wasMultiplayer = this.playerStates.size > 1;
+        if ((wasMultiplayer && activePlayers.length <= 1) || (!wasMultiplayer && activePlayers.length === 0)) {
+          if (activePlayers.length === 1) {
+            const winner = activePlayers[0];
+            winner.status = 'FINISHED';
+            winner.finishedAt = Date.now();
+            winner.isWinner = true;
+          }
           this.endMatch();
         }
         break;
@@ -179,11 +222,16 @@ class PaperFallEngine extends BaseGameEngine {
         levelReached: state.level,
         wpmTimeline: state.wpmTimeline,
         finishedAt: state.finishedAt,
+        isWinner: state.isWinner || false,
       });
     }
 
-    // Sort by score descending, assign ranks
-    results.sort((a, b) => b.score - a.score);
+    // Sort by winner priority and score descending, assign ranks
+    results.sort((a, b) => {
+      if (a.isWinner && !b.isWinner) return -1;
+      if (!a.isWinner && b.isWinner) return 1;
+      return b.score - a.score;
+    });
     results.forEach((r, i) => { r.rank = i + 1; });
 
     this.results = results;
@@ -218,14 +266,22 @@ class PaperFallEngine extends BaseGameEngine {
           state.finishedAt = Date.now();
         }
         
-        let activePlayers = 0;
+        const activePlayers = [];
         for (const [id, ps] of this.playerStates) {
-          if (this.players.has(id) && ps.status === 'PLAYING') { activePlayers++; }
+          if (this.players.has(id) && ps.status === 'PLAYING') {
+            activePlayers.push(ps);
+          }
         }
         
         const wasMultiplayer = this.playerStates.size > 1;
-        if ((wasMultiplayer && activePlayers <= 1) || (!wasMultiplayer && activePlayers === 0)) {
-           this.endMatch();
+        if ((wasMultiplayer && activePlayers.length <= 1) || (!wasMultiplayer && activePlayers.length === 0)) {
+          if (activePlayers.length === 1) {
+            const winner = activePlayers[0];
+            winner.status = 'FINISHED';
+            winner.finishedAt = Date.now();
+            winner.isWinner = true;
+          }
+          this.endMatch();
         }
       } else if (this.status === 'WAITING' && this.players.size === 0) {
         this.status = 'FINISHED';

@@ -141,6 +141,18 @@ export interface LeaderboardEntry {
   score?: number;
   lastPlayed?: string;
   createdAt?: string;
+  extraStats?: {
+    currentLevel?: number;
+    totalScore?: number;
+    levelsCleared?: number;
+    totalArrowsCleared?: number;
+    gamesPlayed?: number;
+    byDifficulty?: {
+      EASY?: ArrowMazeDifficultyStats;
+      MEDIUM?: ArrowMazeDifficultyStats;
+      HARD?: ArrowMazeDifficultyStats;
+    };
+  };
   user?: {
     nickname?: string;
     username?: string;
@@ -201,6 +213,15 @@ export interface ArrowMazeRoomState {
 
 // ── Solo Stats Types ────────────────────────────────────
 
+export interface ArrowMazeDifficultyStats {
+  currentLevel: number;
+  highScore: number;
+  totalScore: number;
+  levelsCleared: number;
+  totalArrowsCleared: number;
+  gamesPlayed: number;
+}
+
 export interface ArrowMazeSoloStats {
   currentLevel: number;
   highScore: number;
@@ -208,6 +229,11 @@ export interface ArrowMazeSoloStats {
   levelsCleared: number;
   totalArrowsCleared: number;
   gamesPlayed: number;
+  byDifficulty?: {
+    EASY: ArrowMazeDifficultyStats;
+    MEDIUM: ArrowMazeDifficultyStats;
+    HARD: ArrowMazeDifficultyStats;
+  };
 }
 
 export interface ArrowMazeMultiStats {
@@ -217,3 +243,4 @@ export interface ArrowMazeMultiStats {
   highScore: number;
   levelsCleared: number;
 }
+
